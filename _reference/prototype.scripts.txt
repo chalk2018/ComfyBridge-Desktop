@@ -1,0 +1,2208 @@
+// ===== script #1 =====
+/* ============ 数据层：模拟配置 + 工作流节点 ============ */
+
+const LS_KEY = 'comfybridge_proto_v101';
+
+/* ---------- 17 个能力模板 ---------- */
+// 模板只给名字/图标/分组，不给参数——每个能力的输入区长什么样，要单独设计
+const TEMPLATES = [
+  { id:'image.generate',   name:'图片生成',     em:'🖼', group:'图像',  desc:'文字描述生成图片，1~8 张', wfHint:'图片生成-文生图' },
+  { id:'image.reference',  name:'参考风格生图', em:'🎨', group:'图像',  desc:'上传 1~3 张图，学画风或学主体', wfHint:'图片生成-参考' },
+  { id:'image.lineart',    name:'线稿图生成',   em:'✏️', group:'图像',  desc:'生成线稿，或把图片转成线稿', wfHint:'图片生成-线稿' },
+  { id:'image.sketch',     name:'简单手绘创作', em:'🖌', group:'图像',  desc:'手绘草稿上色/细化', wfHint:'图片生成-手绘' },
+  { id:'sheet.character',  name:'角色设定图',   em:'👤', group:'设定图', desc:'多视角角色设定', wfHint:'设定图-角色' },
+  { id:'sheet.scene',      name:'场景设定图',   em:'🏞', group:'设定图', desc:'场景概念设定', wfHint:'设定图-场景' },
+  { id:'sheet.prop',       name:'道具设定图',   em:'🗡', group:'设定图', desc:'道具概念设定', wfHint:'设定图-道具' },
+  { id:'board.4',          name:'4 宫格故事板', em:'▦', group:'故事板', desc:'4 格分镜故事板', wfHint:'故事板-4格' },
+  { id:'board.6',          name:'6 格故事板',   em:'▦', group:'故事板', desc:'6 格分镜故事板', wfHint:'故事板-6格' },
+  { id:'board.9',          name:'9 宫格故事板', em:'▦', group:'故事板', desc:'9 格分镜故事板', wfHint:'故事板-9格' },
+  { id:'video.generate',   name:'视频生成',     em:'🎬', group:'视频',  desc:'文字描述生成视频', wfHint:'视频生成-文生视频' },
+  { id:'video.reference',  name:'参考生成视频', em:'🎥', group:'视频',  desc:'用图片/视频作参考生成', wfHint:'视频生成-参考' },
+  { id:'video.firstlast',  name:'首尾帧生成视频', em:'⏮', group:'视频', desc:'给首帧和尾帧，生成中间过程', wfHint:'视频生成-首尾帧' },
+  { id:'audio.music',      name:'音乐生成',     em:'🎵', group:'音频',  desc:'按风格/情绪生成音乐', wfHint:'音乐生成-文生音乐' },
+  { id:'audio.music.ref',  name:'参考生成音乐', em:'🎼', group:'音频',  desc:'用参考音频生成同风格音乐', wfHint:'音乐生成-参考' },
+  { id:'audio.tts',        name:'语音生成',     em:'🎙', group:'音频',  desc:'文字转语音', wfHint:'语音-合成' },
+  { id:'audio.clone',      name:'声音克隆',     em:'🎤', group:'音频',  desc:'用一段参考音频克隆音色', wfHint:'语音-克隆' },
+];
+
+/* ---------- 模拟工作流文件（含节点结构，模拟从 json 里读出来的结果） ---------- */
+// 每个节点按 ComfyUI 的 API 格式列出它的 inputs：
+//   w = 这个节点自己带的数值格子（widget）
+//   c = 连线（从别的节点接过来的），改不了，只能看着
+//   out = 产物节点（SaveImage / SaveVideo / SaveAudio / PreviewImage）
+// 一个节点算什么"角色"，只看 class_type，不看字段名——所以换工作流不用改代码。
+const WF_LIB = {
+  '文生图.sdxl': {
+    path:'workflows/图片生成-文生图-sdxl.json',
+    list:[
+      { id:'4', cls:'CheckpointLoaderSimple', w:['ckpt_name'], c:[], out:false },
+      { id:'6', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'7', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'5', cls:'EmptyLatentImage', w:['width','height','batch_size'], c:[], out:false },
+      { id:'3', cls:'KSampler', w:['seed','steps','cfg','sampler_name','scheduler','denoise'],
+        c:['model','positive','negative','latent_image'], out:false },
+      { id:'8', cls:'VAEDecode', w:[], c:['samples','vae'], out:false },
+      { id:'9', cls:'SaveImage', w:['filename_prefix'], c:['images'], out:true },
+      { id:'10', cls:'PreviewImage', w:[], c:['images'], out:true },
+    ]
+  },
+  '图生图.sdxl': {
+    path:'workflows/图片生成-图生图-sdxl.json',
+    list:[
+      { id:'1', cls:'LoadImage', w:['image','upload'], c:[], out:false },
+      { id:'2', cls:'ImageScale', w:['upscale_method','width','height','crop'], c:['image'], out:false },
+      { id:'4', cls:'CheckpointLoaderSimple', w:['ckpt_name'], c:[], out:false },
+      { id:'6', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'7', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'3', cls:'KSampler', w:['seed','steps','cfg','sampler_name','scheduler','denoise'],
+        c:['model','positive','negative','latent_image'], out:false },
+      { id:'8', cls:'VAEDecode', w:[], c:['samples','vae'], out:false },
+      { id:'9', cls:'SaveImage', w:['filename_prefix'], c:['images'], out:true },
+    ]
+  },
+  '风格参考.ipadapter': {
+    path:'workflows/图片生成-风格参考-ipadapter.json',
+    list:[
+      { id:'1', cls:'LoadImage', w:['image','upload'], c:[], out:false },
+      { id:'4', cls:'CheckpointLoaderSimple', w:['ckpt_name'], c:[], out:false },
+      { id:'11', cls:'IPAdapterAdvanced', w:['weight','weight_type','combine_embeds','start_at','end_at'],
+        c:['model','ipadapter','image'], out:false },
+      { id:'6', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'7', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'5', cls:'EmptyLatentImage', w:['width','height','batch_size'], c:[], out:false },
+      { id:'3', cls:'KSampler', w:['seed','steps','cfg','sampler_name','scheduler','denoise'],
+        c:['model','positive','negative','latent_image'], out:false },
+      { id:'8', cls:'VAEDecode', w:[], c:['samples','vae'], out:false },
+      { id:'9', cls:'SaveImage', w:['filename_prefix'], c:['images'], out:true },
+    ]
+  },
+  // 绑了加速 LoRA 的文生图：图里多了 LoraLoader，
+  // 它该调的只有步数和 CFG（4~8 步、CFG 1~2），宽高、采样器都不用动
+  '文生图.sdxl.turbo': {
+    path:'workflows/图片生成-文生图-sdxl-加速lora.json',
+    list:[
+      { id:'4', cls:'CheckpointLoaderSimple', w:['ckpt_name'], c:[], out:false },
+      { id:'12', cls:'LoraLoader', w:['lora_name','strength_model'], c:['model','clip'], out:false },
+      { id:'6', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'7', cls:'CLIPTextEncode', w:['text'], c:['clip'], out:false },
+      { id:'5', cls:'EmptyLatentImage', w:['width','height','batch_size'], c:[], out:false },
+      { id:'3', cls:'KSampler', w:['seed','steps','cfg','sampler_name','scheduler','denoise'],
+        c:['model','positive','negative','latent_image'], out:false },
+      { id:'8', cls:'VAEDecode', w:[], c:['samples','vae'], out:false },
+      { id:'9', cls:'SaveImage', w:['filename_prefix'], c:['images'], out:true },
+    ]
+  },
+};
+
+/* ---------- 节点角色：只看 class_type，不看字段名 ---------- */
+// 提示词类：用户在创作台打的字进这里（或者档位自己写），不该出现在"可勾节点"里
+const PROMPT_CLASSES = ['CLIPTextEncode','CLIPTextEncodeSDXL','MusicGenTextEncode','T5TextEncode','PromptBuilder'];
+// 上传类：参考图/参考视频/参考音频，可能有多个，由服务端按用户上传动态添加
+const UPLOAD_CLASSES = ['LoadImage','LoadImageMask','LoadAudio','LoadVideo','VHS_LoadVideo'];
+// 产物类：SaveXxx / PreviewXxx
+// （用 out:true 标记，这里只是给文档/提示用）
+// 判断一个节点是不是"能进档位的参数节点"
+function nodeRole(n){
+  if(!n) return 'param';
+  if(n.out) return 'output';
+  if(PROMPT_CLASSES.includes(n.cls)) return 'prompt';
+  if(UPLOAD_CLASSES.includes(n.cls)) return 'upload';
+  return 'param';
+}
+function nodeRoleLabel(n){
+  const r = nodeRole(n);
+  return r==='prompt' ? '提示词' : r==='upload' ? '上传参考' : r==='output' ? '出片' : '';
+}
+
+/* ---------- 字段名 → 人话标签 ---------- */
+const FIELD_LABELS = {
+  width:'宽度', height:'高度', batch_size:'张数',
+  steps:'步数', cfg:'CFG', denoise:'改写幅度', sampler_name:'采样器', scheduler:'调度器', seed:'种子',
+  length:'帧数', fps:'帧率', duration:'时长', bpm:'速度',
+  weight:'参考强度', weight_type:'参考方式', combine_embeds:'组合方式', start_at:'起始位置', end_at:'结束位置',
+  ckpt_name:'模型', lora_name:'LoRA 名字',
+  strength_model:'LoRA 强度', strength_clip:'LoRA 文本强度',
+  text:'文本', prompt:'提示词', cells:'分格描述', genre:'风格', style:'画风', gap:'格间距',
+  model:'模型名', device:'运行设备', voice:'音色', speed:'语速', top_k:'采样范围',
+  format:'文件格式', filename_prefix:'文件名前缀', upscale_method:'放大方式', crop:'裁切方式', upload:'上传',
+  image:'参考图', audio:'参考音频',
+  resolution:'分辨率', motion_strength:'动作幅度', audio_sync:'音画同步'
+};
+const GROUP_LABEL = { size:'画面尺寸', sample:'采样', video:'视频', audio:'音频', prompt:'文字',
+  model:'模型', image:'图片', misc:'其他' };
+
+/* ---------- 字段的控件形态 ---------- */
+// 关键：一个字段用什么控件，由"它在 ComfyUI 里本来是什么"决定，不是由我们规定。
+//   int / float → 数字输入框（数值小的给滑杆）
+//   bool        → 开关
+//   combo       → 下拉选择（必须是这几个之一）
+//   multi       → 多选（可以选好几个）
+//   ratio       → 比例选择（宽高成对，前端合成一个"比例"控件）
+//   text        → 输入框（多行的用 textarea）
+// 表里没有的字段按 text 处理，照样能配。
+const FIELD_META = {
+  width:{g:'size',type:'int',step:64,hint:'16 的倍数'},
+  height:{g:'size',type:'int',step:64,hint:'16 的倍数'},
+  batch_size:{g:'size',type:'int',step:1,min:1,max:8},
+  steps:{g:'sample',type:'int',step:1,min:1,max:150},
+  cfg:{g:'sample',type:'float',step:0.5,min:0,max:30},
+  denoise:{g:'sample',type:'float',step:0.05,min:0,max:1},
+  seed:{g:'sample',type:'int',step:1},
+  lora_name:{g:'model',type:'combo',opts:['sdxl_lcm_lora.safetensors','sdxl_lightning_4step.safetensors','sdxl_hyper8.safetensors']},
+  sampler_name:{g:'sample',type:'combo',opts:['euler','euler_ancestral','dpmpp_2m','dpmpp_sde','uni_pc','lcm']},
+  scheduler:{g:'sample',type:'combo',opts:['normal','karras','exponential','sgm_uniform','simple']},
+  strength_model:{g:'model',type:'float',step:0.05,min:0,max:2},
+  strength_clip:{g:'model',type:'float',step:0.05,min:0,max:2},
+  length:{g:'video',type:'int',step:1,min:9,max:257},
+  fps:{g:'video',type:'combo',opts:['12','16','24','30']},
+  duration:{g:'audio',type:'float',step:1,min:1,max:300},
+  bpm:{g:'audio',type:'int',step:5,min:40,max:200},
+  weight:{g:'image',type:'float',step:0.05,min:0,max:2},
+  weight_type:{g:'image',type:'combo',opts:['linear','ease in','ease out','style transfer','composition']},
+  combine_embeds:{g:'image',type:'multi',opts:['concat','add','subtract','average','norm average']},
+  start_at:{g:'image',type:'float',step:0.05,min:0,max:1},
+  end_at:{g:'image',type:'float',step:0.05,min:0,max:1},
+  text:{g:'prompt',type:'text',multi:1},
+  prompt:{g:'prompt',type:'text',multi:1},
+  cells:{g:'prompt',type:'text',multi:1},
+  genre:{g:'prompt',type:'combo',opts:['lofi','cinematic','edm','ambient','orchestral']},
+  style:{g:'prompt',type:'text'},
+  gap:{g:'misc',type:'int',step:1,min:0,max:60},
+  model:{g:'model',type:'combo',opts:['musicgen-small.safetensors','musicgen-medium.safetensors','cosyvoice-300m']},
+  ckpt_name:{g:'model',type:'combo',opts:['sd_xl_base_1.0.safetensors','sd_xl_refiner_1.0.safetensors','illustrious_v1.safetensors']},
+  device:{g:'model',type:'combo',opts:['cuda','cpu']},
+  voice:{g:'model',type:'combo',opts:['中文-女-温柔','中文-男-沉稳','英文-女-清亮']},
+  speed:{g:'audio',type:'float',step:0.05,min:0.5,max:2},
+  top_k:{g:'audio',type:'int',step:1,min:0,max:500},
+  upscale_method:{g:'image',type:'combo',opts:['nearest-exact','bilinear','area','bicubic','lanczos']},
+  crop:{g:'image',type:'combo',opts:['disabled','center']},
+  format:{g:'misc',type:'combo',opts:['png','jpg','webp','mp4','webm','mp3','wav']},
+  filename_prefix:{g:'misc',type:'text'},
+  resolution:{g:'video',type:'combo',opts:['480p','720p','1080p']},
+  motion_strength:{g:'video',type:'float',step:0.05,min:0,max:1},
+  audio_sync:{g:'video',type:'bool'},
+};
+function fieldLabel(f){ return FIELD_LABELS[f] || f; }
+function fieldMeta(f){ return FIELD_META[f] || { g:'misc', type:'text' }; }
+function fieldType(f){ return fieldMeta(f).type || 'text'; }
+function fieldOpts(f){ return fieldMeta(f).opts || []; }
+// 这个字段用什么控件？四类 + 特殊的比例
+function controlOf(f){
+  const t = fieldType(f);
+  if(t==='bool')  return 'switch';
+  if(t==='combo') return 'select';
+  if(t==='multi') return 'multi';
+  if(t==='int'||t==='float') return 'number';
+  return fieldMeta(f).multi ? 'textarea' : 'text';
+}
+const CONTROL_LABEL = { number:'输入框（数字）', text:'输入框（文字）', textarea:'输入框（多行）',
+  switch:'开关', select:'选择菜单', multi:'多选', ratio:'比例选择' };
+// 比例预设：宽高成对时给一排按钮，比让用户记 16 的倍数靠谱
+const RATIOS = [
+  { label:'1:1',  w:1024, h:1024 },
+  { label:'4:3',  w:1152, h:896  },
+  { label:'3:4',  w:896,  h:1152 },
+  { label:'16:9', w:1344, h:768  },
+  { label:'9:16', w:768,  h:1344 },
+];
+function isNumField(f){ const t=fieldType(f); return t==='int'||t==='float'; }
+function coerceField(f, raw){
+  if(raw===''||raw===undefined||raw===null) return '';
+  const t = fieldType(f);
+  if(t==='int')   { const n=Math.round(+raw); return isNaN(n)?'':n; }
+  if(t==='float') { const n=+raw; return isNaN(n)?'':Math.round(n*1000)/1000; }
+  return raw;
+}
+
+/* ---------- 从节点清单里推出"这个工作流能改哪些值" ---------- */
+// 只把"参数节点"自己的格子摊平：提示词、上传、产物节点一律不算。
+// 新工作流进来不需要改这里——它有什么就读到什么。
+function paramNodes(wfName){
+  const lib = WF_LIB[wfName];
+  return lib ? lib.list.filter(n=>nodeRole(n)==='param').filter(n=>(n.w||[]).length) : [];
+}
+function wfFields(wfName){
+  const out = [];
+  paramNodes(wfName).forEach(n=>{
+    (n.w||[]).forEach(f=>{
+      if(out.some(x=>x.node===n.id && x.field===f)) return;
+      out.push({ node:n.id, field:f, cls:n.cls });
+    });
+  });
+  return out;
+}
+// 单个节点"能进档位的格子"
+function nodeFields(nodeId, wfName){
+  const lib = WF_LIB[wfName];
+  if(!lib) return [];
+  const n = lib.list.find(x=>x.id===String(nodeId));
+  if(!n || nodeRole(n)!=='param') return [];
+  return (n.w||[]).slice();
+}
+
+/* ---------- 谁出现在 ② 的清单里 ---------- */
+// 只有"参数节点"能勾。提示词/上传/出片三类不出现在清单上——
+// 不是因为不让改，而是因为改它们没意义：提示词由创作台填，参考图由用户上传（还可能好几个）。
+function pickableNodes(wfName){
+  return paramNodes(wfName);
+}
+function nodePickableFields(nodeId, wfName){ return nodeFields(nodeId, wfName); }
+// 这个工作流里"被排除的节点"，用来在页面上说明清楚为什么没列出来
+function excludedNodes(wfName){
+  const lib = WF_LIB[wfName];
+  if(!lib) return [];
+  return lib.list.filter(n=>nodeRole(n)!=='param')
+    .map(n=>({ id:n.id, cls:n.cls, role:nodeRole(n), label:nodeRoleLabel(n) }));
+}
+// 提示词格子（给"描述框绑到哪"用）——它不进档位设置，但需要一个绑定
+const PROMPT_FIELDS = ['text','prompt','cells','genre'];
+function isPromptLike(field){ return PROMPT_FIELDS.includes(field); }
+// 这份配置里哪些节点被选进了参数区
+function pickedNodeIds(wf){
+  const ids = [];
+  (wf && wf.fields || []).forEach(f=>{ if(f.node && !ids.includes(String(f.node))) ids.push(String(f.node)); });
+  return ids;
+}
+// 某个节点里能被设置的那几格
+function nodeSetFields(nodeId, wfName){
+  const lib = WF_LIB[wfName];
+  if(!lib) return [];
+  const n = lib.list.find(x=>x.id===String(nodeId));
+  if(!n) return [];
+  return (n.w||[]).slice();
+}
+
+/* ---------- 控件类型（创作台"输入区"用） ---------- */
+const CONTROL_TYPES = ['多行文本','单行文本','数字','滑杆','下拉','开关','比例选择','上传图片','上传音频','多段文本'];
+const TRIGGERS = ['图片数量','音频数量','视频数量','总文件数量','某个参数的值','画面比例','文本长度'];
+
+/* ---------- 工作流拷贝 ---------- */
+// 一个档位 = 一份工作流拷贝。默认档 = 原始工作流本身（只读、只调用、删不掉）。
+// 点【添加】就是深拷贝原始工作流，再在拷贝上改值。
+function cloneWfParams(wf){
+  return {
+    name: wf.name,
+    path: wf.path,
+    values: JSON.parse(JSON.stringify(wf.params || {})),
+  };
+}
+function wfBaseParams(wf){
+  return JSON.parse(JSON.stringify(wf.params || {}));
+}
+
+/* ---------- 默认配置 ---------- */
+// 数据模型（一个工作流）：
+//   original = 原始工作流的参数快照（只读，就是默认档）
+//   fields   = 进档位设置的节点（从参数节点里勾）
+//   grades   = 档位列表。第 1 档永远是 { locked:true }，代表"默认档 = 原始工作流"。
+//              其余档各带一份 params（= 它自己的工作流拷贝）
+function wf(name, path, timeout, fields, original, grades, opt){
+  return Object.assign({
+    name, path, timeout,
+    prompt:{ node:null, field:null },
+    fields,
+    original,
+    grades,
+    output:{ node:null, kind:'图片', multi:false },
+    status:'ok',
+  }, opt||{});
+}
+
+function defaultState(){
+  // 原始工作流的参数（就是从 json 里读出来的那些默认值）
+  const O_SDXL = {
+    ckpt_name:'sd_xl_base_1.0.safetensors',
+    width:1024, height:1024, batch_size:1,
+    steps:28, cfg:7.0, sampler_name:'dpmpp_2m', scheduler:'karras', denoise:1.0, seed:0,
+    filename_prefix:'ComfyBridge',
+  };
+  const O_I2I = Object.assign({}, O_SDXL, {
+    image:'', upscale_method:'lanczos', crop:'disabled',
+    width:1024, height:1024, denoise:0.55,
+  });
+  const O_IPA = Object.assign({}, O_SDXL, {
+    image:'', weight:0.8, weight_type:'linear', combine_embeds:['concat'], start_at:0, end_at:1,
+  });
+  const O_TURBO = Object.assign({}, O_SDXL, {
+    lora_name:'sdxl_lcm_lora.safetensors', strength_model:1.0,
+    steps:8, cfg:1.5, sampler_name:'lcm', scheduler:'sgm_uniform',
+  });
+  const O_WAN = {
+    prompt:'', width:1280, height:704, length:81, steps:30, seed:0,
+    fps:'24', format:'mp4',
+  };
+  const O_BOARD = {
+    ckpt_name:'sd_xl_base_1.0.safetensors', text:'', cells:'',
+    style:'电影感分镜，统一光影', gap:12,
+    width:768, height:768, steps:26, cfg:7.0, sampler_name:'dpmpp_2m', scheduler:'karras', seed:0,
+    filename_prefix:'ComfyBridge',
+  };
+  const O_MUSIC = {
+    model:'musicgen-medium.safetensors', device:'cuda', prompt:'', genre:'lofi',
+    duration:30, bpm:90, seed:0, top_k:250, format:'mp3',
+  };
+  const O_TTS = {
+    model:'cosyvoice-300m', voice:'中文-女-温柔', text:'', speed:1.0, seed:0, format:'mp3',
+  };
+  const O_H3 = {
+    image:'', audio:'', prompt:'', duration:6, resolution:'720p',
+    motion_strength:0.6, audio_sync:true, fps:'24', format:'mp4',
+  };
+
+  return {
+    service: {
+      comfy:'http://127.0.0.1:8188', port:8190, bindLan:false, token:'',
+      logLevel:'info', logMaxMB:10,
+      maxConcurrent:1, maxQueue:20,
+      archiveDir:'output/ComfyBridgeOutput',
+      wfDir:'./workflows', copyDir:'./workflows/ComfyBridge', uploadDir:'./data/uploads',
+      taskDir:'./data/tasks', uploadMaxMB:32
+    },
+    capabilities: [
+      {
+        id:'image.generate', name:'图片生成', em:'🖼', group:'图像', enabled:true,
+        desc:'文字描述生成图片，支持 1~8 张、任意比例',
+        rules:[
+          { when:'图片 = 0', wf:'文生图.sdxl' },
+          { when:'图片 = 1', wf:'图生图.sdxl' },
+          { when:'图片 ≥ 2', wf:'风格参考.ipadapter' },
+        ],
+        fallback:'auto',
+        workflows:[
+          wf('文生图.sdxl', WF_LIB['文生图.sdxl'].path, 180,
+            [ {node:'5',field:'width'}, {node:'5',field:'height'}, {node:'5',field:'batch_size'},
+              {node:'3',field:'steps'}, {node:'3',field:'cfg'}, {node:'3',field:'sampler_name'} ],
+            O_SDXL,
+            [
+              { name:'默认', locked:true, note:'原样出图，参数没改过' },
+              { name:'快速', note:'几十秒出一张，先看构图',
+                params:Object.assign({}, O_SDXL, { width:768, height:768, steps:12, cfg:4.5, sampler_name:'dpmpp_sde' }) },
+              { name:'精细', note:'出图慢一些，细节更多',
+                params:Object.assign({}, O_SDXL, { width:1344, height:768, steps:40, cfg:8.5, sampler_name:'dpmpp_2m' }) },
+            ],
+            { prompt:{ node:'6', field:'text' }, output:{ node:'9', kind:'图片', multi:true } }),
+
+          wf('图生图.sdxl', WF_LIB['图生图.sdxl'].path, 180,
+            [ {node:'2',field:'width'}, {node:'2',field:'height'}, {node:'3',field:'denoise'},
+              {node:'3',field:'steps'}, {node:'3',field:'cfg'} ],
+            O_I2I,
+            [
+              { name:'默认', locked:true, note:'原样出图，参数没改过' },
+              { name:'快速', note:'改写大一点，先看方向',
+                params:Object.assign({}, O_I2I, { width:768, height:768, denoise:0.65, steps:14, cfg:5.0 }) },
+              { name:'精细', note:'贴着原图改',
+                params:Object.assign({}, O_I2I, { width:1152, height:896, denoise:0.45, steps:32, cfg:7.0 }) },
+            ],
+            { prompt:{ node:'6', field:'text' }, output:{ node:'9', kind:'图片', multi:true } }),
+
+          wf('风格参考.ipadapter', WF_LIB['风格参考.ipadapter'].path, 240,
+            [ {node:'5',field:'width'}, {node:'5',field:'height'}, {node:'11',field:'weight'},
+              {node:'11',field:'weight_type'}, {node:'3',field:'steps'} ],
+            O_IPA,
+            [
+              { name:'默认', locked:true, note:'原样出图，参数没改过' },
+              { name:'更像画风', note:'参考强度拉高',
+                params:Object.assign({}, O_IPA, { weight:1.0, weight_type:'style transfer', steps:32 }) },
+              { name:'只借一点', note:'保留自己原本的画风',
+                params:Object.assign({}, O_IPA, { weight:0.55, weight_type:'linear', steps:24 }) },
+            ],
+            { prompt:{ node:'6', field:'text' }, output:{ node:'9', kind:'图片', multi:true }, status:'warn' }),
+
+          wf('文生图.sdxl.turbo', WF_LIB['文生图.sdxl.turbo'].path, 120,
+            [ {node:'3',field:'steps'}, {node:'3',field:'cfg'}, {node:'12',field:'strength_model'} ],
+            O_TURBO,
+            [
+              { name:'默认', locked:true, note:'原样出图，参数没改过' },
+              { name:'4 步', note:'最快，看个大概',
+                params:Object.assign({}, O_TURBO, { steps:4, cfg:1.2, strength_model:0.8 }) },
+              { name:'6 步', note:'细节更稳',
+                params:Object.assign({}, O_TURBO, { steps:6, cfg:1.5, strength_model:1.0 }) },
+            ],
+            { prompt:{ node:'6', field:'text' }, output:{ node:'9', kind:'图片', multi:true } }),
+        ]
+      },
+    ],
+    jobs: [],
+    seeded:false
+  };
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){ const s = JSON.parse(raw); if(s && s.capabilities) return s; }
+  }catch(e){}
+  return defaultState();
+}
+function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
+function resetState(){ localStorage.removeItem(LS_KEY); location.reload(); }
+
+let S = loadState();
+
+/* ---------- 能力状态判定 ---------- */
+function capStatus(cap){
+  if(!cap.workflows || !cap.workflows.length) return 'empty';
+  if(cap.workflows.every(w=>w.status==='err')) return 'err';
+  if(!cap.enabled) return 'off';
+  if(cap.workflows.some(w=>w.status==='err')) return 'partial';
+  return 'ok';
+}
+function capUsable(cap){ const s = capStatus(cap); return s==='ok' || s==='partial'; }
+
+/* ---------- 按输入挑工作流（规则来自 config.yaml，页面不编辑） ---------- */
+function pickWorkflow(cap, refs){
+  const n = refs.length;
+  for(const w of cap.workflows){
+    if(w.status==='err') continue;
+    const rule = (cap.rules||[]).find(r=>r.wf===w.name);
+    if(!rule) continue;
+    const t = rule.when;
+    if(t==='默认') return { wf:w, why:'兜底默认' };
+    const m = t.match(/(图片|音频|视频|总文件数量)\s*(=|≥|>|≤|<)\s*(\d+)/);
+    if(m){
+      const kind=m[1], op=m[2], v=+m[3];
+      const cnt = kind==='图片'||kind==='总文件数量' ? n : kind==='音频' ? refs.filter(r=>r.kind==='audio').length : refs.filter(r=>r.kind==='video').length;
+      const hit = op==='='?cnt===v:op==='≥'?cnt>=v:op==='>'?cnt>v:op==='≤'?cnt<=v:cnt<v;
+      if(hit) return { wf:w, why:`命中「${t}」` };
+    }
+  }
+  const fb = cap.fallback==='auto' ? cap.workflows.find(w=>w.status!=='err') : null;
+  if(fb) return { wf:fb, why:'条件都不匹配，用兜底' };
+  return { wf:null, why:'没有匹配的工作流' };
+}
+
+/* ---------- 档位 ---------- */
+function capGrades(cap){
+  if(!cap || !cap.workflows || !cap.workflows.length) return [];
+  const ok = cap.workflows.find(x=>x.status!=='err' && x.grades && x.grades.length);
+  if(ok) return ok.grades;
+  const only = cap.workflows.find(x=>x.grades && x.grades.length);
+  return only ? only.grades : [];
+}
+// 某一档最终要写进工作流的这组值：默认档返回原始值，其余返回它自己那份拷贝
+function gradeParams(wf, g){
+  if(!wf || !g) return {};
+  if(g.locked) return JSON.parse(JSON.stringify(wf.original||{}));
+  return Object.assign(JSON.parse(JSON.stringify(wf.original||{})), g.params||{});
+}
+// 这个档位字段是不是数值
+function isNumGradeField(f){ return isNumField(f.field); }
+// 档位摘要：宽高成对写成 1024×1024
+function gradeDetail(g, fields, wf){
+  if(!g) return '';
+  const vals = wf ? gradeParams(wf, g) : Object.assign({}, g.params||{});
+  const fs = (fields && fields.length) ? fields : Object.keys(vals).map(k=>({ field:k }));
+  const used = [];
+  const parts = [];
+  fs.forEach(f=>{
+    if(used.includes(f.field)) return;
+    const v = vals[f.field];
+    if(v===''||v===undefined||v===null) return;
+    if(f.field==='width' && vals.height!==undefined){
+      used.push('height'); parts.push(v+'×'+vals.height); return;
+    }
+    used.push(f.field);
+    const lb = fieldLabel(f.field);
+    parts.push(lb+' '+(Array.isArray(v)?v.join('/'):v));
+  });
+  return parts.join(' · ');
+}
+
+/* ---------- 成果物归档路径 ---------- */
+function archivePathFor(cap, fileName){
+  const root = (S.service.archiveDir || 'output/ComfyBridgeOutput').replace(/\/+$/,'');
+  return root + '/' + (cap ? cap.name : '未分类') + '/' + (fileName || '');
+}
+
+/* ---------- 生成模拟成品图（SVG 渐变 + 噪点感） ---------- */
+const PALETTES = [
+  ['#1b2a4a','#3d5a80','#98c1d9'],
+  ['#2b1b3d','#5b3d80','#c9a0dc'],
+  ['#0f2027','#203a43','#2c5364'],
+  ['#3a1c1c','#7a3030','#d9a08f'],
+  ['#1c3a2e','#2f6b52','#a8d5ba'],
+  ['#2d2a1c','#6b5f2f','#d9c88f'],
+];
+let _artSeq = 0;
+function mockArt(seed, label, sub){
+  const p = PALETTES[Math.abs(seed)%PALETTES.length];
+  const id = 'g'+(++_artSeq);
+  const shapes = [];
+  for(let i=0;i<5;i++){
+    const cx = 20+((seed*(i+7))%80), cy=18+((seed*(i+13))%72);
+    const r = 12+((seed*(i+3))%26);
+    shapes.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${p[2]}" opacity="${0.28+(i%3)*0.12}"/>`);
+    shapes.push(`<rect x="${(cx+r*0.3)%70}" y="${(cy+r*0.4)%70}" width="${r*0.9}" height="${r*0.55}" rx="3" fill="${p[1]}" opacity="0.45"/>`);
+  }
+  shapes.push(`<path d="M-10 78 L60 -10 L82 -10 L10 90 Z" fill="#fff" opacity="0.10"/>`);
+  shapes.push(`<path d="M30 105 L100 20 L108 32 L46 105 Z" fill="#fff" opacity="0.07"/>`);
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${p[0]}"/><stop offset="0.55" stop-color="${p[1]}"/><stop offset="1" stop-color="${p[2]}"/>
+    </linearGradient></defs>
+    <rect width="100" height="100" fill="url(#${id})"/>
+    ${shapes.join('')}
+    <text x="50" y="53" font-size="7" fill="#fff" opacity="0.5" text-anchor="middle" font-family="sans-serif">${label||'预览'}</text>
+    <text x="50" y="63" font-size="4.5" fill="#fff" opacity="0.32" text-anchor="middle" font-family="sans-serif">${sub||('seed '+seed)}</text>
+  </svg>`;
+}
+function mockVideo(seed){
+  const vid = 'v'+(++_artSeq);
+  return `<svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+    <defs><linearGradient id="${vid}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12213a"/><stop offset="1" stop-color="#2b4f7a"/></linearGradient></defs>
+    <rect width="160" height="100" fill="url(#${vid})"/>
+    <circle cx="80" cy="50" r="19" fill="#fff" opacity="0.9"/>
+    <path d="M74 41 L94 50 L74 59 Z" fill="#12213a"/>
+    <rect x="6" y="88" width="148" height="4" rx="2" fill="#fff" opacity="0.22"/>
+    <rect x="6" y="88" width="62" height="4" rx="2" fill="#fff" opacity="0.65"/>
+    <text x="8" y="14" font-size="7" fill="#fff" opacity="0.6" font-family="sans-serif">${seed%3===0?'5s · 832×480':'5s · 1280×720'}</text>
+  </svg>`;
+}
+
+/* ---------- 工具 ---------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(msg, ms=1900){
+  // 同一时间只留最后一条，免得几条叠在一起看不清
+  document.querySelectorAll('.toast').forEach(x=>x.remove());
+  const el = document.createElement('div');
+  el.className='toast'; el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='.2s'; setTimeout(()=>el.remove(),220); }, ms);
+}
+function uid(p='id'){ return p+'_'+Math.random().toString(36).slice(2,7); }
+function nowStr(){ const d=new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+
+// ===== script #2 =====
+/* ============ 应用主逻辑 ============ */
+
+const UI = {
+  route:'studio',       // studio | admin | gallery
+  adminPage:'caps',
+  capId:'image.generate',
+  refs:[],              // [{id,kind,seed}]
+  params:{},            // 当前选中的档位
+  comfyOnline:true,
+  editingWfIndex:0,
+  showWizard:false,
+  wizardStep:0,
+  galleryFilter:'全部',
+  autoScroll:false,     // 只在发送任务后自动滚到底部
+};
+
+/* ---------- 演示用任务 ---------- */
+/* 一张任务卡 = 一次提交（同一句话、同一个工作流）。
+   卡里可以有多个成品：第 1 个来自普通生成，后面几个来自「加入队列生成」。
+   一个成品 = 一条 run = 一次真正提交给 ComfyUI 的工作流。 */
+function seedJobs(){
+  if(S.seeded) return;
+  S.seeded = true;
+  const t = Date.now();
+  const R = (o)=>Object.assign({ mode:'normal', state:'done', pct:100, media:'image', stem:'' }, o);
+  S.jobs = [
+    { id:'job_8f3a', cap:'image.generate', capName:'图片生成', wf:'文生图.sdxl', seed:887231456,
+      prompt:'雨夜霓虹街道，赛博朋克，湿地面反光', refs:[], t0:t-240000,
+      runs:[
+        R({ id:'run_8f3a_1', seq:1, mode:'normal', wf:'文生图.sdxl', grade:'默认', seed:887231456,
+            t0:t-240000, t1:t-226000, file:'雨夜霓虹街道_0001_.png', stem:'雨夜霓虹街道' }),
+        R({ id:'run_8f3a_2', seq:2, mode:'queue', wf:'文生图.sdxl', grade:'精细', seed:887231456,
+            t0:t-226000, t1:t-210000, file:'雨夜霓虹街道_0002_.png', stem:'雨夜霓虹街道' }),
+      ] },
+    { id:'job_7c11', cap:'image.generate', capName:'图片生成', wf:'文生图.sdxl',
+      prompt:'一只橘猫坐在窗台上，午后阳光', refs:[], t0:t-900000,
+      runs:[ R({ id:'run_7c11_1', seq:3, wf:'文生图.sdxl', grade:'快速', seed:1230984,
+                 t0:t-900000, t1:t-874000, file:'橘猫窗台_0001_.png', stem:'橘猫窗台' }) ] },
+  ];
+  _runSeq = 3;
+  saveState();
+}
+
+/* 刷新页面时：上一秒"正在跑"的那条当作没跑完，重新排队；队列里剩下的接着跑 */
+function resumeJobs(){
+  let touched = false;
+  allRuns().forEach(x=>{
+    if(x.r.state==='running'){ x.r.state='queued'; x.r.pct=0; touched=true; }
+  });
+  if(touched) saveState();
+  pump();
+}
+
+/* 老版本存下来的任务（没有 runs）转成新结构，免得升级后一片空白 */
+function normalizeJobs(){
+  let touched = false;
+  (S.jobs||[]).forEach(j=>{
+    if(Array.isArray(j.runs)){
+      // 一批只认一个种子：老数据里每条不一样，统一成首发那个
+      const sd = j.seed || (j.runs[0] && j.runs[0].seed) || Math.floor(Math.random()*1e9);
+      if(j.seed!==sd || j.runs.some(r=>r.seed!==sd)){ j.seed = sd; j.runs.forEach(r=>{ r.seed = sd; }); touched = true; }
+      return;
+    }
+    touched = true;
+    const st = j.state || 'done';
+    const files = (j.archive||[]).slice();
+    const media = String(j.cap||'').startsWith('video') ? 'video' : String(j.cap||'').startsWith('audio') ? 'audio' : 'image';
+    const stem = (j.prompt||'成品').replace(/[\\/:*?"<>|\s，。、；：！？]/g,'_').slice(0,10);
+    const n = Math.max(1, files.length || j.count || 1);
+    const seed = j.seed || Math.floor(Math.random()*1e9);
+    j.seed = seed;
+    j.runs = Array.from({length:n}).map((_,i)=>({
+      id:(j.id||uid('job'))+'_r'+(i+1), seq: ++_runSeq,
+      mode: i===0 ? 'normal' : 'queue',
+      wf: j.wf||'', grade: j.grade||'', seed, media,
+      state: (st==='running'||st==='queued') ? 'canceled' : st,
+      pct: st==='done' ? 100 : (j.pct||0),
+      t0: j.t0, t1: j.t1, err: j.err,
+      file: files[i] || (stem+'_'+String(i+1).padStart(4,'0')+'_.png'), stem
+    }));
+    delete j.state; delete j.pct; delete j.assets; delete j.count; delete j.archive; delete j.err;
+    if(!j.refs) j.refs = [];
+  });
+  if(touched) saveState();
+}
+/* ================= 通用渲染 ================= */
+
+function render(){
+  const root = $('#root');
+  if(UI.route==='studio') root.innerHTML = viewStudio();
+  else if(UI.route==='admin') root.innerHTML = viewAdmin();
+  else root.innerHTML = viewGallery();
+  bindGlobal();
+  if(UI.route==='studio'){ bindStudio(); if(UI.autoScroll){ scrollChatBottom(); UI.autoScroll=false; } }
+  if(UI.route==='admin') bindAdmin();
+  if(UI.route==='gallery') bindGallery();
+  if(UI.showWizard) renderWizard();
+}
+
+function viewTopbar(){
+  const on = UI.comfyOnline;
+  return `<div class="topbar">
+    <div class="brand"><i></i>ComfyBridge</div>
+    <div class="health ${on?'':'off'}" id="healthBtn" title="${on?'断开测试':'恢复连接'}">
+      <span class="dot ${on?'g':'r'} pulse"></span>
+      <span class="txt">${on?'已连接':'ComfyUI 未连接'}</span>
+      <span class="mono muted">${S.service.comfy.replace('http://','')}</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" data-nav="gallery">🗂 历史</button>
+    <button class="btn sm" data-nav="${UI.route==='admin'?'studio':'admin'}">${UI.route==='admin'?'← 返回创作台':'⚙ 管理台'}</button>
+  </div>`;
+}
+
+/* ================= 创作台 ================= */
+
+function groupedCaps(){
+  const groups = {};
+  S.capabilities.forEach(c=>{ (groups[c.group]=groups[c.group]||[]).push(c); });
+  return groups;
+}
+const GROUP_ORDER = ['图像','设定图','故事板','视频','音频'];
+function orderedGroups(){
+  const g = groupedCaps();
+  const known = GROUP_ORDER.filter(k=>g[k]);
+  const extra = Object.keys(g).filter(k=>!GROUP_ORDER.includes(k));
+  return known.concat(extra).map(k=>({name:k, caps:g[k]}));
+}
+
+function viewStudio(){
+  return `<div class="app">
+    ${viewTopbar()}
+    <div class="studio">
+      ${viewRail()}
+      <div class="chat">
+        <div class="chat-scroll" id="chatScroll"><div class="chat-inner" id="chatInner">${viewChat()}</div></div>
+        ${viewComposer()}
+      </div>
+      ${viewDrawer()}
+    </div>
+  </div>`;
+}
+
+function viewRail(){
+  let html = `<div class="rail">`;
+  let hasAny = false;
+  orderedGroups().forEach(({name:grp, caps})=>{
+    html += `<div class="group">${grp}</div>`;
+    caps.forEach(c=>{
+      const usable = capUsable(c) && c.enabled;
+      if(usable){ hasAny = true; }
+      const cur = c.id===UI.capId;
+      html += `<div class="item ${cur?'on':''} ${usable?'':'dis'}" data-cap="${c.id}" title="${esc(c.desc||'还没配置工作流')}">
+        <span class="em">${c.em}</span><span class="nm">${esc(c.name)}</span>
+        ${usable?'':'<span class="tag">未配置</span>'}
+      </div>`;
+    });
+  });
+  if(!hasAny) html += `<div class="tip">当前还没有任何可用能力。<br>点这里去管理台添加第一个 →</div>`;
+  else html += `<div class="tip">灰色 = 还没配好，暂时用不了</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function viewChat(){
+  const mine = S.jobs.filter(j=>j.cap===UI.capId);
+  if(!mine.length) return viewEmptyChat();
+  return mine.map(j=>jobCard(j)).join('');
+}
+
+function viewEmptyChat(){
+  const cap = S.capabilities.find(c=>c.id===UI.capId);
+  const usable = cap && capUsable(cap) && cap.enabled;
+  if(!usable) return `<div class="empty">
+    <div style="font-size:34px">🧩</div>
+    <div><b style="font-size:15px;color:#45505f">这个能力还没有配置工作流</b></div>
+    <div class="tiny">去管理台给它选一个工作流、排好档位，保存后立刻能用</div>
+    <button class="btn primary" data-nav="admin">去管理台配置</button>
+  </div>`;
+  return `<div class="empty" style="padding-top:36px">
+    <div style="font-size:34px">✨</div>
+    <div><b style="font-size:15px;color:#45505f">${esc(cap.em)} ${esc(cap.name)}</b></div>
+    <div class="tiny" style="max-width:420px">${esc(cap.desc||'描述你想要的画面，剩下的交给本地显卡')}</div>
+    <div class="row" style="flex-wrap:wrap;justify-content:center;max-width:520px;margin-top:4px">
+      ${samplePrompts(cap).map(p=>`<button class="chip" data-sample="${esc(p)}">${esc(p)}</button>`).join('')}
+    </div>
+  </div>`;
+}
+function samplePrompts(cap){
+  const m = {
+    'image.generate':['雨夜霓虹街道，赛博朋克，竖版','一只橘猫坐在窗台上，午后阳光','水墨山水，远山淡雾'],
+    'video.firstlast':['从白天到黑夜的延时摄影','镜头从远推近，人物回头'],
+    'board.9':['小机器人找猫的 9 格分镜','雨夜追凶，冷色调 9 格分镜'],
+    'audio.music':['低沉的钢琴配雨声，慢速','轻快的电子乐，适合做开箱视频'],
+  };
+  return m[cap.id] || ['描述你想生成的内容'];
+}
+
+/* ---------- 任务卡 ---------- */
+function jobRuns(j){ return (j && j.runs) || []; }
+function doneRuns(j){ return jobRuns(j).filter(r=>r.state==='done'); }
+function pendRuns(j){ return jobRuns(j).filter(r=>r.state==='running'||r.state==='queued'); }
+
+/* 这一档要跑多少步（只用来显示进度文案；音乐/语音这类没步数的给 28） */
+function stepTotal(job, run){
+  const cap = S.capabilities.find(c=>c.id===job.cap);
+  const wf = cap && (cap.workflows||[]).find(w=>w.name===run.wf);
+  if(!wf) return 28;
+  const st = wfFields(wf.name).find(f=>f.field==='steps');
+  if(!st) return 28;
+  const g = (wf.grades||[]).find(x=>x.name===run.grade);
+  const v = g ? gradeParams(wf,g)[st.field] : null;
+  return (+v) || 28;
+}
+/* 原型里的模拟耗时：步数越多跑得越久（跟真实显卡的绝对时间无关） */
+function runDurMs(job, run){
+  return Math.min(14000, 1200 + stepTotal(job, run) * 140);
+}
+function queueAhead(run){
+  // 正在跑的那一个也算在前面，不然第二个排队会显示“前面还有 0 个”
+  return allRuns().filter(x=>(x.r.state==='running'||x.r.state==='queued') && (x.r.seq||0) < (run.seq||0)).length;
+}
+
+function jobCard(j){
+  const runs = jobRuns(j);
+  const base = runs[0];
+  if(!base) return '';
+  const cap = S.capabilities.find(c=>c.id===j.cap);
+  const promptBox = `<div class="msg-u" style="background:#f6f8fb;color:#45505f;box-shadow:none;max-width:none;margin-bottom:10px">${esc(j.prompt)}</div>`;
+
+  /* 首发还没出片：生成中 / 等执行 */
+  if(base.state==='queued' || base.state==='running'){
+    const pct = Math.round(base.pct||0);
+    const st = stepTotal(j, base);
+    return `<div class="job" id="${j.id}">
+      <div class="head"><span class="dot a pulse"></span><b>${base.state==='queued'?'等待执行':'生成中'}</b>
+        <span class="wf">· ${esc(j.wf)}</span><span class="gradechip">${esc(base.grade||'默认')}</span>
+        <span style="flex:1"></span><span class="tiny muted">${j.id}</span></div>
+      <div class="body">
+        ${promptBox}
+        <div class="tiny muted" data-jobstep>${base.state==='queued'?'ComfyUI 马上开始':`正在采样 · ${Math.round(pct*st/100)}/${st} 步`}</div>
+        <div class="progress"><i data-jobbar style="width:${pct}%"></i></div>
+        <div class="spread tiny muted"><span>${base.state==='queued'?'等待显卡空闲':'预计还需 '+Math.max(2,Math.round((runDurMs(j,base)/1000)*(100-pct)/100))+' 秒'}</span><b style="color:#2f6bff" data-jobpct>${pct}%</b></div>
+      </div>
+      <div class="foot"><span class="grow">第一次生成只会出一张 · 跑完可以「加入队列生成」往后接着加</span>
+        <button class="btn sm" data-cancel="${j.id}">取消</button></div>
+    </div>`;
+  }
+
+  /* 首发就失败了 */
+  if(base.state==='fail'){
+    const e = base.err || {};
+    return `<div class="job fail" id="${j.id}">
+      <div class="head"><span class="dot r"></span><b>失败</b><span class="wf">· ${esc(j.wf)}</span>
+        <span class="gradechip">${esc(base.grade||'默认')}</span>
+        <span style="flex:1"></span><span class="tiny muted">${esc(e.retriable?'可以再试一次':'要先改一下再跑')}</span></div>
+      <div class="body" style="padding-bottom:0">${promptBox}</div>
+      <div class="errbox" id="err-${j.id}">
+        <div>${esc(e.msg||'')}</div>
+        <div class="raw">${esc(e.raw||'')}</div>
+      </div>
+      <div class="foot"><span class="grow"></span>
+        <button class="btn sm" data-raw="${j.id}">看原始报错</button>
+        ${e.retriable?'<button class="btn sm primary" data-retry="'+j.id+'">重试一次</button>':'<button class="btn sm" data-nav="admin">去检查配置</button>'}
+      </div>
+    </div>`;
+  }
+
+  if(base.state==='canceled'){
+    return `<div class="job" id="${j.id}"><div class="head"><span class="dot"></span><b>已取消</b><span class="wf">· ${esc(j.wf)}</span></div>
+      <div class="body">${promptBox}</div></div>`;
+  }
+
+  /* 首发已出片：成品横着往后排，队列里的还占一个位置 */
+  const ds = doneRuns(j);
+  const ps = pendRuns(j);
+  const fs = runs.filter(r=>r.state==='fail');
+  const n = ds.length + ps.length;
+  const cols = n<=1 ? 1 : n===2 ? 2 : 3;
+  const grades = [...new Set(runs.filter(r=>r.state!=='canceled').map(r=>r.grade||'默认'))];
+  const running = ps.find(r=>r.state==='running');
+  const lastT = Math.max(j.t0||0, ...runs.filter(r=>r.t1).map(r=>r.t1));
+
+  return `<div class="job done" id="${j.id}">
+    <div class="head"><span class="dot g"></span><b>已完成</b><span class="wf">· ${esc(j.wf)}</span>
+      <span class="gradechip">${esc(grades.join(' / '))}</span>
+      <span style="flex:1"></span>
+      ${ps.length?`<span class="qchip"><span class="dot a pulse"></span>队列 ${ps.length} 个${running?` · 正在出成品 ${ds.length+1}`:''}</span>`:''}
+      <span class="tiny muted">用时 ${Math.round((lastT-(j.t0||lastT))/1000)} 秒</span></div>
+    <div class="body">
+      ${promptBox}
+      <div class="grid tiles" style="grid-template-columns:repeat(${cols},minmax(0,1fr));max-width:${cols*250+(cols-1)*9}px">
+        ${ds.map((r,i)=>{
+          const label = '成品 ' + (i+1);
+          const sub = runSizeText(j, r);          // 写这一档的尺寸，比写种子有用
+          const badge = (r.grade && r.grade!==base.grade) ? `<span class="badge">${esc(r.grade)}</span>` : '';
+          return r.media==='video'
+            ? `<div class="tile vid"><div style="width:100%;height:100%">${mockVideo(r.seed)}</div>${badge}
+                <div class="acts"><button title="看大图" data-zoom="${j.id}|${i}">⤢</button><button title="下载" data-dl="${j.id}">⬇</button></div></div>`
+            : `<div class="tile"><div style="position:absolute;inset:0">${mockArt(r.seed,label,sub)}</div>${badge}
+                <div class="acts"><button title="看大图" data-zoom="${j.id}|${i}">⤢</button><button title="下载" data-dl="${j.id}">⬇</button>
+                <button title="加入队列生成（同种子、更高档）" data-qadd="${j.id}">🕒</button><button title="复制种子" data-seed="${r.seed}">⧉</button></div></div>`;
+        }).join('')}
+        ${ps.map((r,k)=>`<div class="tile q" data-runprog="${r.id}">
+          <button class="qx" title="撤掉这一档" data-qcancel="${r.id}">✕</button>
+          <div class="qwrap">
+            <div class="qlb">成品 ${ds.length+k+1}</div>
+            <div class="progress"><i style="width:${Math.round(r.pct||0)}%"></i></div>
+            <div class="tiny muted" data-runstep="${r.id}">${r.state==='running'?'正在采样…':'排队中 · 前面还有 '+queueAhead(r)+' 个'}</div>
+            <div class="qpct" data-runpct="${r.id}">${Math.round(r.pct||0)}%</div>
+          </div></div>`).join('')}
+      </div>
+      ${fs.length?`<div class="jobfail">${fs.map((r,i)=>`<div>有一条队列任务没跑成（${esc(r.grade||'默认')}）：${esc(r.err&&r.err.msg||'未知错误')}</div>`).join('')}</div>`:''}
+    </div>
+    <div class="foot">
+      <span class="grow seedline"><i class="sdot"></i>种子 <b class="mono">${j.seed||base.seed}</b></span>
+      <button class="btn sm qbtn" data-qadd="${j.id}" title="挑一档排到这批后面，再出一张">🕒 加入队列生成</button>
+      <button class="btn sm" data-again="${j.id}">↻ 再来一张</button>
+    </div>
+  </div>`;
+}
+
+function currentCap(){ return S.capabilities.find(c=>c.id===UI.capId); }
+
+/* ---------- 输入区：描述框 + 档位（没有 step/cfg/seed 这些词） ---------- */
+function viewComposer(){
+  const cap = currentCap();
+  const usable = cap && capUsable(cap) && cap.enabled;
+  if(!usable){
+    // 区分两种"不能用"：什么都没配 vs 配了但有错。后者要告诉用户错在哪，而不是一句冷冰冰的"未配置"。
+    const brokenWf = cap && (cap.workflows||[]).find(w=>w.status==='err');
+    if(brokenWf){
+      return `<div class="composer"><div class="composer-inner">
+        <div class="brokenbox">
+          <div><b>这个能力现在发不出去</b>：${esc(brokenWf.name)} 的档位有问题。</div>
+          <div class="tiny mono" style="margin-top:4px">${esc(brokenWf.err||'')}</div>
+          <div class="tiny muted" style="margin-top:6px">改法：管理台 → 档位表 → 把越界的那一档改掉（宽高这两格要是 16 的整数倍）。</div>
+        </div>
+        <button class="btn sm" data-nav="admin" style="margin-top:8px">去管理台改</button>
+      </div></div>`;
+    }
+    return `<div class="composer"><div class="composer-inner">
+      <div class="inputbox" style="border-color:var(--line);box-shadow:none;background:#fafbfe">
+        <div class="tiny muted" style="padding:18px 4px;text-align:center">这个能力还没配好档位，暂时不能发送。先去管理台配一下。</div>
+      </div></div></div>`;
+  }
+  const requiresRef = needsRef(cap);
+  const grades = capGrades(cap);
+  const curGrade = grades.find(g=>g.name===UI.params.grade) || grades[0] || null;
+  return `<div class="composer"><div class="composer-inner">
+    <div class="parambar">
+      ${requiresRef?`<button class="pb ${UI.refs.length?'on':''}" id="refBtn">🖼 参考图 ${UI.refs.length?`<span class="val">${UI.refs.length}</span>`:'<span class="muted tiny">必填</span>'}</button>`:''}
+      ${grades.length?`<div class="grades" role="group" aria-label="画质档">
+        ${grades.map(g=>`<button class="grade ${curGrade&&g.name===curGrade.name?'on':''}" data-grade="${esc(g.name)}" title="${esc(g.note||'')}">${esc(g.name)}</button>`).join('')}
+      </div><span class="grade-note">${esc((curGrade||{}).note||'')}</span>`:''}
+      <span class="scope-hint">${UI.refs.length===0&&requiresRef?'还没传参考图，这次只按文字来':''}</span>
+    </div>
+    <div class="inputbox" id="inputbox">
+      <div class="refs" id="refsRow">${UI.refs.map(r=>`<div class="ref-thumb">
+        ${r.kind==='image'?`<div style="position:absolute;inset:0">${mockArt(r.seed,'参考')}</div>`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:20px">🎵</div>`}
+        <button class="x" data-rmref="${r.id}">✕</button></div>`).join('')}</div>
+      <textarea id="promptInput" placeholder="${esc(placeholderFor(cap))}"></textarea>
+      <div class="foot">
+        <button class="btn ghost sm" id="addRef">＋ 上传</button>
+        <span class="tiny muted" id="pickHint">${esc(pickHintFor(cap))}</span>
+        <span style="flex:1"></span>
+        <span class="tiny muted">Ctrl/⌘ + Enter</span>
+        <button class="sendbtn" id="sendBtn" title="发送">↑</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+function needsRef(cap){
+  return ['image.reference','image.lineart','image.sketch','sheet.character','video.reference','video.firstlast','audio.music.ref','audio.clone'].includes(cap.id);
+}
+function placeholderFor(cap){
+  const m = {
+    'image.generate':'描述你想要的画面，例如：雨夜霓虹街道，赛博朋克，湿地面反光',
+    'video.firstlast':'描述这段过渡里发生什么，例如：镜头缓慢推近，光线逐渐变暗',
+    'board.9':'一句话说清故事，例如：小机器人找猫，9 格分镜',
+    'audio.tts':'把要读的文字粘进来',
+    'audio.music':'描述想要什么音乐，例如：低沉的钢琴配雨声，慢速，适合当背景',
+  };
+  return m[cap.id] || '描述你想生成的内容…';
+}
+function pickHintFor(cap){
+  if(cap.id==='image.generate') return UI.refs.length===0?'只有文字，直接画':'拿这张图来改';
+  if(cap.id==='video.firstlast') return '需要首帧和尾帧两张图';
+  return '';
+}
+
+/* ---------- 右栏 ---------- */
+function viewDrawer(){
+  return `<div class="drawer"><div id="drawerBody">${drawerInner()}</div></div>`;
+}
+function drawerInner(){
+  const running = runningEntry();
+  const queued = queuedEntries();
+  const doneJobs = S.jobs.filter(j=>doneRuns(j).length);
+  const failJobs = S.jobs.filter(j=>jobRuns(j)[0] && jobRuns(j)[0].state==='fail');
+  return `
+    <h4>ComfyUI</h4>
+    <div class="cstate ${running?'busy':''}">
+      <span class="dot ${running?'a pulse':'g'}"></span>
+      <div class="t">
+        <b>${running?('正在跑「'+esc(running.r.grade||'默认')+'」'):'空闲'}</b>
+        <span>${running?`${esc(running.j.capName)} · <i data-drawerpct="${running.r.id}">${Math.round(running.r.pct||0)}%</i>`:'可以接新的生成'}</span>
+      </div>
+    </div>
+    ${queued.length?`<h4 style="margin-top:14px">执行队列 ${queued.length} 个</h4>
+      ${queued.map((x,i)=>`<div class="q-item">
+        <span class="qn">${i+1}</span>
+        <div class="t"><b>${esc(x.r.grade||'默认')}</b><span>${esc(x.j.capName)} · ${esc(x.r.wf)}</span></div></div>`).join('')}`:''}
+    <h4 style="margin-top:14px">本会话任务</h4>
+    ${doneJobs.length?doneJobs.map(j=>`<div class="task-item" data-jump="${j.id}">
+      <span class="dot g"></span><div class="t"><b>${esc(j.capName)}</b><span>${doneRuns(j).length} 个成品 · ${esc(j.wf)}</span></div></div>`).join('')
+      :'<div class="tiny muted" style="padding:0 8px">还没有成品</div>'}
+    ${failJobs.length?`<h4 style="margin-top:14px">失败 ${failJobs.length}</h4>${failJobs.map(j=>`<div class="task-item" data-jump="${j.id}">
+      <span class="dot r"></span><div class="t"><b>${esc(j.capName)}</b><span>${esc((jobRuns(j)[0].err||{}).short||'没跑成')}</span></div></div>`).join('')}`:''}
+    <div class="hr"></div>
+    <div class="tiny muted" style="padding:0 8px;line-height:1.7">
+      成品都存放在：<br><span class="mono">${esc(S.service.archiveDir)}</span>
+    </div>`;
+}
+function renderDrawer(){
+  const d = $('#drawerBody');
+  if(d) d.innerHTML = drawerInner();
+}
+
+/* ---------- 创作台交互 ---------- */
+function bindStudio(){
+  $$('[data-cap]').forEach(el=>el.onclick=()=>{
+    UI.capId = el.dataset.cap; UI.params={}; UI.refs=[];
+    const cap = currentCap();
+    if(!capUsable(cap)||!cap.enabled) toast('这个能力还没配置，先去管理台配一下');
+    render();
+    window.scrollTo({top:0});
+  });
+  $$('[data-sample]').forEach(el=>el.onclick=()=>{
+    const t = $('#promptInput'); if(t){ t.value = el.dataset.sample; t.focus(); }
+  });
+  const send = $('#sendBtn');
+  if(send){ send.onclick = doSend; }
+  const t = $('#promptInput');
+  if(t){
+    t.onkeydown = e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); doSend(); } };
+    t.oninput = ()=>{ $('#inputbox').classList.remove('err'); };
+  }
+  const addRefBtn = $('#addRef');
+  if(addRefBtn) addRefBtn.onclick = addRef;
+  $$('[data-rmref]').forEach(el=>el.onclick=()=>{
+    UI.refs = UI.refs.filter(r=>r.id!==el.dataset.rmref); refreshComposer();
+  });
+  $$('[data-grade]').forEach(el=>el.onclick=()=>{
+    UI.params.grade = el.dataset.grade;
+    const capNow = currentCap();
+    const g = capGrades(capNow).find(x=>x.name===el.dataset.grade);
+    refreshComposer();
+    if(g){
+      const wfNow = pickWorkflow(capNow, UI.refs).wf || (capNow.workflows||[])[0];
+      const d = gradeDetail(g, wfNow.fields, wfNow);
+      toast('已切到「'+g.name+'」'+(d?'：'+d:''));
+    }
+  });
+  const refBtn = $('#refBtn');
+  if(refBtn) refBtn.onclick = addRef;
+
+  // 任务卡交互
+  $$('[data-cancel]').forEach(el=>el.onclick=()=>{
+    const j = S.jobs.find(x=>x.id===el.dataset.cancel);
+    if(j){ cancelJob(j); toast('已取消，并通知 ComfyUI 停止'); }
+  });
+  $$('[data-raw]').forEach(el=>el.onclick=()=>{
+    const box = $('#err-'+el.dataset.raw); if(!box) return;
+    box.classList.toggle('open');
+    el.textContent = box.classList.contains('open')?'收起详情':'展开详情';
+  });
+  // 重试一次 = 普通生成，同样要过"ComfyUI 有没有任务在跑"这一关
+  $$('[data-retry]').forEach(el=>el.onclick=()=>{
+    const j = S.jobs.find(x=>x.id===el.dataset.retry);
+    if(!j) return;
+    const r = jobRuns(j)[0];
+    if(submitNormal(j.cap, j.prompt, r.grade, r.wf, j.refs||[])) toast('已重新提交');
+  });
+  // 再来一张 = 普通生成（新开一张卡），忙的时候只提示、不排队
+  $$('[data-again]').forEach(el=>el.onclick=()=>{
+    const j = S.jobs.find(x=>x.id===el.dataset.again);
+    if(!j) return;
+    const r = jobRuns(j)[0];
+    submitNormal(j.cap, j.prompt, r.grade, r.wf, j.refs||[]);
+  });
+  // 加入队列生成 = 唯一允许进队列的入口
+  $$('[data-qadd]').forEach(el=>el.onclick=()=>openQueueModal(el.dataset.qadd));
+  // 排队中/正在跑的那一格可以单独撤掉
+  $$('[data-qcancel]').forEach(el=>el.onclick=()=>{
+    const run = allRuns().map(x=>x.r).find(r=>r.id===el.dataset.qcancel);
+    if(!run) return;
+    const job = S.jobs.find(j=>jobRuns(j).includes(run));
+    run.state = 'canceled';
+    if(EXEC.run===run){ clearInterval(EXEC.timer); EXEC.timer=null; EXEC.run=null; EXEC.job=null; }
+    saveState();
+    if(job) renderCard(job);
+    renderDrawer();
+    pump();
+    toast('已撤掉这一档');
+  });
+  $$('[data-seed]').forEach(el=>el.onclick=()=>{
+    const t2=$('#promptInput'); if(t2){ t2.value = (t2.value?t2.value+' ':'')+`seed ${el.dataset.seed}`; t2.focus(); }
+    toast('种子已复制，粘到输入框即可复现'); });
+  $$('[data-dl]').forEach(el=>el.onclick=()=>toast('演示版不做真下载'));
+  $$('[data-zoom]').forEach(el=>el.onclick=()=>{
+    const [jid,idx]=el.dataset.zoom.split('|');
+    const j = S.jobs.find(x=>x.id===jid);
+    const r = doneRuns(j)[+idx]; if(!r) return;
+    const cap = S.capabilities.find(c=>c.id===j.cap);
+    openModal(`<div class="m-head"><h3>成品预览</h3><button class="btn ghost sm" data-close>✕</button></div>
+      <div class="m-body" style="padding:0"><div style="aspect-ratio:1/1;background:#eef2f8">${mockArt(r.seed,'成品')}</div></div>
+      <div class="m-foot" style="flex-wrap:wrap">
+        <span class="tiny muted mono" style="width:100%;margin-bottom:8px;word-break:break-all">${esc(archivePathFor(cap, r.file||''))}</span>
+        <span class="tiny muted">种子 ${r.seed} · 档位 ${esc(r.grade||'默认')}</span><span style="flex:1"></span>
+        <button class="btn sm" data-close>关闭</button><button class="btn sm primary" data-close>下载 ⬇</button></div>`, true);
+  });
+  $$('[data-jump]').forEach(el=>el.onclick=()=>{
+    const node = document.getElementById(el.dataset.jump);
+    if(node){ node.scrollIntoView({block:'center',behavior:'smooth'}); node.style.outline='2px solid #2f6bff'; node.style.outlineOffset='3px';
+      setTimeout(()=>{node.style.outline='none';},1200); }
+  });
+  const hb = $('#healthBtn');
+  if(hb) hb.onclick = ()=>{ UI.comfyOnline=!UI.comfyOnline; render(); toast('已恢复连接'); };
+}
+
+function addRef(){
+  if(UI.refs.length>=3){ toast('这个能力最多 3 张参考图'); return; }
+  UI.refs.push({ id:uid('ref'), kind:'image', seed: Math.floor(Math.random()*99999) });
+  refreshComposer();
+}
+
+function refreshComposer(){
+  const node = $('.composer'); if(!node) return;
+  const focused = document.activeElement && document.activeElement.id==='promptInput';
+  const val = focused ? document.activeElement.value : '';
+  node.outerHTML = viewComposer();
+  if(focused){ const t2 = $('#promptInput'); if(t2){ t2.value = val; t2.focus(); } }
+  bindStudio();
+}
+
+function scrollChatBottom(){
+  const list = S.jobs.filter(j=>j.cap===UI.capId);
+  const last = list.length ? document.getElementById(list[list.length-1].id) : null;
+  if(last){ last.scrollIntoView({block:'end'}); return; }
+  window.scrollTo({top:0});
+}
+
+/* ================= ComfyUI 执行 · 排队规则 =================
+   照真实 ComfyUI 的行为模拟：同一时刻只跑一个任务。
+   · 普通生成（发送 / 再来一张 / 重试）：有任务在跑 → 只提示、不执行、也不进队列。
+   · 队列生成（加入队列生成）：只在"没有普通任务没跑完"时才能加；加完能接着加，一个一个跑。
+*/
+const EXEC = { job:null, run:null, timer:null };
+let _runSeq = 0;
+
+function allRuns(){
+  const out = [];
+  (S.jobs||[]).forEach(j=>(j.runs||[]).forEach(r=>out.push({j,r})));
+  return out;
+}
+function runningEntry(){ return allRuns().find(x=>x.r.state==='running') || null; }
+function queuedEntries(){ return allRuns().filter(x=>x.r.state==='queued').sort((a,b)=>(a.r.seq||0)-(b.r.seq||0)); }
+function pendingNormal(){ return allRuns().find(x=>x.r.mode!=='queue' && (x.r.state==='queued'||x.r.state==='running')) || null; }
+
+function busyText(x){
+  const cap = S.capabilities.find(c=>c.id===x.j.cap);
+  const nm = (cap?cap.name:x.j.capName) + ' · ' + (x.r.grade||'默认');
+  const tail = x.r.state==='running' ? (Math.round(x.r.pct||0)+'%') : '刚提交还没开始';
+  return `「${nm}」（${tail}）`;
+}
+function toastBlocked(title, detail, ms=4400){
+  $$('.tblock').forEach(e=>e.remove());
+  const el = document.createElement('div');
+  el.className = 'tblock';
+  el.innerHTML = `<div class="tb-i">⏳</div><div class="tb-t"><b>${esc(title)}</b><span>${esc(detail)}</span></div>`;
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.classList.add('out'); setTimeout(()=>el.remove(),260); }, ms);
+}
+
+function guardNormal(){
+  if(!UI.comfyOnline){ toast('ComfyUI 没连上，先把它打开'); return false; }
+  const busy = runningEntry();
+  if(busy){
+    toastBlocked('正在生成中', busyText(busy)+' 还没跑完。等这张出来再点；想要同一张的高清版，用下面的「加入队列生成」。');
+    return false;
+  }
+  return true;
+}
+function guardQueue(){
+  if(!UI.comfyOnline){ toast('ComfyUI 没连上，先把 ComfyUI 启动起来'); return false; }
+  const p = pendingNormal();
+  if(p){
+    toastBlocked('先等这张出来', busyText(p)+' 还在跑。它出来以后再点「加入队列生成」，不然你现在等的这张会排在后面。');
+    return false;
+  }
+  // 排队上限写在配置文件里（service.maxQueue），页面上不给改
+  const cap = Math.max(1, +(S.service.maxQueue) || 20);
+  const qn = queuedEntries().filter(x=>x.j && x.j.id !== UI.qJobId).length;
+  if(qn >= cap){
+    toastBlocked('排队已满', `已经排了 ${qn} 个（最多 ${cap} 个）。等前面出来几个再加。`);
+    return false;
+  }
+  return true;
+}
+
+function newRun(job, mode, wfName, gradeName, media){
+  // 一批只有一个种子：首发随机生成，之后所有队列任务都沿用它
+  if(!job.seed) job.seed = Math.floor(Math.random()*1e9);
+  return {
+    id: uid('run'), seq: ++_runSeq, mode, wf:wfName, grade:gradeName||'',
+    seed: job.seed, media,
+    state:'queued', pct:0, t0:Date.now(),
+    stem: (job.prompt||'成品').replace(/[\\/:*?"<>|\s，。、；：！？]/g,'_').slice(0,10)
+  };
+}
+
+/* 普通生成：首发的那一张 */
+function submitNormal(capId, prompt, gradeName, wfName, refs){
+  if(!guardNormal()) return false;
+  const cap = S.capabilities.find(c=>c.id===capId) || currentCap();
+  if(!cap) return false;
+  const wf = (cap.workflows||[]).find(w=>w.name===wfName) || { output:{kind:'图片'} };
+  const okind = (wf.output && wf.output.kind) || '图片';
+  const media = okind==='视频' ? 'video' : okind==='音频' ? 'audio' : 'image';
+  const job = { id:uid('job'), cap:capId, capName:cap.name, wf:wfName, prompt, refs:refs||[], t0:Date.now(), runs:[] };
+  job.runs.push(newRun(job, 'normal', wfName, gradeName, media));
+  S.jobs.push(job);
+  saveState();
+  UI.autoScroll = true;
+  pump();
+  render();
+  return true;
+}
+
+/* 队列生成：接到同一张卡的后面 */
+function addQueueRun(job, gradeName){
+  const base = jobRuns(job)[0];
+  if(!base) return;
+  // 同一个种子、换一档参数：出来的是同一张构图的高清版，不是另画一张
+  const run = newRun(job, 'queue', base.wf, gradeName, base.media);
+  job.runs.push(run);
+  saveState();
+  const ahead = queueAhead(run);
+  const idx = doneRuns(job).length + pendRuns(job).length;
+  renderCard(job);
+  pump();
+  renderDrawer();
+  toast(ahead>0 ? `已加入队列：前面还有 ${ahead} 个，跑完接到成品 ${idx}` : `开跑了，出的片会接到成品 ${idx}`, 2600);
+}
+
+function pump(){
+  if(EXEC.run) return;
+  const next = queuedEntries()[0];
+  if(!next) return;
+  startRun(next.j, next.r);
+}
+
+function startRun(job, run){
+  EXEC.job = job; EXEC.run = run;
+  run.state = 'running'; run.pct = 1; run.t0 = Date.now();
+  saveState();
+  renderCard(job); renderDrawer();
+  const dur = runDurMs(job, run);
+  const t0 = Date.now();
+  clearInterval(EXEC.timer);
+  EXEC.timer = setInterval(()=>{
+    if(run.state!=='running'){ clearInterval(EXEC.timer); EXEC.timer=null; return; }
+    const p = Math.min(100, ((Date.now()-t0)/dur)*100);
+    if(p>=100){ clearInterval(EXEC.timer); EXEC.timer=null; finishRun(job, run); return; }
+    if(p > (run.pct||0)){ run.pct = p; paintRun(job, run); }
+  }, 240);
+}
+
+function finishRun(job, run){
+  run.state = 'done'; run.pct = 100; run.t1 = Date.now();
+  const idx = doneRuns(job).length;   // 含自己
+  const ext = run.media==='video' ? 'mp4' : run.media==='audio' ? 'wav' : 'png';
+  run.file = run.stem + '_' + String(idx).padStart(4,'0') + '_.' + ext;
+  if(EXEC.run===run){ EXEC.run = null; EXEC.job = null; }
+  saveState();
+  renderCard(job); renderDrawer();
+  const cap = S.capabilities.find(c=>c.id===job.cap);
+  if(run.mode==='queue'){
+    toast(`队列里的「${run.grade||'默认'}」出来了，已接到成品 ${idx}`, 2800);
+  }else{
+    toast('生成完成，已存到「'+S.service.archiveDir+'/'+(cap?cap.name:'')+'/」', 2600);
+  }
+  pump();
+}
+
+function cancelJob(job){
+  const r = jobRuns(job).find(x=>x.state==='running'||x.state==='queued');
+  if(!r) return;
+  r.state = 'canceled';
+  if(EXEC.run===r){ clearInterval(EXEC.timer); EXEC.timer=null; EXEC.run=null; EXEC.job=null; }
+  saveState(); render(); pump();
+}
+
+/* 图片/视频/音频在"同一批"这句话里说法不同，别对着音频说"同一张" */
+function batchWording(media){
+  if(media==='video') return { same:'同一条', better:'更清晰' };
+  if(media==='audio') return { same:'同一段', better:'音质更好' };
+  return { same:'同一张', better:'更精细' };
+}
+
+/* 成品角上写这一档实际的尺寸，比重复写种子有用（一批只有一个种子） */
+function runSizeText(job, run){
+  const cap = S.capabilities.find(c=>c.id===job.cap);
+  const wf = cap && (cap.workflows||[]).find(w=>w.name===run.wf);
+  const g = wf && (wf.grades||[]).find(x=>x.name===run.grade);
+  if(!g) return run.grade||'默认';
+  const p = gradeParams(wf, g) || {};
+  if(p.width && p.height) return p.width+'×'+p.height;
+  if(p.seconds) return p.seconds+' 秒';
+  return (g.name||run.grade||'默认');
+}
+
+function renderCard(job){
+  const el = document.getElementById(job.id);
+  if(!el) return;
+  el.outerHTML = jobCard(job);
+  bindStudio();
+}
+function paintRun(job, run){
+  const card = document.getElementById(job.id);
+  const pct = Math.round(run.pct||0);
+  if(card){
+    const st = stepTotal(job, run);
+    card.querySelectorAll('[data-jobbar]').forEach(e=>e.style.width = pct+'%');
+    card.querySelectorAll('[data-jobpct]').forEach(e=>e.textContent = pct+'%');
+    card.querySelectorAll('[data-jobstep]').forEach(e=>e.textContent = `正在采样 · ${Math.round(pct*st/100)}/${st} 步`);
+    card.querySelectorAll('[data-runprog="'+run.id+'"] i').forEach(e=>e.style.width = pct+'%');
+    card.querySelectorAll('[data-runpct="'+run.id+'"]').forEach(e=>e.textContent = pct+'%');
+    card.querySelectorAll('[data-runstep="'+run.id+'"]').forEach(e=>e.textContent = `正在采样 · ${Math.round(pct*st/100)}/${st} 步`);
+  }
+  const dr = document.querySelector('[data-drawerpct="'+run.id+'"]');
+  if(dr) dr.textContent = pct+'%';
+}
+
+/* 「加入队列生成」的确认框：挑一档 + 一个随机种子 */
+function openQueueModal(jobId){
+  const j = S.jobs.find(x=>x.id===jobId);
+  if(!j) return;
+  if(!guardQueue()) return;
+  const cap = S.capabilities.find(c=>c.id===j.cap);
+  const base = jobRuns(j)[0];
+  const wf = (cap.workflows||[]).find(w=>w.name===base.wf) || (cap.workflows||[])[0];
+  const grades = (wf && wf.grades) || [];
+  if(!grades.length){ toast('这个工作流还没有档位，先去管理台加一档'); return; }
+  const pick0 = grades[grades.length-1];
+  const dnum = doneRuns(j).length;
+  const qn = queuedEntries().length;
+  const running = runningEntry();
+  const w = batchWording(base.media);
+  const html = `<div class="m-head"><h3>加入队列生成</h3><button class="btn ghost sm" data-close>✕</button></div>
+  <div class="m-body">
+    <div class="qintro">挑一档，出${w.same}的${w.better}版。种子不变，已有的成品一张不动，新的接在<b>成品 ${dnum+1}</b>。</div>
+    <div class="qlabel">用哪一档</div>
+    <div class="qgrades">
+      ${grades.map(g=>`<div class="qg ${g.name===pick0.name?'on':''}" data-qg="${esc(g.name)}">
+        <span class="qg-n">${esc(g.name)}</span>
+        <span class="qg-d">${esc(gradeDetail(g, wf.fields, wf) || g.note || '')}</span>
+        <span class="qg-t">约 ${Math.max(2,Math.round(runDurMs(j, {wf:base.wf, grade:g.name})/1000))} 秒</span>
+      </div>`).join('')}
+    </div>
+    <div class="qrow">
+      <span class="qn">种子</span>
+      <span class="qseed">${j.seed||base.seed}</span>
+      <span class="tiny muted">跟这张一样，只是更细</span>
+    </div>
+    <div class="qstat">${running
+      ? `正在跑${busyText(running)}，这一档排在它后面`
+      : (qn ? `前面排了 ${qn} 个，这是第 ${qn+1} 个` : '现在空着，点确认就开始')} · 一次只跑一个</div>
+  </div>
+  <div class="m-foot">
+    <span class="tiny muted" style="flex:1">可以连着加，一个一个跑</span>
+    <button class="btn sm" data-close>取消</button>
+    <button class="btn sm primary" id="qGo">加入队列生成</button>
+  </div>`;
+  UI.qJobId = j.id;
+  const mask = openModal(html);
+  let sel = pick0.name;
+  $$('[data-qg]', mask).forEach(el=>el.onclick=()=>{
+    sel = el.dataset.qg;
+    $$('[data-qg]', mask).forEach(x=>x.classList.toggle('on', x===el));
+  });
+  $('#qGo', mask).onclick = ()=>{
+    closeModal();
+    if(!guardQueue()) return;
+    addQueueRun(j, sel);
+  };
+}
+
+function doSend(){
+  const cap = currentCap();
+  const t = $('#promptInput');
+  const prompt = (t&&t.value||'').trim();
+  if(!prompt){ $('#inputbox').classList.add('err'); toast('写点描述再发送'); return; }
+  const picked = pickWorkflow(cap, UI.refs);
+  if(!picked.wf){ toast('这种情况还没有配置对应的工作流'); return; }
+  if(needsRef(cap) && UI.refs.length===0){
+    $('#inputbox').classList.add('err');
+    toast('这个能力需要参考图');
+    return;
+  }
+  const grades = (picked.wf.grades||[]);
+  const g = grades.find(x=>x.name===UI.params.grade) || grades[0];
+  const ok = submitNormal(cap.id, prompt, g?g.name:'', picked.wf.name, [...UI.refs]);
+  if(!ok) return;                 // 被拦住：输入框里的字和图都留着，方便等会儿直接点
+  UI.refs = []; UI.params = {};
+  if(t) t.value='';
+  UI.autoScroll = true;
+  render();
+}
+
+/* ================= 管理台 ================= */
+
+const ADMIN_PAGES = [
+  ['caps','能力与工作流'],
+  ['grades','档位表'],
+  ['service','服务设置'],
+  ['diag','自检'],
+];
+
+function viewAdmin(){
+  const cur = S.capabilities.find(c=>c.id===UI.capId) || S.capabilities[0];
+  return `<div class="admin">
+    ${viewTopbar()}
+    <div class="admin-body">
+      <div class="admin-nav">
+        ${ADMIN_PAGES.map(([k,n],i)=>`<div class="item ${UI.adminPage===k?'on':''}" data-page="${k}">
+          <span class="n">${i+1}</span>${n}</div>`).join('')}
+        <div class="hr"></div>
+        <div class="tiny muted" style="padding:0 8px;line-height:1.7">${S.capabilities.filter(c=>capUsable(c)&&c.enabled).length} 个能力可用</div>
+      </div>
+      <div class="admin-main"><div class="inner">${adminPage(cur)}</div></div>
+    </div>
+  </div>`;
+}
+
+function adminPage(cap){
+  switch(UI.adminPage){
+    case 'caps': return pageCaps();
+    case 'grades': return pageGrades(cap);
+    case 'service': return pageService();
+    case 'diag': return pageDiag();
+  }
+}
+
+/* ---- 能力列表 ---- */
+function pageCaps(){
+  let list = '';
+  orderedGroups().forEach(({name:g, caps})=>{
+    caps.forEach(c=>{
+      const st = capStatus(c);
+      const stChip = st==='ok'?'<span class="chip green">可用</span>'
+        : st==='partial'?'<span class="chip amber">部分可用</span>'
+        : st==='err'?'<span class="chip red">有问题</span>'
+        : st==='off'?'<span class="chip gray">已停用</span>'
+        : '<span class="chip gray">未配置</span>';
+      const grades = capGrades(c);
+      const hasWf = c.workflows.length>0;
+      const reason = st==='err' ? `<div class="tiny" style="color:#b23a2b;margin-top:3px">${esc((c.workflows.find(w=>w.status==='err')||{}).err||'')}</div>` : '';
+      list += `<div class="cap-row ${hasWf?'':'nocfg'}">
+        <span class="em">${c.em}</span>
+        <div style="min-width:0;flex:1">
+          <div class="row" style="gap:8px;flex-wrap:wrap"><b>${esc(c.name)}</b>${stChip}
+            ${grades.length?`<span class="tiny muted">${grades.length} 档可选</span>`:`<span class="tiny muted">还没排档位</span>`}</div>
+          ${c.desc?`<div class="tiny muted" style="margin-top:2px">${esc(c.desc)}</div>`:''}
+          ${reason}
+        </div>
+        <span class="switch ${c.enabled?'on':''}" data-toggle="${c.id}" style="width:34px;height:20px"></span>
+        ${hasWf
+          ? `<button class="btn sm" data-edit="${c.id}">${st==='err'?'去修':'配置'}</button>`
+          : `<button class="btn sm ghost" data-edit="${c.id}" title="还没配工作流">未配置</button>`}
+        <button class="btn sm ghost" data-copy="${c.id}" title="复制一份">⧉</button>
+        <button class="btn sm ghost" data-del="${c.id}" title="删除">✕</button>
+      </div>`;
+    });
+  });
+  return `<div class="spread" style="margin-bottom:14px">
+      <div><h2>能力与工作流</h2><div class="sub">开关能力、调整每个能力的档位</div></div>
+      <div class="row"><button class="btn primary" data-reload>↻ 重读配置</button></div>
+    </div>
+    ${list}`;
+}
+
+/* ---- 档位表（核心页面） ---- */
+// 这一页只干一件事：把一个工作流拆成"默认档 + 若干改过的拷贝档"。
+//   左列 ① 工作流文件 ② 参数节点（勾哪些进设置） ③ 被排除的节点（说明为什么不让设）
+//   ④ 新档位区：勾好的参数在这里填一组值 + 档位名 + 【添加】
+//         点【添加】= 把原始工作流深拷贝一份，这批值写进拷贝，拷贝就是这一档要调的工作流
+//   ⑤ 档位列表：一行一档，第一行永远是"默认档 = 原始工作流"（只读、删不掉）；
+//      其余每行 ✎ 编辑 = 展开这一档那份拷贝的全部参数
+// 控件形态跟着参数本身的类型走：数字→输入框，开关→开关，枚举→下拉，多选→多选。
+
+/* 一格参数渲染成对应控件 */
+function ctlHtml(field, value, attr, opt){
+  opt = opt || {};
+  const kind = controlOf(field);
+  const meta = fieldMeta(field);
+  const dis = opt.disabled ? 'disabled' : '';
+  const ph = opt.placeholder || '';
+  const a = attr ? `${attr}="${attr.split('@')[0].replace('@','|')}"` : '';
+  const v = value===undefined || value===null ? '' : value;
+  if(kind==='switch'){
+    const on = v===true || v==='true' || v===1;
+    return `<span class="sw ${on?'on':''} ${dis}" ${attr} data-switch="1" role="switch" aria-checked="${on}"><i></i><em>${on?'开':'关'}</em></span>`;
+  }
+  if(kind==='select'){
+    const opts = fieldOpts(field);
+    const cur = String(v);
+    const list = opts.includes(cur) ? opts : (cur!=='' ? [cur].concat(opts) : opts);
+    return `<select class="input" ${attr} ${dis}>${list.map(o=>`<option value="${esc(o)}" ${String(o)===cur?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  }
+  if(kind==='multi'){
+    const opts = fieldOpts(field);
+    const cur = Array.isArray(v) ? v.map(String) : (v?String(v).split(',').map(x=>x.trim()).filter(Boolean):[]);
+    const list = [...new Set([...opts, ...cur])];
+    return `<span class="multi ${dis}" ${attr}>${list.map(o=>`<label class="mopt"><input type="checkbox" value="${esc(o)}" ${cur.includes(String(o))?'checked':''} ${dis}><span>${esc(o)}</span></label>`).join('')}</span>`;
+  }
+  if(kind==='textarea'){
+    return `<textarea class="input" rows="2" ${attr} ${dis} placeholder="${esc(ph)}">${esc(v)}</textarea>`;
+  }
+  // number / text
+  const numeric = kind==='number';
+  const stepAttr = numeric ? `step="${meta.step||(meta.type==='int'?1:0.05)}"` : '';
+  const minAttr = meta.min!==undefined ? `min="${meta.min}"` : '';
+  const maxAttr = meta.max!==undefined ? `max="${meta.max}"` : '';
+  const typeAttr = numeric ? 'type="number"' : 'type="text"';
+  return `<input class="input ${numeric?'mono':''}" ${typeAttr} ${stepAttr} ${minAttr} ${maxAttr} value="${esc(v)}" ${attr} ${dis} placeholder="${esc(ph)}">`;
+}
+
+/* 一格参数：标签 + 控件 + 类型角标 */
+function ctlRow(field, value, attr, opt){
+  opt = opt || {};
+  const kind = controlOf(field);
+  const meta = fieldMeta(field);
+  const wide = (kind==='textarea' || (kind==='text' && String(value??'').length>16)) ? 'wide' : '';
+  return `<div class="pfld ${wide} ${opt.cls||''}">
+    <div class="plb">
+      <span class="pn">${esc(fieldLabel(field))}</span>
+      <i class="pk">${esc(field)}</i>
+      <span class="ptype t-${kind}">${esc(CONTROL_LABEL[kind]||kind)}</span>
+      ${meta.hint?`<span class="phint">${esc(meta.hint)}</span>`:''}
+    </div>
+    <div class="pctl">${ctlHtml(field, value, attr, opt)}</div>
+  </div>`;
+}
+
+/* 把一个节点的几格参数整块渲染出来 */
+function nodeBlock(node, fieldList, getVal, attrOf, opt){
+  opt = opt || {};
+  const live = fieldList.filter(f=>nodeSetFields(node.id, opt.wfName).includes(f));
+  return `<div class="node-edit ${opt.readonly?'ro':''}">
+    <div class="ne-hd">
+      <span class="cid">${node.id}</span>
+      <b>${esc(node.cls)}</b>
+      <span class="tiny muted">${live.length} 个参数</span>
+      <span style="flex:1"></span>
+      ${opt.readonly?'<span class="rochip">只读 · 没改过</span>':''}
+      ${opt.hdExtra||''}
+    </div>
+    <div class="ne-bd">
+      ${live.map(f=>ctlRow(f, getVal(f), attrOf(f), {disabled:opt.readonly, wfName:opt.wfName})).join('')}
+    </div>
+  </div>`;
+}
+
+function pageGrades(cap){
+  if(!cap) return '';
+
+  const wf = cap.workflows[UI.editingWfIndex] || cap.workflows[0];
+  if(!wf) return `<div class="spread" style="margin-bottom:6px">
+      <div><h2>档位表</h2><div class="sub">${esc(cap.em)} ${esc(cap.name)}</div></div>
+      <button class="btn sm" data-page="caps">← 返回列表</button></div>
+    <div class="panel"><div class="empty" style="padding:36px 24px">
+      <div style="font-size:15px;font-weight:650;margin-bottom:8px;color:var(--tx)">还没配置</div>
+      <div class="tiny muted" style="line-height:1.95;max-width:540px;margin:0 auto">
+        这个能力还排不了档位。
+      </div>
+      <div class="tiny" style="margin-top:16px;color:#8a5a00;background:#fff8ec;border:1px solid #f0dcb8;border-radius:8px;padding:9px 12px;display:inline-block">
+        配上工作流后，回来点「重读配置」。
+      </div>
+    </div></div>`;
+
+  const nodes = (WF_LIB[wf.name]||{list:[]}).list;
+  const pickable = pickableNodes(wf.name);
+  const excluded = excludedNodes(wf.name);
+  const picked = pickedNodeIds(wf);
+  const grades = wf.grades || [];
+  const open = Math.min(UI.gOpen|0, Math.max(grades.length-1,0));
+  const draft = UI.draft || (UI.draft = { name:'', values:{} });
+  const setFields = new Set();                       // 被设置的全部格子
+  picked.forEach(id=>nodeSetFields(id, wf.name).forEach(f=>setFields.add(f)));
+
+  // ④ 的草稿值：还没填的从原始工作流带过来
+  const draftVal = f => {
+    const v = (draft.values||{})[f];
+    return v!==undefined ? v : (wf.original||{})[f];
+  };
+
+  return `<div class="spread" style="margin-bottom:6px">
+    <div><h2>档位表</h2><div class="sub">${esc(cap.em)} ${esc(cap.name)} / ${esc(wf.name)}</div></div>
+    <div class="row"><button class="btn sm" data-page="caps">← 返回列表</button><button class="btn primary sm" data-savewf>保存</button></div>
+  </div>
+
+  ${cap.workflows.length>1?`<div class="row" style="margin-bottom:12px;flex-wrap:wrap;gap:6px">
+    <span class="tiny muted" style="margin-right:4px">工作流：</span>
+    ${cap.workflows.map((w,i)=>`<button class="btn sm ${i===UI.editingWfIndex?'primary':''}" data-wfswitch="${i}">${esc(w.name)}${w.status==='err'?' ⚠':''}</button>`).join('')}
+    <span style="flex:1"></span>
+  </div>`:''}
+
+  <div style="display:grid;grid-template-columns:296px minmax(0,1fr);gap:14px;align-items:start">
+
+    <!-- ============ 左列 ============ -->
+    <div class="panel" style="margin:0;position:sticky;top:12px">
+      <h3>① 工作流文件</h3>
+      <div class="wffile">
+        <span class="wfname mono">${esc(wf.path)}</span>
+        <span class="wfauto">自动读取</span>
+      </div>
+      <div class="tiny muted" style="margin:8px 0 14px;line-height:1.7">
+        只读，不对它做任何改动。
+      </div>
+
+      <h3 style="flex-wrap:wrap">② 参数节点 <span class="tag">${pickable.length} 个</span></h3>
+      <div class="tiny muted" style="margin:-2px 0 8px;line-height:1.7">
+        勾上哪些节点，右边 ④ 就出现哪些参数。
+      </div>
+      <div class="node-list">
+        ${pickable.length?pickable.map(n=>{
+          const on = picked.includes(String(n.id));
+          const fs = nodeSetFields(n.id, wf.name);
+          return `<label class="node-row can ${on?'on':''}" data-picknode="${n.id}">
+            <input type="checkbox" ${on?'checked':''}>
+            <span class="id">${n.id}</span>
+            <span class="cls">${esc(n.cls)}</span>
+            <span class="nf">${fs.map(f=>fieldLabel(f)).join(' · ')}</span>
+          </label>`;
+        }).join(''):'<div class="tiny muted" style="padding:8px 2px">这个工作流没有可设置的参数节点。</div>'}
+      </div>
+
+      <div class="hr"></div>
+      <h3 style="flex-wrap:wrap">③ 不用设的节点 <span class="tag gray">${excluded.length} 个</span></h3>
+      <div class="tiny muted" style="margin:-2px 0 8px;line-height:1.7">
+        这三类不用管：填词的、传素材的、出片的。
+      </div>
+      <div class="node-list dim">
+        ${excluded.map(n=>`<div class="node-row no">
+          <span class="nochk"></span>
+          <span class="id">${n.id}</span>
+          <span class="cls">${esc(n.cls)}</span>
+          <span class="role r-${n.role}">${esc(n.label)}</span>
+        </div>`).join('')}
+      </div>
+
+    </div>
+
+    <!-- ============ 右列 ============ -->
+    <div>
+      <!-- ④ 新增档位 -->
+      <div class="panel build">
+        <h3 style="flex-wrap:wrap">④ 新增档位 <span class="tag">勾 ${picked.length} 个节点 / ${setFields.size} 个参数</span></h3>
+        <div class="tiny muted" style="margin:-2px 0 12px;line-height:1.75">
+          填好值、起个名，点<b>【添加】</b>，创作台就多一个按钮。
+        </div>
+
+        ${picked.length?`<div class="node-editors">
+          ${picked.map(id=>{
+            const n = nodes.find(x=>String(x.id)===String(id));
+            if(!n) return '';
+            return nodeBlock(n, nodeSetFields(id, wf.name), draftVal, f=>`data-drf="${id}|${f}"`, {
+              wfName:wf.name,
+              hdExtra:`<button class="btn sm ghost" data-unpicknode="${id}" title="这一档不设它">移出</button>`
+            });
+          }).join('')}
+        </div>`:`<div class="empty" style="padding:22px">
+          <div class="tiny">还没勾节点，所以这里没有参数。</div>
+          <div class="tiny muted" style="margin-top:4px">只有一个「默认」档也能用。</div>
+        </div>`}
+
+        <div class="addbar">
+          <div class="addbar-lb">
+            <span class="an">档位名称</span>
+            <span class="tiny muted">创作台上显示这几个字</span>
+          </div>
+          <input class="input aname" id="newGradeName" value="${esc(draft.name||'')}" placeholder="例如：快速 / 精细 / 4 步" data-draftname>
+          <button class="btn primary addbtn" data-gadd ${picked.length?'':'disabled'}>＋ 添加</button>
+        </div>
+        <div class="tiny muted" style="margin-top:8px;line-height:1.7">
+          <b>2~3 档就够了</b>，多了没人挑。
+        </div>
+      </div>
+
+      <!-- ⑤ 档位列表 -->
+      <div class="panel">
+        <div class="row" style="margin-bottom:4px">
+          <h3 style="margin:0">⑤ 已有档位 <span class="tag">${grades.length} 档</span></h3>
+          <span style="flex:1"></span>
+        </div>
+        <div class="tiny muted" style="margin-bottom:10px;line-height:1.75">
+          「默认」改不了；其余各档点 ✎ 就能改。
+        </div>
+
+        ${grades.length?`<div class="glist">
+          ${grades.map((g,i)=>{
+            const isOpen = i===open;
+            const isDef = !!g.locked;
+            const pv = isDef ? (wf.original||{}) : Object.assign({}, wf.original||{}, g.params||{});
+            const changed = Object.keys(g.params||{}).filter(k=>String(g.params[k])!==String((wf.original||{})[k]));
+            return `<div class="grow ${isOpen?'open':''} ${isDef?'def':''}">
+              <div class="grow-hd" data-gtoggle="${i}">
+                <span class="gnum">${i+1}</span>
+                ${isDef
+                  ? `<span class="gname-txt">${esc(g.name)}<i class="lock">🔒 原始</i></span>`
+                  : `<input class="input gname" value="${esc(g.name)}" data-gfield="name|${i}" data-stop>`}
+                ${isDef
+                  ? '<span class="gdefnote">只读</span>'
+                  : `<span class="gcopy">${changed.length} 项改动</span>`}
+                <span style="flex:1"></span>
+                <span class="gedit ${isOpen?'on':''}" data-gtoggle="${i}" title="${isDef?'看看没改过的值':'看这一档的全部参数'}">${isDef?'👁 查看':'✎ 编辑'}</span>
+                ${isDef?'<button class="gdel" disabled title="删不了">✕</button>'
+                       :`<button class="gdel" data-gdel="${i}" title="删掉这一档">✕</button>`}
+              </div>
+              ${isOpen?`<div class="grow-bd">
+                ${isDef?``:''}
+                ${picked.length?picked.map(id=>{
+                  const n = nodes.find(x=>String(x.id)===String(id));
+                  if(!n) return '';
+                  return nodeBlock(n, nodeSetFields(id, wf.name),
+                    f=>pv[f],
+                    f=>isDef?'':`data-gval="${f}@${i}"`,
+                    { wfName:wf.name, readonly:isDef });
+                }).join(''):'<div class="tiny muted" style="padding:4px 2px">左边 ② 还没勾节点，这一档没有参数可显示。</div>'}
+                ${isDef?'':`<div class="note-row">
+                  <span class="nm">一句话说明</span>
+                  <input class="input" value="${esc(g.note||'')}" data-gfield="note|${i}" placeholder="例如：几十秒出一张，先看构图">
+                </div>`}
+              </div>`:''}
+            </div>`;
+          }).join('')}
+        </div>`:`<div class="empty" style="padding:20px">
+          <div class="tiny">还没有档位</div>
+          
+        </div>`}
+
+        ${wf.status==='err'?`<div class="tiny" style="color:#b23a2b;margin-top:10px">⚠ ${esc(wf.err)}</div>`:''}
+      </div>
+
+    </div>
+  </div>`;
+}
+
+/* 这个能力的归档目录：<成果目录>/<能力名> */
+function archiveDirOf(cap){
+  const root = (S.service.archiveDir||'output/ComfyBridgeOutput').replace(/\/+$/,'');
+  return root + '/' + (cap?cap.name:'未分类');
+}
+
+/* 这个工作流里所有文字类格子（给"描述框绑到哪"用） */
+// 提示词节点不进 ② 的可勾清单，但描述框必须能绑到它——所以单独扫一遍
+function allPromptFields(wfName){
+  const out = [];
+  const lib = WF_LIB[wfName];
+  if(!lib) return out;
+  lib.list.forEach(n=>{
+    if(nodeRole(n)==='output' || nodeRole(n)==='upload') return;
+    (n.w||[]).forEach(f=>{ if(isPromptLike(f)) out.push({ node:n.id, field:f, cls:n.cls }); });
+  });
+  return out;
+}
+
+/* 读出这个工作流的原始参数（= 默认档的值，只读） */
+function readOriginal(wfName){
+  const lib = WF_LIB[wfName];
+  const o = {};
+  if(!lib) return o;
+  lib.list.forEach(n=>{
+    (n.w||[]).forEach(f=>{
+      if(f==='upload'||f==='image'||f==='audio') return;
+      if(o[f]!==undefined) return;
+      const t = fieldType(f);
+      if(t==='int')        o[f] = (f==='width'||f==='height') ? 1024 : f==='steps' ? 28 : f==='seed' ? 0 : 1;
+      else if(t==='float') o[f] = 1.0;
+      else if(t==='bool')  o[f] = false;
+      else if(t==='multi') o[f] = fieldOpts(f).length ? [fieldOpts(f)[0]] : [];
+      else if(t==='combo') o[f] = fieldOpts(f)[0]||'';
+      else o[f] = '';
+    });
+  });
+  return o;
+}
+
+/* ---- 服务设置 ---- */
+function pageService(){
+  const s = S.service;
+  return `<h2>服务设置</h2><div class="sub">改完点保存，立刻生效</div>
+  <div class="panel">
+    <h3>连接</h3>
+    <div class="field"><label>ComfyUI 地址</label>
+      <div class="row"><input class="input mono" value="${esc(s.comfy)}" data-s="comfy"><button class="btn sm" id="testConn">测试连接</button></div>
+      <div class="hint">就是浏览器里打开 ComfyUI 的那个地址。</div></div>
+    <div class="field"><label>本应用端口</label><input class="input" value="${s.port}" data-s="port" style="width:140px">
+      <div class="hint">创作台和管理台的访问地址：http://127.0.0.1:${s.port}</div></div>
+    <div class="field"><label class="row" style="gap:10px"><span class="switch ${s.bindLan?'on':''}" data-sw="bindLan"></span>允许本机以外访问（手机/局域网）</label>
+      <div class="hint">开了之后要设访问口令。</div></div>
+    <div class="field"><label>访问口令</label><input class="input" type="password" value="${esc(s.token)}" data-s="token" placeholder="本机使用可以留空">
+      <div class="hint">只在本机用就留空。</div></div>
+  </div>
+
+  <div class="panel">
+    <h3>成品存放</h3>
+    <div class="field"><label>成果目录</label>
+      <input class="input mono" value="${esc(s.archiveDir)}" data-s="archiveDir">
+      <div class="hint">默认在 ComfyUI 的 output 下。要放别处就填绝对路径。</div></div>
+    <div class="field"><label>成品会这样放</label>
+      <div class="path-tree mono">
+        <div><span class="d">output/</span></div>
+        <div>&nbsp;├─ <span class="d">ComfyBridgeOutput/</span></div>
+        <div>&nbsp;│&nbsp;&nbsp; ├─ <span class="d">图片生成/</span></div>
+        <div>&nbsp;│&nbsp;&nbsp; ├─ <span class="d">9 宫格故事板/</span></div>
+        <div>&nbsp;│&nbsp;&nbsp; └─ <span class="d">首尾帧生成视频/</span></div>
+        <div>&nbsp;├─ <span class="muted">（原有的其他文件）</span></div>
+      </div>
+    </div>
+    <div class="tiny muted" style="line-height:1.85">
+      子目录按能力自动建。生成成功后自动移进来；万一移不进去，图照样给你。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>路径</h3>
+    <div class="field"><label>工作流目录</label><input class="input mono" value="${esc(s.wfDir)}" data-s="wfDir"><div class="hint">从 ComfyUI 导出的 json 放这个目录</div></div>
+    <div class="field"><label>上传目录</label><input class="input mono" value="${esc(s.uploadDir)}" data-s="uploadDir"><div class="hint">参考图、音频先存这儿，单个上限 ${s.uploadMaxMB}MB</div></div>
+    <div class="field"><label>任务记录目录</label><input class="input mono" value="${esc(s.taskDir)}" data-s="taskDir"><div class="hint">每批生成的结果记在这儿</div></div>
+  </div>
+
+  <div class="panel">
+    <h3>存储与清理</h3>
+    <div class="row" style="gap:20px;flex-wrap:wrap">
+      <div class="field" style="margin:0"><label>任务记录保留</label><select class="input" style="width:120px"><option>7 天</option><option>30 天</option></select></div>
+      <div class="field" style="margin:0"><label>最多保留任务数</label><input class="input" value="500" style="width:110px"></div>
+      <div class="field" style="margin:0"><label>当前占用</label><div class="tiny" style="padding-top:8px">上传 128MB · 任务记录 2.1MB</div></div>
+    </div>
+    <div class="tiny muted" style="margin-top:10px">只清任务记录和上传缓存，<b>不删成品</b>。</div>
+  </div>
+
+  <div class="row"><span class="tiny muted" style="flex:1"></span>
+    <button class="btn" data-discard>放弃修改</button><button class="btn primary" data-savecfg>保存并生效</button></div>`;
+}
+
+/* ---- 自检 ---- */
+// 只做两项：连不连得上 ComfyUI、成果目录能不能写。
+// 工作流逐个"体检"不做——节点缺没缺、档位对不对，等真跑的时候 ComfyUI 会直说，比预检更准。
+function pageDiag(){
+  const rows = [
+    {t:'ok', name:'ComfyUI 连接正常', d:S.service.comfy+' · 队列空闲'},
+    {t:'ok', name:'成果目录可写', d:S.service.archiveDir+' · 能往里存'},
+  ];
+  return `<div class="spread" style="margin-bottom:6px">
+    <div><h2>自检</h2><div class="sub">查连接和存放目录</div></div>
+    <button class="btn primary" id="rerun">重新自检</button></div>
+  <div class="panel">
+    <div class="row" style="gap:10px;margin-bottom:12px">
+      <span class="chip green">${rows.length} 项正常</span>
+    </div>
+    ${rows.map(r=>`<div class="diag-row ${r.t}">
+      <span class="dot ${r.t==='ok'?'g':r.t==='warn'?'a':'r'}"></span>
+      <div style="flex:1;min-width:0"><b>${esc(r.name)}</b><div class="tiny muted" style="margin-top:2px">${esc(r.d)}</div></div>
+    </div>`).join('')}
+  </div>
+  <div class="panel" style="background:#f7f9fc">
+    <div class="tiny muted" style="line-height:1.85">
+      工作流配得对不对，真跑一次就知道了——用不着在这儿预检。
+    </div>
+  </div>`;
+}
+
+/* ---- 管理台交互 ---- */
+function bindAdmin(){
+  $$('[data-page]').forEach(el=>el.onclick=()=>{
+    if(el.dataset.page==='studio'){ UI.route='studio'; render(); return; }
+    UI.adminPage = el.dataset.page; render();
+  });
+  $$('[data-toggle]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();
+    const c = S.capabilities.find(x=>x.id===el.dataset.toggle);
+    if(!c) return;
+    if(!c.enabled && !capUsable(c)){ toast('这个能力还没配工作流，开不了'); return; }
+    c.enabled = !c.enabled; saveState(); render();
+    toast(c.enabled?'已启用':'已停用');
+  });
+  $$('[data-del]').forEach(el=>el.onclick=()=>{
+    const c = S.capabilities.find(x=>x.id===el.dataset.del);
+    openModal(`<div class="m-head"><h3>删除「${esc(c.name)}」？</h3><button class="btn ghost sm" data-close>✕</button></div>
+      <div class="m-body"><div class="tiny" style="line-height:1.9">这会把能力连同它的档位表一起删掉。<br>
+      <b>不会删除工作流 json 文件本身，也不会删已经生成的成品</b>。<br><br>如果你只是想暂时不让人看到，用"停用"更合适。</div></div>
+      <div class="m-foot"><button class="btn sm" data-close>取消</button>
+        <button class="btn sm danger" data-confirm-del="${c.id}">确认删除</button></div>`);
+  });
+  $$('[data-copy]').forEach(el=>el.onclick=()=>{
+    const c = S.capabilities.find(x=>x.id===el.dataset.copy);
+    const clone = JSON.parse(JSON.stringify(c));
+    clone.id = c.id+'.copy'+Math.floor(Math.random()*90+10);
+    clone.name = c.name+'（副本）';
+    S.capabilities.push(clone); saveState(); render(); toast('已复制，档位一起带过去了');
+  });
+  $$('[data-edit]').forEach(el=>el.onclick=()=>{
+    UI.capId = el.dataset.edit; UI.adminPage='grades'; UI.editingWfIndex=0; render();
+  });
+  $$('[data-reload]').forEach(el=>el.onclick=()=>{
+    saveState(); render();
+    toast('配置已重读，档位改动都在');
+  });
+  $$('[data-wfswitch]').forEach(el=>el.onclick=()=>{ UI.editingWfIndex=+el.dataset.wfswitch; render(); });
+
+  // ② 勾节点：勾中的参数节点才会出现在 ④ / ⑤ 里
+  $$('[data-picknode]').forEach(el=>el.onchange=()=>{
+    const wf = currentCap().workflows[UI.editingWfIndex];
+    if(!wf) return;
+    const id = String(el.dataset.picknode);
+    const checked = el.checked;
+    const fs = nodeSetFields(id, wf.name);
+    wf.fields = (wf.fields||[]).filter(f=>String(f.node)!==id);
+    if(checked){
+      fs.forEach(f=>wf.fields.push({ node:id, field:f }));
+    }else{
+      // 移出节点：把各档拷贝里这几格一起清掉，别留下看不见的脏值
+      (wf.grades||[]).forEach(g=>{ if(g.params) fs.forEach(f=>delete g.params[f]); });
+    }
+    saveState();
+    setTimeout(()=>{ render(); toast(checked?`已选 ${id} 号节点，${fs.length} 个参数进入设置区`:`已把 ${id} 号节点移出设置区`); }, 0);
+  });
+  $$('[data-unpicknode]').forEach(el=>el.onclick=()=>{
+    const wf = currentCap().workflows[UI.editingWfIndex];
+    const id = String(el.dataset.unpicknode);
+    const fs = nodeSetFields(id, wf.name);
+    wf.fields = (wf.fields||[]).filter(f=>String(f.node)!==id);
+    (wf.grades||[]).forEach(g=>{ if(g.params) fs.forEach(f=>delete g.params[f]); });
+    saveState(); render(); toast('已移出设置区');
+  });
+
+  // ④ 新增档位区：每个参数按它自己的类型取值（数字/开关/下拉/多选）
+  $$('[data-drf]').forEach(el=>{
+    const [node,field] = el.dataset.drf.split('|');
+    const draft = UI.draft || (UI.draft = { name:'', values:{} });
+    const read = ()=>{
+      if(el.dataset.switch){
+        const on = el.classList.contains('on');
+        draft.values[field] = on ? 'true' : 'false';
+      }else if(el.classList.contains('multi')){
+        draft.values[field] = $$('input:checked', el).map(x=>x.value);
+      }else{
+        const v = (el.value||'').trim();
+        draft.values[field] = v==='' ? '' : (isNumField(field) ? coerceField(field, v) : v);
+      }
+      saveState();
+    };
+    const ev = (el.dataset.switch || el.classList.contains('multi')) ? 'click' : 'change';
+    if(el.dataset.switch){
+      el.onclick = ()=>{ const on=!el.classList.contains('on'); el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); const em=el.querySelector('em'); if(em) em.textContent=on?'开':'关'; draft.values[field] = on?'true':'false'; saveState(); };
+    }else if(el.classList.contains('multi')){
+      el.onchange = read;
+    }else{
+      el.onchange = read;
+    }
+  });
+  const dn = $('[data-draftname]');
+  if(dn) dn.oninput = ()=>{ (UI.draft || (UI.draft={name:'',values:{}})).name = dn.value; };
+
+  // ⑤ 档位列表：改名 / 展开 / 删 / 改这一档拷贝里的值
+  $$('[data-stop]').forEach(el=>el.onclick=e=>e.stopPropagation());
+  $$('[data-gfield]').forEach(el=>el.onchange=()=>{
+    const [k,i] = el.dataset.gfield.split('|');
+    const wf = currentCap().workflows[UI.editingWfIndex];
+    if(!wf || !wf.grades[+i]) return;
+    if(wf.grades[+i].locked) return;
+    wf.grades[+i][k] = el.value;
+    saveState();
+    if(k==='name') setTimeout(()=>{ const a=document.activeElement; render(); if(a && a.blur) a.blur(); }, 0);
+  });
+  $$('[data-gtoggle]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();
+    const i = +el.dataset.gtoggle;
+    UI.gOpen = (UI.gOpen|0)===i ? -1 : i;
+    render();
+  });
+  $$('[data-gval]').forEach(el=>{
+    const [field,i] = el.dataset.gval.split('@');
+    const wf = currentCap().workflows[UI.editingWfIndex];
+    if(!wf || !wf.grades[+i] || wf.grades[+i].locked) return;
+    const g = wf.grades[+i]; g.params = g.params || {};
+    if(el.dataset.switch){
+      el.onclick = ()=>{
+        const on = !el.classList.contains('on');
+        el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on));
+        const em = el.querySelector('em'); if(em) em.textContent = on?'开':'关';
+        g.params[field] = on ? 'true' : 'false'; saveState();
+      };
+      return;
+    }
+    if(el.classList.contains('multi')){
+      el.onchange = ()=>{ g.params[field] = $$('input:checked', el).map(x=>x.value); saveState(); };
+      return;
+    }
+    el.onchange = ()=>{
+      const v = (el.value||'').trim();
+      g.params[field] = v==='' ? '' : (isNumField(field) ? coerceField(field, v) : v);
+      saveState();
+    };
+  });
+  $$('[data-gdel]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();
+    const wf = currentCap().workflows[UI.editingWfIndex];
+    const i = +el.dataset.gdel;
+    if(!wf.grades[i] || wf.grades[i].locked) return;
+    const nm = wf.grades[i].name;
+    wf.grades.splice(i,1);
+    UI.gOpen = Math.min(i, wf.grades.length-1);
+    saveState(); render();
+    toast(`已删掉档位「${nm}」`);
+  });
+  // ④ 的【添加】：把原始工作流深拷贝一份，草稿里的值写进拷贝，成为新的一档
+  const ga = $('[data-gadd]');
+  if(ga) ga.onclick=()=>{
+    const wf = currentCap().workflows[UI.editingWfIndex];
+    if(!wf) return;
+    if(!pickedNodeIds(wf).length){ toast('先勾一个参数节点'); return; }
+    const draft = UI.draft || { name:'', values:{} };
+    const nm = String(draft.name||'').trim();
+    if(!nm){ toast('先给这一档起个名字'); const box=$('#newGradeName'); if(box) box.focus(); return; }
+    if((wf.grades||[]).some(g=>g.name===nm)){ toast('这个名字已经有一档了，换一个'); return; }
+    const copy = cloneWfParams(wf);              // 原始工作流的完整拷贝
+    copy.values = Object.assign(copy.values, JSON.parse(JSON.stringify(draft.values||{})));
+    wf.grades = wf.grades || [];
+    wf.grades.push({
+      name: nm, note:'',
+      params: JSON.parse(JSON.stringify(draft.values||{})),
+      copyFile: `${(S.service.copyDir||'./workflows/ComfyBridge').replace(/\/+$/,'')}/${wf.name.replace(/\.json$/,'')}__${nm}.json`
+    });
+    UI.gOpen = wf.grades.length-1;
+    UI.draft = { name:'', values:{} };
+    saveState(); render();
+    const changed = Object.keys(draft.values||{}).length;
+    toast(`已添加档位「${nm}」，创作台里多了一个按钮`);
+  };
+  // 描述框绑定（页面上不再提供下拉，读工作流时自动认；这里保留兜底）
+  const pn = $('[data-pnode]');
+  if(pn) pn.onchange=()=>{
+    const wf=currentCap().workflows[UI.editingWfIndex];
+    const [node,field] = pn.value.split('|');
+    wf.prompt = Object.assign({ label:'描述', required:true }, wf.prompt, { node, field });
+    saveState();
+  };
+
+  const sv = $('[data-savewf]');
+  if(sv) sv.onclick = ()=>{ saveState(); toast('已保存'); render(); };
+  const ts = $('[data-savecfg]');
+  if(ts) ts.onclick = ()=>{ saveState(); toast('已保存'); render(); };
+  const tc = $('#testConn');
+  if(tc) tc.onclick = ()=>{ tc.textContent='连接中…'; setTimeout(()=>{ tc.textContent='测试连接'; toast(UI.comfyOnline?'连接成功：队列空闲':'连接失败：目标计算机积极拒绝'); }, 700); };
+  $$('[data-s]').forEach(el=>el.onchange=()=>{
+    let v = el.value;
+    if(el.dataset.s==='archiveDir'){
+      v = String(v||'').trim() || 'output/ComfyBridgeOutput';
+      if(v.includes('..')){ toast('路径里不能有 ..'); render(); return; }
+      if(v.includes('models')){ toast('不能放在 models 目录里'); render(); return; }
+    }
+    S.service[el.dataset.s] = v; saveState();
+    if(el.dataset.s==='archiveDir'){ toast('成果目录已改成：'+v); render(); }
+  });
+  $$('[data-sw]').forEach(el=>el.onclick=()=>{
+    const k = el.dataset.sw; S.service[k] = !S.service[k];
+    el.classList.toggle('on', S.service[k]); saveState();
+    if(k==='bindLan' && S.service[k]) toast('已开启，记得设口令');
+  });
+  const rr2 = $('#rerun');
+  if(rr2) rr2.onclick=()=>{ toast('正在自检…'); setTimeout(()=>render(), 500); };
+  $$('[data-discard]').forEach(el=>el.onclick=()=>{
+    openModal(`<div class="m-head"><h3>放弃这些修改？</h3><button class="btn ghost sm" data-close>✕</button></div>
+      <div class="m-body tiny">改过但没保存的，都会恢复成上次保存的样子。</div>
+      <div class="m-foot"><button class="btn sm" data-close>取消</button><button class="btn sm danger" data-do-reset>放弃</button></div>`);
+  });
+}
+
+/* ---- 清空这个工作流已勾的档位字段（换工作流时用） ---- */
+function clearWfFields(){
+  const wf = currentCap().workflows[UI.editingWfIndex];
+  if(!wf) return;
+  openModal(`<div class="m-head"><h3>重新挑一遍参数？</h3><button class="btn ghost sm" data-close>✕</button></div>
+    <div class="m-body tiny" style="line-height:1.9">
+      会清掉「${esc(wf.name)}」已勾的节点和 ${Math.max((wf.grades||[]).length-1,0)} 个档位。<br>
+      <b>工作流文件不动。</b>
+    </div>
+    <div class="m-foot"><button class="btn sm" data-close>取消</button>
+      <button class="btn sm danger" data-do-clearwf>清空</button></div>`);
+  $$('[data-do-clearwf]').forEach(b2=>b2.onclick=()=>{
+    wf.fields = []; wf.grades = [ { name:'默认', locked:true, note:'原样出图，参数没改过' } ];
+    saveState(); closeModal(); render(); toast('已清空，回左边重新勾节点');
+  });
+}
+
+/* ================= 历史画廊 ================= */
+
+function viewGallery(){
+  const done = S.jobs.filter(j=>doneRuns(j).length);
+  const caps = ['全部', ...new Set(done.map(j=>j.capName))];
+  const shown = UI.galleryFilter==='全部'? done : done.filter(j=>j.capName===UI.galleryFilter);
+  const tiles = [];
+  shown.forEach(j=>doneRuns(j).forEach((r,i)=>tiles.push({j,r,i})));
+  return `<div class="admin">
+    ${viewTopbar()}
+    <div class="admin-main" style="padding-top:22px"><div class="inner" style="max-width:1100px">
+      <div class="spread" style="margin-bottom:16px">
+        <div><h2>历史记录</h2><div class="sub">生成过的成品都在这儿</div></div>
+        <div class="row">
+          <select class="input" style="width:140px" id="gfilter">${caps.map(c=>`<option ${c===UI.galleryFilter?'selected':''}>${esc(c)}</option>`).join('')}</select>
+          <button class="btn" id="batchDl">⬇ 批量下载（${tiles.length}）</button>
+        </div>
+      </div>
+      ${tiles.length? `<div class="gallery">
+        ${tiles.map(t=>`<div class="card" style="overflow:hidden;cursor:pointer">
+          <div class="art" style="border:0;border-radius:0;aspect-ratio:1/1">${t.r.media==='video'?mockVideo(t.r.seed):mockArt(t.r.seed,t.j.capName)}</div>
+          <div style="padding:9px 11px">
+            <div class="tiny" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.j.prompt)}</div>
+            <div class="tiny muted" style="margin-top:2px">${esc(t.j.capName)} · ${esc(t.r.grade||'默认')} · 种子 ${t.r.seed}</div>
+          </div></div>`).join('')}
+      </div>` : `<div class="empty"><div style="font-size:30px">🗂</div><div class="tiny">这里还没有记录，先去创作台生成几张</div></div>`}
+    </div></div>
+  </div>`;
+}
+function bindGallery(){
+  const f = $('#gfilter');
+  if(f) f.onchange=()=>{ UI.galleryFilter=f.value; render(); };
+  const b = $('#batchDl');
+  if(b) b.onclick=()=>toast('演示版不做真打包');
+}
+
+/* ================= 弹层工具 ================= */
+function openModal(html, noMaskClose){
+  closeModal();
+  const mask = document.createElement('div');
+  mask.className='modal-mask'; mask.id='mask';
+  mask.innerHTML = `<div class="modal ${html.length>900?'wide':''}">${html}</div>`;
+  document.body.appendChild(mask);
+  $$('[data-close]', mask).forEach(el=>el.onclick=closeModal);
+  mask.onclick = e=>{ if(e.target===mask && !noMaskClose) closeModal(); };
+  $$('[data-confirm-del]', mask).forEach(el=>el.onclick=()=>{
+    S.capabilities = S.capabilities.filter(c=>c.id!==el.dataset.confirmDel);
+    saveState(); closeModal(); render(); toast('已删除');
+  });
+  $$('[data-do-reset]', mask).forEach(el=>el.onclick=()=>resetState());
+  return mask;
+}
+function closeModal(){ const m=$('#mask'); if(m) m.remove(); }
+function closeAll(){ closeModal(); }
+
+/* ================= 向导 ================= */
+function renderWizard(){
+  const steps = [
+    { t:'欢迎使用 ComfyBridge', d:'它把你写的描述变成 ComfyUI 执行的任务。先确认两件事，30 秒。',
+      b:`<div class="field"><label>ComfyUI 地址</label><input class="input mono" value="http://127.0.0.1:8188">
+        <div class="hint">先打开 ComfyUI。连不上时会提示你。</div></div>
+        <div class="field"><label>成果物放哪</label><input class="input mono" value="output/ComfyBridgeOutput">
+        <div class="hint">成品会按能力分开放在这里，ComfyUI 的 output 不会再乱。</div></div>` },
+    { t:'给能力排几档', d:'一个能力配几档，用户就只能看到这几个按钮。',
+      b:`<div class="step"><div class="num">1</div><div class="txt"><b>打开管理台 → 档位表</b><p>左边勾几个节点，右边就会出现这些参数。</p></div></div>
+         <div class="step"><div class="num">2</div><div class="txt"><b>填一组值，起个名字，点「添加」</b><p>比如「快速」768×768 8 步，「精细」1344×768 30 步。</p></div></div>
+         <div class="step"><div class="num">3</div><div class="txt"><b>保存</b><p>创作台立刻多出这两个按钮，不用重启。</p></div></div>` },
+    { t:'用户侧只剩两样东西', d:'一个描述框，一排档位按钮。没有别的。',
+      b:`<div class="field"><label>创作台输入区</label>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff">
+          <div class="row" style="margin-bottom:10px"><div class="grades">
+            <button class="grade">快速</button><button class="grade on">均衡</button><button class="grade">精细</button></div></div>
+          <div class="tiny muted">描述你想要的画面，例如：雨夜霓虹街道……</div>
+        </div>
+        <div class="hint">用户只看到档位名，看不到具体参数。</div></div>` },
+  ];
+  const st = steps[UI.wizardStep];
+  const html = `<div class="wizard-mask" id="wiz">
+    <div class="wizard">
+      <div class="w-head"><h3>${esc(st.t)}</h3><div class="tiny muted">${esc(st.d)}</div></div>
+      <div class="w-body">${st.b}</div>
+      <div class="w-foot">
+        <div class="dots">${steps.map((_,i)=>`<i class="${i===UI.wizardStep?'on':''}"></i>`).join('')}</div>
+        <div class="row">
+          <button class="btn sm ghost" id="wizSkip">跳过</button>
+          ${UI.wizardStep>0?'<button class="btn sm" id="wizPrev">上一步</button>':''}
+          <button class="btn sm primary" id="wizNext">${UI.wizardStep<steps.length-1?'下一步':'开始配置'}</button>
+        </div>
+      </div>
+    </div></div>`;
+  const exist = $('#wiz'); if(exist) exist.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+  $('#wizSkip').onclick = ()=>{ UI.showWizard=false; $('#wiz').remove(); };
+  const prev = $('#wizPrev'); if(prev) prev.onclick = ()=>{ UI.wizardStep--; renderWizard(); };
+  $('#wizNext').onclick = ()=>{
+    if(UI.wizardStep<steps.length-1){ UI.wizardStep++; renderWizard(); }
+    else{ UI.showWizard=false; $('#wiz').remove(); UI.route='admin'; UI.adminPage='caps'; render(); toast('配好了，先去给用得上的能力排几个档位'); }
+  };
+}
+
+/* ================= 启动 ================= */
+function bindGlobal(){
+  $$('[data-nav]').forEach(el=>el.onclick=()=>{
+    const t = el.dataset.nav;
+    if(t==='admin'){ UI.route='admin'; UI.adminPage='caps'; }
+    else if(t==='gallery'){ UI.route='gallery'; UI.galleryFilter='全部'; }
+    else UI.route='studio';
+    render();
+  });
+}
+
+window.addEventListener('DOMContentLoaded', ()=>{
+  normalizeJobs();
+  seedJobs();
+  resumeJobs();
+  if(!localStorage.getItem('comfybridge_seen_wizard_v3')){
+    UI.showWizard = true; UI.wizardStep = 0;
+    localStorage.setItem('comfybridge_seen_wizard_v3','1');
+  }
+  render();
+});

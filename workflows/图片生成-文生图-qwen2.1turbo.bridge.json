@@ -1,0 +1,57 @@
+{
+  "prompt_targets": [
+    {
+      "node": "459_471",
+      "field": "prompt",
+      "scope_slot": 0
+    },
+    {
+      "node": "459_474",
+      "field": "on_false",
+      "scope_slot": 0
+    }
+  ],
+  "seed_targets": [
+    {
+      "node": "459_471",
+      "field": "sampling_mode.seed",
+      "scope_slot": 8
+    },
+    {
+      "node": "459_488",
+      "field": "noise_seed",
+      "scope_slot": -1
+    }
+  ],
+  "ref_slots": [],
+  "output_nodes": [
+    "461"
+  ],
+  "root_load_images": [],
+  "class_types": {
+    "459_451": "UNETLoader",
+    "459_452": "TextEncodeQwenImage21",
+    "459_453": "CLIPLoader",
+    "459_454": "VAELoader",
+    "459_456": "EmptyLatentImage",
+    "459_457": "VAEDecode",
+    "459_471": "TextGenerate",
+    "459_472": "PreviewAny",
+    "459_473": "CLIPLoader",
+    "459_474": "ComfySwitchNode",
+    "459_475": "PrimitiveStringMultiline",
+    "459_484": "ManualSigmas",
+    "459_486": "SamplerCustomAdvanced",
+    "459_487": "KSamplerSelect",
+    "459_488": "RandomNoise",
+    "459_489": "CFGGuider",
+    "459_490": "QwenImage21Cache",
+    "13": "ResolutionSelector",
+    "461": "SaveImageAdvanced"
+  },
+  "notes": [
+    "剔除前端/未知节点 root:463 MarkdownNote",
+    "剔除前端/未知节点 root:468 MarkdownNote",
+    "剔除前端/未知节点 root:483 MarkdownNote"
+  ]
+}

@@ -1,0 +1,63 @@
+[PASS] N1.1 能力与工作流页有「配置」按钮
+[PASS] N1.2 点配置进入档位表
+[PASS] N1.3 存在可勾选的参数节点 — 459_454
+[PASS] N1.4 勾选节点后仍停在档位表（不再跳回） — hash=#admin/grades
+[PASS] N1.5 勾选真的写进配置 — 10 -> 11
+[PASS] N1.6 取消勾选恢复原配置且页面不动
+[PASS] N1.7 刷新后仍停在档位表 — #admin/grades
+[PASS] N2.1 所有工作流所有档位参数逐项生效 — 共核对 14 个参数，异常：[]
+[PASS] N2.2 档位表显示 16:9 档 — 3
+[PASS] N2.3 展开后显示逐参数生效自检 — ✓ 参数全部生效
+    出图 16:9 (Widescreen) · 约 1368 × 768
+    aspect_ratio
+    16:9 (Widescreen) → 16:9 (Widescreen)✓cfg
+    1 → 
+[PASS] N2.4 16:9 档的尺寸说明是宽屏 — 16:9 (Widescreen) · 约 1368 × 768
+[PASS] N2.5 改数字参数即时保存生效 — megapixels -> 0.5
+[PASS] N2.6 改选择菜单参数即时保存生效
+[PASS] N2.7 「保存」按钮真的提交整档参数 — [('aspect_ratio', '4:3 (Standard)'), ('megapixels', 0.5), ('cfg', 2.5)]
+[PASS] N2.8 保存后尺寸说明随参数变化 — 4:3 (Standard) · 约 840 × 624
+[PASS] N2.9 16:9 档真实出图完成 — done
+[PASS] N2.10 真实成品是宽屏而不是 1:1 — 1376×768
+[PASS] N2.11 任务记录了实际生效参数 — 16:9 (Widescreen) · 约 1368 × 768
+[PASS] N3.1 能力开关能关
+[PASS] N3.2 能力开关能开回来
+[PASS] N3.3 复制能力生成了新能力 — ['image.generate.copy45']
+[PASS] N3.4 删除能力有确认弹窗
+[PASS] N3.5 确认删除后能力消失
+[PASS] N3.6 重读配置可用
+[PASS] N3.7 档位表多个工作流 tab 可切换
+[PASS] N3.8 切换后标题跟着变
+[PASS] N3.9 新增档位写进配置 — ['默认', '快速', '精细', '快速（16:9）', 'E2E新增档']
+[PASS] N3.10 档位可展开编辑
+[PASS] N3.11 档位改名生效 — ['默认', '快速', '精细', '快速（16:9）', 'E2E改名档']
+[PASS] N3.12 档位说明保存生效 — ['E2E 说明']
+[PASS] N3.13 档位参数编辑生效 — cfg@4
+[PASS] N3.14 保存按钮不报错且档位仍在
+[PASS] N3.15 删除档位生效且拷贝文件被清掉 — ['默认', '快速', '精细', '快速（16:9）']
+[PASS] N3.16 服务设置保存并生效 — 9
+[PASS] N3.17 服务设置能改回原值
+[PASS] N3.18 放弃修改可用
+[PASS] N3.19 测试连接按钮可用
+[PASS] N3.20 配置原文可读可保存
+[PASS] N3.21 自检页重新自检可用
+[PASS] N4.1 两张测试成品已生成
+[PASS] N4.2 历史页有全选与删除按钮
+[PASS] N4.3 全选能一次选中所有可见成品 — 29 张
+[PASS] N4.4 删除按钮计数跟着变
+[PASS] N4.5 取消全选清零
+[PASS] N4.6 历史删除有确认弹窗
+[PASS] N4.7 历史删除把本地成品文件删掉 — D:\ComfyUI-0.37.1\ComfyUI\output\ComfyBridgeOutput\图片生成\ComfyBridge_job_0113_115_00001.png
+[PASS] N4.8 历史里这张成品消失
+[PASS] N4.9 主页面对应记录也一起移除 — True
+[PASS] N4.10 单张成品删除按钮也删掉文件 — D:\ComfyUI-0.37.1\ComfyUI\output\ComfyBridgeOutput\图片生成\ComfyBridge_job_0119_121_00001.png
+[PASS] N5.1 右栏会话任务有删除按钮
+[PASS] N5.2 主页面对话卡片有删除按钮
+[PASS] N5.3 会话删除有确认弹窗
+[PASS] N5.4 主页面这条对话卡片消失
+[PASS] N5.5 右栏本会话任务同步消失
+[PASS] N5.6 会话删除不删成品文件 — D:\ComfyUI-0.37.1\ComfyUI\output\ComfyBridgeOutput\图片生成\ComfyBridge_job_0116_118_00001.png
+[PASS] N5.7 历史页仍能看到这条成品（可在历史里删文件）
+[PASS] N5.8 历史删除才真正删掉这个成品文件 — D:\ComfyUI-0.37.1\ComfyUI\output\ComfyBridgeOutput\图片生成\ComfyBridge_job_0116_118_00001.png
+
+===== 新增功能与配置全功能 E2E：57/57 项通过 =====

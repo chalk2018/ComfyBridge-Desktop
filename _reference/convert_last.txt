@@ -1,0 +1,27 @@
+===== [图][文生图]image_qwen_image_2_1_turbo_t2i.json -> 图片生成-文生图-qwen2.1turbo =====
+API nodes: 19; outputs: ['461']
+prompt_targets: [{'node': '459_471', 'field': 'prompt', 'scope_slot': 0}, {'node': '459_474', 'field': 'on_false', 'scope_slot': 0}]
+seed_targets: [{'node': '459_471', 'field': 'sampling_mode.seed', 'scope_slot': 8}, {'node': '459_488', 'field': 'noise_seed', 'scope_slot': -1}]
+ref_slots: []
+root_load_images: []
+校验问题: 
+  459_452 TextEncodeQwenImage21: 缺必填 images
+转换备注:
+  剔除前端/未知节点 root:463 MarkdownNote
+  剔除前端/未知节点 root:468 MarkdownNote
+  剔除前端/未知节点 root:483 MarkdownNote
+
+===== [图][编辑]image_qwen_image_2_1_turbo_image_edit.json -> 图片生成-参考生图-qwen2.1turbo =====
+API nodes: 22; outputs: ['461']
+prompt_targets: [{'node': '459_484', 'field': 'on_false', 'scope_slot': 1}, {'node': '459_500', 'field': 'prompt', 'scope_slot': 1}]
+seed_targets: [{'node': '459_500', 'field': 'sampling_mode.seed', 'scope_slot': 11}, {'node': '459_504', 'field': 'noise_seed', 'scope_slot': 11}, {'node': '459_504', 'field': 'noise_seed', 'scope_slot': -1}]
+ref_slots: [('images.image_1', 2), ('images.image_2', 2), ('images.image_3', 2), ('images.image_4', 2), ('images.image_5_1', 2), ('images.image_6', 2), ('images.image_7', 2), ('images.image_8', 2), ('images.image_9', 2), ('images.image_10', 2)]
+root_load_images: ['470']
+校验问题: 
+  470 LoadImage: 未知输入 upload
+转换备注:
+  剔除前端/未知节点 root:463 MarkdownNote
+  剔除前端/未知节点 root:472 ImageCompare
+  剔除前端/未知节点 root:476 MarkdownNote
+  剔除前端/未知节点 root:501 MarkdownNote
+

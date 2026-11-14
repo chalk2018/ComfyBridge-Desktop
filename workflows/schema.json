@@ -1,0 +1,347 @@
+{
+  "UNETLoader": {
+    "role": "param",
+    "fields": {}
+  },
+  "TextEncodeQwenImage21": {
+    "role": "prompt",
+    "fields": {
+      "prompt": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "negative_prompt": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "resolution": {
+        "type": "int",
+        "options": null,
+        "min": 0,
+        "max": 4096,
+        "step": 32
+      }
+    }
+  },
+  "CLIPLoader": {
+    "role": "param",
+    "fields": {}
+  },
+  "VAELoader": {
+    "role": "param",
+    "fields": {}
+  },
+  "EmptyLatentImage": {
+    "role": "param",
+    "fields": {
+      "width": {
+        "type": "int",
+        "options": null,
+        "min": 16,
+        "max": 16384,
+        "step": 8
+      },
+      "height": {
+        "type": "int",
+        "options": null,
+        "min": 16,
+        "max": 16384,
+        "step": 8
+      },
+      "batch_size": {
+        "type": "int",
+        "options": null,
+        "min": 1,
+        "max": 4096,
+        "step": null
+      }
+    }
+  },
+  "VAEDecode": {
+    "role": "param",
+    "fields": {}
+  },
+  "TextGenerate": {
+    "role": "prompt",
+    "fields": {
+      "prompt": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "max_length": {
+        "type": "int",
+        "options": null,
+        "min": 1,
+        "max": 32768,
+        "step": null
+      },
+      "sampling_mode": {
+        "type": "dynamic",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "thinking": {
+        "type": "bool",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "use_default_template": {
+        "type": "bool",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "mtp": {
+        "type": "combo",
+        "options": [
+          "auto",
+          "off",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "system_prompt": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "PreviewAny": {
+    "role": "output",
+    "fields": {}
+  },
+  "ComfySwitchNode": {
+    "role": "param",
+    "fields": {
+      "switch": {
+        "type": "bool",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "PrimitiveStringMultiline": {
+    "role": "prompt",
+    "fields": {
+      "value": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "ManualSigmas": {
+    "role": "param",
+    "fields": {
+      "sigmas": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "SamplerCustomAdvanced": {
+    "role": "param",
+    "fields": {}
+  },
+  "KSamplerSelect": {
+    "role": "param",
+    "fields": {
+      "sampler_name": {
+        "type": "combo",
+        "options": [
+          "euler",
+          "euler_cfg_pp",
+          "euler_ancestral",
+          "euler_ancestral_cfg_pp",
+          "heun",
+          "heunpp2",
+          "exp_heun_2_x0",
+          "exp_heun_2_x0_sde",
+          "dpm_2",
+          "dpm_2_ancestral",
+          "lms",
+          "dpm_fast",
+          "dpm_adaptive",
+          "dpmpp_2s_ancestral",
+          "dpmpp_2s_ancestral_cfg_pp",
+          "dpmpp_sde",
+          "dpmpp_sde_gpu",
+          "dpmpp_2m",
+          "dpmpp_2m_cfg_pp",
+          "dpmpp_2m_sde",
+          "dpmpp_2m_sde_gpu",
+          "dpmpp_2m_sde_heun",
+          "dpmpp_2m_sde_heun_gpu",
+          "dpmpp_3m_sde",
+          "dpmpp_3m_sde_gpu",
+          "ddpm",
+          "lcm",
+          "ipndm",
+          "ipndm_v",
+          "deis",
+          "cfgpp_ud10_ab",
+          "res_multistep",
+          "res_multistep_cfg_pp",
+          "res_multistep_ancestral",
+          "res_multistep_ancestral_cfg_pp",
+          "gradient_estimation",
+          "gradient_estimation_cfg_pp",
+          "er_sde",
+          "seeds_2",
+          "seeds_3",
+          "sa_solver",
+          "sa_solver_pece",
+          "ddim",
+          "uni_pc",
+          "uni_pc_bh2"
+        ],
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "RandomNoise": {
+    "role": "param",
+    "fields": {
+      "noise_seed": {
+        "type": "int",
+        "options": null,
+        "min": 0,
+        "max": 18446744073709551615,
+        "step": null
+      }
+    }
+  },
+  "CFGGuider": {
+    "role": "param",
+    "fields": {
+      "cfg": {
+        "type": "float",
+        "options": null,
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.1
+      }
+    }
+  },
+  "QwenImage21Cache": {
+    "role": "param",
+    "fields": {
+      "device": {
+        "type": "combo",
+        "options": [
+          "auto",
+          "gpu",
+          "cpu",
+          "off"
+        ],
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "dtype": {
+        "type": "combo",
+        "options": [
+          "default",
+          "int8",
+          "int4"
+        ],
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "ResolutionSelector": {
+    "role": "param",
+    "fields": {
+      "aspect_ratio": {
+        "type": "combo",
+        "options": [
+          "1:1 (Square)",
+          "2:3 (Portrait Photo)",
+          "3:2 (Photo)",
+          "3:4 (Portrait Standard)",
+          "4:3 (Standard)",
+          "9:16 (Portrait Widescreen)",
+          "16:9 (Widescreen)",
+          "21:9 (Ultrawide)"
+        ],
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "megapixels": {
+        "type": "float",
+        "options": null,
+        "min": 0.1,
+        "max": 16.0,
+        "step": 0.1
+      },
+      "multiple": {
+        "type": "int",
+        "options": null,
+        "min": 8,
+        "max": 128,
+        "step": 4
+      }
+    }
+  },
+  "SaveImageAdvanced": {
+    "role": "output",
+    "fields": {
+      "filename_prefix": {
+        "type": "text",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "format": {
+        "type": "dynamic",
+        "options": null,
+        "min": null,
+        "max": null,
+        "step": null
+      }
+    }
+  },
+  "BatchImagesNode": {
+    "role": "param",
+    "fields": {}
+  },
+  "LoadImage": {
+    "role": "upload",
+    "fields": {}
+  }
+}

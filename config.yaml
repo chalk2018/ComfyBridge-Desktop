@@ -1,0 +1,217 @@
+version: 1.01
+service:
+  comfy: http://127.0.0.1:8188
+  port: 8190
+  bindLan: false
+  comfyOutputDir: D:/ComfyUI-0.37.1/ComfyUI/output
+  archiveDir: D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput
+  wfDir: ./workflows
+  copyDir: ./workflows/ComfyBridge
+  uploadDir: ./data/uploads
+  taskDir: ./data/tasks
+  uploadMaxMB: 32
+  maxQueue: 20
+  keepDays: 7
+  maxRecords: 500
+capabilities:
+- id: image.generate
+  name: 图片生成
+  em: 🖼
+  group: 图像
+  enabled: true
+  desc: 文字描述生成图片，支持参考图
+  maxRefs: 3
+  requiredRef: false
+  rules:
+  - when: 图片 = 0
+    wf: 文生图
+  - when: 图片 ≥ 1
+    wf: 参考生图
+  fallback: auto
+  workflows:
+  - 文生图
+  - 参考生图
+- id: image.reference
+  name: 参考风格生图
+  em: 🎨
+  group: 图像
+  enabled: false
+  desc: 上传参考图学画风或主体
+  maxRefs: 0
+  workflows: []
+- id: image.lineart
+  name: 线稿图生成
+  em: ✏️
+  group: 图像
+  enabled: false
+  desc: 生成线稿，或把图片转成线稿
+  maxRefs: 0
+  workflows: []
+- id: image.sketch
+  name: 简单手绘创作
+  em: 🖌
+  group: 图像
+  enabled: false
+  desc: 手绘草稿上色与细化
+  maxRefs: 0
+  workflows: []
+- id: sheet.character
+  name: 角色设定图
+  em: 👤
+  group: 设定图
+  enabled: false
+  desc: 多视角角色设定
+  maxRefs: 0
+  workflows: []
+- id: sheet.scene
+  name: 场景设定图
+  em: 🏞
+  group: 设定图
+  enabled: false
+  desc: 场景概念设定
+  maxRefs: 0
+  workflows: []
+- id: sheet.prop
+  name: 道具设定图
+  em: 🗡
+  group: 设定图
+  enabled: false
+  desc: 道具概念设定
+  maxRefs: 0
+  workflows: []
+- id: board.4
+  name: 4 宫格故事板
+  em: ▦
+  group: 故事板
+  enabled: false
+  desc: 4 格分镜故事板
+  maxRefs: 0
+  workflows: []
+- id: board.6
+  name: 6 格故事板
+  em: ▦
+  group: 故事板
+  enabled: false
+  desc: 6 格分镜故事板
+  maxRefs: 0
+  workflows: []
+- id: board.9
+  name: 9 宫格故事板
+  em: ▦
+  group: 故事板
+  enabled: false
+  desc: 9 格分镜故事板
+  maxRefs: 0
+  workflows: []
+- id: video.generate
+  name: 视频生成
+  em: 🎬
+  group: 视频
+  enabled: false
+  desc: 文字描述生成视频
+  maxRefs: 0
+  workflows: []
+- id: video.reference
+  name: 参考生成视频
+  em: 🎥
+  group: 视频
+  enabled: false
+  desc: 用图片或视频作参考生成
+  maxRefs: 0
+  workflows: []
+- id: video.firstlast
+  name: 首尾帧生成视频
+  em: ⏮
+  group: 视频
+  enabled: false
+  desc: 给首帧和尾帧，生成中间过程
+  maxRefs: 0
+  workflows: []
+- id: audio.music
+  name: 音乐生成
+  em: 🎵
+  group: 音频
+  enabled: false
+  desc: 按风格与情绪生成音乐
+  maxRefs: 0
+  workflows: []
+- id: audio.music.ref
+  name: 参考生成音乐
+  em: 🎼
+  group: 音频
+  enabled: false
+  desc: 用参考音频生成同风格音乐
+  maxRefs: 0
+  workflows: []
+- id: audio.tts
+  name: 语音生成
+  em: 🎙
+  group: 音频
+  enabled: false
+  desc: 文字转语音
+  maxRefs: 0
+  workflows: []
+- id: audio.clone
+  name: 声音克隆
+  em: 🎤
+  group: 音频
+  enabled: false
+  desc: 用一段参考音频克隆音色
+  maxRefs: 0
+  workflows: []
+workflows:
+  文生图:
+    file: workflows/图片生成-文生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '13'
+      field: aspect_ratio
+    - node: '13'
+      field: megapixels
+    - node: '13'
+      field: multiple
+    grades:
+    - name: 默认
+      locked: true
+      note: 原样出图
+    - name: 快速（16:9）
+      note: ''
+      params:
+        '13':
+          aspect_ratio: 16:9 (Widescreen)
+    - name: 精细（16:9）
+      note: ''
+      params:
+        '13':
+          aspect_ratio: 16:9 (Widescreen)
+          megapixels: 2
+          multiple: 20
+  参考生图:
+    file: workflows/图片生成-参考生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    grades:
+    - name: 默认
+      locked: true
+      note: 原样出图
+    - name: 快速（16:9）
+      note: ''
+      params:
+        '502':
+          aspect_ratio: 16:9 (Widescreen)
+          multiple: 8
+    - name: 精细（16:9）
+      note: ''
+      params:
+        '502':
+          aspect_ratio: 16:9 (Widescreen)
+          megapixels: 2
+          multiple: 20
