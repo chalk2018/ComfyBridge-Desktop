@@ -1,8 +1,13 @@
-# 运行时/依赖/缓存（不入库）
+# 依赖与缓存（不入库）
 .venv/
 __pycache__/
 *.pyc
 .cache/
-data/
 node_modules/
 *.log
+
+# data：只保留四个目录结构，目录内的文件一律不入库
+data/*
+!data/*/
+data/*/**
+!data/*/.gitkeep
