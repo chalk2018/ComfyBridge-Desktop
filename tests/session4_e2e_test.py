@@ -195,6 +195,7 @@ def run_checks(cdp: CDP) -> None:
         appH: Math.round(app.getBoundingClientRect().height),
         studioDir: st.flexDirection,
         railDir: rs.flexDirection, railOx: rs.overflowX,
+        railPos: rs.position, railRight: Math.round(rail.getBoundingClientRect().right),
         composerBottom: Math.round(r('.composer').bottom),
         composerW: Math.round(r('.composer').width),
         chatScrollable: cs.scrollHeight > cs.clientHeight + 2,
@@ -202,8 +203,9 @@ def run_checks(cdp: CDP) -> None:
       };
     })()""")
     check("A1 手机整页一屏高、不靠 body 滚动", abs(lay["appH"] - lay["vh"]) <= 2, str(lay))
-    check("A2 创作台竖列布局、左栏横向胶囊", lay["studioDir"] == "column" and lay["railDir"] == "row"
-          and lay["railOx"] in ("auto", "scroll"), str(lay))
+    # 手机端左栏改成左侧抽屉（参考豆包），默认整块移出屏幕
+    check("A2 创作台竖列布局、左栏收成左侧抽屉", lay["studioDir"] == "column"
+          and lay["railPos"] == "fixed" and lay["railRight"] <= 2, str(lay))
     check("A3 输入区贴底且满宽", abs(lay["composerBottom"] - lay["vh"]) <= 2 and lay["composerW"] >= lay["vw"] - 24, str(lay))
     check("A4 聊天区内部滚动、不被输入区盖住", lay["chatScrollable"] and lay["chatInView"], str(lay))
     ov = overflow_report(cdp)
@@ -225,12 +227,16 @@ def run_checks(cdp: CDP) -> None:
       const mask = getComputedStyle(document.querySelector('#sheetMask') || document.createElement('div'));
       return { open: app.classList.contains('sheet-open'), vis: cs.visibility,
                top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height),
-               vh: window.innerHeight, maskOpacity: mask.opacity,
+               left: Math.round(r.left), width: Math.round(r.width),
+               vw: window.innerWidth, vh: window.innerHeight, maskOpacity: mask.opacity,
                hasTasks: !!document.querySelector('#tbatch') };
     })()""")
-    check("B2 点「任务」拉起底部抽屉（含会话任务/批量删除）",
-          sheet["open"] and sheet["vis"] == "visible" and abs(sheet["bottom"] - sheet["vh"]) <= 3
-          and sheet["top"] > 0 and sheet["hasTasks"], str(sheet))
+    # 抽屉从右侧弹出（贴右上、竖向满高、宽度小于屏宽），里面是会话任务与批量删除
+    check("B2 点「任务」从右侧滑出抽屉（含会话任务/批量删除）",
+          sheet["open"] and sheet["vis"] == "visible" and sheet["top"] <= 2
+          and abs(sheet["bottom"] - sheet["vh"]) <= 3
+          and sheet["left"] > 0 and sheet["width"] <= sheet["vw"]
+          and sheet["hasTasks"], str(sheet))
     check("B3 抽屉打开时遮罩可见", float(sheet["maskOpacity"]) > 0.5, str(sheet["maskOpacity"]))
     cdp.shot("m2-sheet")
     click(cdp, "#sheetMask")
@@ -268,11 +274,13 @@ def run_checks(cdp: CDP) -> None:
       const main = row ? row.querySelector('div') : null;
       const nm = row ? row.querySelector('.row b') : null;
       return { navDir: ns.flexDirection, navOx: ns.overflowX,
+               navPos: ns.position, navRight: Math.round(nav.getBoundingClientRect().right),
                mainW: main ? Math.round(main.getBoundingClientRect().width) : 0,
                nameH: nm ? Math.round(nm.getBoundingClientRect().height) : 0,
                nameW: nm ? Math.round(nm.getBoundingClientRect().width) : 0 };
     })()""")
-    check("D1 管理台导航变横向标签条", adm["navDir"] == "row" and adm["navOx"] in ("auto", "scroll"), str(adm))
+    # 管理台菜单和创作台一样收进左侧抽屉
+    check("D1 管理台导航收成左侧抽屉", adm["navPos"] == "fixed" and adm["navRight"] <= 2, str(adm))
     check("D2 能力卡文字不再被挤成竖排", adm["mainW"] >= 200 and adm["nameH"] <= 28 and adm["nameW"] >= 40, str(adm))
     dov = overflow_report(cdp)
     check("D3 管理台无横向溢出", dov["overflow"] is False, str(dov))

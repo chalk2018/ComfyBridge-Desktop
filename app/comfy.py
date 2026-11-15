@@ -35,11 +35,30 @@ class ComfyClient:
 
     def __init__(self, on_message: Callable[[dict[str, Any]], None] | None = None) -> None:
         self._on_message = on_message
-        self._client = httpx.Client(timeout=httpx.Timeout(20.0, connect=5.0))
+        self._client = self._new_client()
+        self._client_lock = threading.Lock()
         self._ws_thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._current_prompt_id = ""
         self.client_id = "comfybridge"
+
+    @staticmethod
+    def _new_client() -> httpx.Client:
+        return httpx.Client(timeout=httpx.Timeout(20.0, connect=5.0))
+
+    def reset_client(self) -> None:
+        """换一只连接池。
+
+        ComfyUI 重启、换端口、或本机网络抖动之后，旧池里那些 keep-alive 连接全是死的。
+        httpx 不保证能自动丢掉它们，症状是顶栏长期「未连接」、自检报错，但实际上
+        curl 8188 是通的——只能重启本服务才好。换一只池就能自愈，不用人介入。
+        """
+        with self._client_lock:
+            old, self._client = self._client, self._new_client()
+        try:
+            old.close()
+        except Exception:  # noqa: BLE001  关不上也无所谓，反正不再用了
+            pass
 
     @property
     def base(self) -> str:
@@ -49,13 +68,22 @@ class ComfyClient:
         return self.base + path
 
     def health(self) -> tuple[bool, dict[str, Any]]:
-        """顶栏那盏灯：只查连不连得上，顺带拿版本信息。"""
-        try:
-            resp = self._client.get(self._url("/system_stats"), timeout=3.0)
-            resp.raise_for_status()
-            return True, resp.json()
-        except Exception as exc:  # noqa: BLE001
-            return False, {"error": str(exc)}
+        """顶栏那盏灯：只查连不连得上，顺带拿版本信息。
+
+        第一次失败就换池再试一次：多花 3 秒超时，换来自动恢复，比让用户以为
+        「服务挂了」要好。
+        """
+        last: Exception | None = None
+        for attempt in (0, 1):
+            try:
+                resp = self._client.get(self._url("/system_stats"), timeout=3.0)
+                resp.raise_for_status()
+                return True, resp.json()
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                if attempt == 0:
+                    self.reset_client()
+        return False, {"error": str(last)}
 
     def queue_state(self) -> dict[str, Any]:
         """读取 ComfyUI 自己的执行队列（running + pending），用于忙闲判定。"""

@@ -4,6 +4,12 @@
 只把演示用的 <script> 换成真正对接服务端的 app.js；末尾补一小段样式，
 覆盖原型在小屏隐藏右栏的行为（需求：右栏执行队列在手机上不能消失）。
 
+⚠️ 别直接跑：web/index.html 后来被手工改过（成品图 object-fit / 档位拖拽 / 抽屉显示 /
+成品尺寸标签等），这些改动没有回填到本脚本，跑一次会把它们冲掉。
+要重建请先用 `diff` 把 index.html 里多出来的样式补进来，再执行。
+本脚本新增的 SHEET_CSS（角色设定图：创作台表单 + 管理台模板）已经同步过，
+重建时不会丢。
+
 Usage:
     python tools/build_frontend.py
 """
@@ -96,6 +102,66 @@ EXTRA_CSS = """
 """
 
 
+SHEET_CSS = """\
+/* ================= 角色设定图：创作台表单 + 管理台模板 ================= */
+
+/* 表单卡片：沿用 .inputbox 的强调边框，内部按「版式 / 画法 / 参考 / 角色 / 风格」分行 */
+.sheetbox{padding:6px 10px 8px}
+.sheetbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 2px;min-height:34px}
+.sheetbar + .sheetbar{border-top:1px dashed var(--line2)}
+.sheetbar .slb{font-size:11.5px;color:var(--ink3);flex:0 0 auto;min-width:26px;letter-spacing:.02em}
+/* 分段按钮：比画质档更小一档，正好放进输入区 */
+.seg{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:8px;background:#eef1f7;border:1px solid #e6eaf2}
+.segb{height:24px;padding:0 9px;border:0;border-radius:6px;background:transparent;color:var(--ink2);
+  font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;transition:.12s}
+.segb:hover{color:var(--ink)}
+.segb.on{background:#fff;color:var(--accent);font-weight:600;box-shadow:0 1px 3px rgba(20,30,50,.1)}
+.segx{font-style:normal;font-size:9.5px;color:var(--ink4);margin-left:5px}
+.segb.on .segx{color:var(--accent)}
+.segsel{height:26px;width:auto;min-width:132px;max-width:260px;font-size:12px;padding:0 8px;flex:0 0 auto}
+.segtext{height:26px;font-size:12px;padding:0 8px;flex:1 1 200px;min-width:140px;width:auto}
+.sheetchar{width:100%;border:0;outline:none;resize:vertical;font:inherit;font-size:13.5px;line-height:1.65;
+  min-height:68px;max-height:200px;padding:7px 3px;background:transparent;color:var(--ink)}
+.sheetchar::placeholder{color:var(--ink4)}
+.warnhint{font-size:10.5px;color:#8a5a00;background:#fff8ec;border:1px solid #f0dcb8;border-radius:5px;padding:1px 6px}
+/* 「看完整提示词」面板 */
+.pvbox{margin-top:4px;border-top:1px dashed var(--line2);padding-top:8px}
+.pvhead{display:flex;align-items:baseline;gap:8px;font-size:11.5px;margin-bottom:6px;color:var(--ink2)}
+.pvhead.bad{color:#a83a20}
+.pvbox pre{margin:0;max-height:210px;overflow:auto;background:#f7f9fd;border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;font-family:inherit;font-size:11.5px;line-height:1.8;white-space:pre-wrap;word-break:break-word;color:#39445a}
+/* 卡片上的摘要行 */
+.promptmeta{display:flex;align-items:center;gap:8px;margin:-4px 0 10px;flex-wrap:wrap}
+.linkbtn{font-size:11.5px;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.linkbtn:hover{color:#2359e0}
+.promptfull{margin:0;max-height:56vh;overflow:auto;background:#f7f9fd;border:1px solid var(--line);border-radius:9px;
+  padding:12px 14px;font-family:inherit;font-size:12px;line-height:1.85;white-space:pre-wrap;word-break:break-word;color:#39445a}
+
+/* 管理台「设定图模板」 */
+.sheet-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.lcard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fcfdff}
+.lcard .chip{height:20px;font-size:10.5px}
+.lmeta{display:flex;align-items:center;gap:7px;margin-top:5px}
+.sheet-block{border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;background:#fcfdff}
+.sheet-block .bh{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.sheet-block .bh .mono{font-weight:400;color:var(--ink4);font-size:10px}
+.sheet-block textarea{width:100%;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:8px 10px;
+  font:inherit;font-size:12px;line-height:1.8;color:#2b3444;background:#fff;outline:none}
+.sheet-block textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,107,255,.1)}
+.style-row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+.style-row .sname{width:120px;flex:0 0 auto}
+.style-row .input{height:30px;font-size:12px}
+
+@media (max-width:820px){
+  .sheetbar{gap:6px}
+  .segsel,.segtext{height:28px}
+  .sheetchar{min-height:60px}
+  .style-row{flex-wrap:wrap}
+  .style-row .sname{width:100%}
+  .sheet-cards{grid-template-columns:1fr}
+}
+"""
+
 def main() -> None:
     """生成 index.html。"""
     source = SOURCE.read_text(encoding="utf-8")
@@ -106,7 +172,7 @@ def main() -> None:
     head = head.replace("原型", "页面").replace("演示", "成品")
     page = (
         head
-        + "<style>\n" + EXTRA_CSS + "\n</style>\n"
+        + "<style>\n" + EXTRA_CSS + "\n" + SHEET_CSS + "</style>\n"
         + "</head>\n<body>\n<div id=\"root\"></div>\n"
         + '<script src="/static/app.js"></script>\n'
         + "</body>\n</html>\n"

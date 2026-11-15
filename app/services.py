@@ -25,6 +25,7 @@ import yaml
 
 from .comfy import ComfyClient, ComfyError, parse_history_error, read_seed_from_history
 from .config import CONFIG_PATH, ROOT, ConfigError, config
+from .promptlib import SheetError, library as sheet_library
 from .state import now_ms, state
 from .workflows import WorkflowError, flatten_params, pick_workflow, registry
 
@@ -192,6 +193,16 @@ class TaskService:
     # ------------------------------------------------------------------ 状态
     def state_payload(self) -> dict[str, Any]:
         """/api/state：页面每次刷新/新开窗口都从这里重新拉全量状态。"""
+        try:
+            sheet_lib = sheet_library.view()
+        except SheetError:
+            # 提示词库坏了不能连累整个创作台：给空库，页面上按「库读不到」提示
+            sheet_lib = {}
+        try:
+            from . import combos
+            sheet_combos = combos.view()
+        except Exception:  # noqa: BLE001 - 组合同样不能拖垮页面
+            sheet_combos = []
         with state.lock:
             return {
                 "service": {**config.state_service(), "maxQueue": config.service.maxQueue},
@@ -200,6 +211,8 @@ class TaskService:
                 "wfLib": registry.state_wf_lib(),
                 "ui": copy.deepcopy(state.ui),
                 "schema": registry.schema,
+                "sheetLib": sheet_lib,
+                "sheetCombos": sheet_combos,
                 "health": {"online": state.comfy_online, "comfy": config.service.comfy,
                            "queue": copy.deepcopy(state.comfy_queue)},
                 "seeded": True,
@@ -276,13 +289,22 @@ class TaskService:
 
     def submit_normal(
         self, cap_id: str, prompt: str, grade: str, ref_ids: list[str],
-        wf: str | None = None,
+        wf: str | None = None, sheet: dict[str, Any] | None = None,
+        brief: str = "", params: dict[str, Any] | None = None,
+        tag: str | None = None,
     ) -> tuple[bool, str, str]:
         """发送 / 再来一张 / 重试：新开一张卡，忙了只提示。返回 (ok, job_id, reason)。
 
         wf 为前端显式选择的子工作流（如「文生图」/「参考生图」）；若给定且属于该能力，
         优先用它，否则回退到按参考图数量自动挑（pick_workflow）。这样前端既能做显式模式切换，
         也能在没传 wf 时保持旧行为。
+
+        sheet / brief 只有角色设定图会用：sheet 记结构化输入（版式/画法/参考方式/角色行），
+        便于「基于上一条」把整台表单带回来；brief 是给对话卡片的一句摘要，
+        因为设定图的正文有 800 字左右，铺在卡片上会把整屏撑满。
+
+        params / tag：角色设定图「组合档位」的参数覆盖与缓存键。给了就用它，
+        不再按档位名去 config 里查——组合的档位是算出来的，不在 grades 表里。
         """
         cap = config.capability(cap_id)
         if not cap or not cap.get("enabled") or not cap.get("workflows"):
@@ -305,9 +327,16 @@ class TaskService:
         if not wf_name:
             return False, "", "这种情况还没有配置对应的工作流"
         wf = config.workflow(wf_name) or {}
-        grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
-        if grade not in grades:
-            grade = grades[0]
+        if params is None:
+            # 图片生成：档位来自 config 的 grades 表，名字不合法就退回第一档
+            grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
+            if grade not in grades:
+                grade = grades[0]
+            tag = tag or grade
+        else:
+            # 角色设定图：档位属于某个组合，名字由 combos 校验过，这里不再改
+            grade = grade or "默认"
+            tag = tag or grade
         ok, reason = self.check_normal(cap_id)
         if not ok:
             return False, "", reason
@@ -322,14 +351,29 @@ class TaskService:
                 {"path": r.get("path", ""), "name": r.get("name", "")} for r in refs
             ],
         }
-        job["runs"].append(self._new_run(job, "normal", wf_name, grade))
+        if sheet:
+            job["sheet"] = copy.deepcopy(sheet)
+            job["brief"] = brief or ""
+        if params is not None:
+            # 参数跟着任务走：换档重跑、再来一张都要拿回同一份覆盖，不能靠名字重查
+            job["params"] = copy.deepcopy(params)
+            job["gradeTag"] = tag
+        run = self._new_run(job, "normal", wf_name, grade)
+        run["params"] = copy.deepcopy(params) if params is not None else None
+        run["gradeTag"] = tag
+        job["runs"].append(run)
         with state.lock:
             state.jobs.append(job)
         state.persist()
         return True, job["id"], ""
 
     def submit_queue(self, job_id: str, grade: str) -> tuple[bool, str]:
-        """加入队列生成：接到同一张卡后面，沿用这一批的种子。"""
+        """加入队列生成：接到同一张卡后面，配方原样复用、只换档位。
+
+        设定图必须按「这张卡所属的组合」解析档位：同一组合的档位只是参数覆盖，
+        提示词/参考图/种子/工作流都不变，出来的才是同一张图的高清版；
+        跨组合拿档位会被拒绝，而不是静默当成母版跑。
+        """
         job = state.job(job_id)
         if not job:
             return False, "找不到这张卡片"
@@ -339,11 +383,24 @@ class TaskService:
         ok, reason = self.check_queue(job["cap"])
         if not ok:
             return False, reason
-        wf = config.workflow(job["wf"]) or {}
-        grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
-        if grade not in grades:
-            grade = grades[0]
+        params: dict[str, Any] | None = None
+        tag: str | None = None
+        cid = str((job.get("sheet") or {}).get("combo") or "")
+        if cid:
+            from . import combos
+            if not combos.find_grade(cid, grade):
+                return False, f"「{combos.meta(cid)['name']}」没有档位「{grade}」"
+            params = combos.effective_params(cid, grade)
+            tag = combos.tag(cid, grade)
+        else:
+            wf = config.workflow(job["wf"]) or {}
+            grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
+            if grade not in grades:
+                grade = grades[0]
+            tag = grade
         run = self._new_run(job, "queue", base["wf"], grade)
+        run["params"] = params
+        run["gradeTag"] = tag
         with state.lock:
             job["runs"].append(run)
         state.persist()
@@ -355,7 +412,12 @@ class TaskService:
         if not job or not job["runs"]:
             return False, "", "找不到这张卡片"
         run = job["runs"][0]
-        return self.submit_normal(job["cap"], job["prompt"], run["grade"], job["refs"])
+        return self.submit_normal(
+            job["cap"], job["prompt"], run["grade"], job["refs"],
+            wf=job.get("wf"), sheet=job.get("sheet"), brief=job.get("brief", ""),
+            # 组合档位的参数不按名字重查（名字只在那一个组合里有意义），原样透传
+            params=job.get("params"), tag=job.get("gradeTag"),
+        )
 
     def cancel(self, run_id: str) -> bool:
         """取消排队中/生成中的任务，并通知 ComfyUI 真正停下。"""
@@ -408,9 +470,13 @@ class TaskService:
                 # 队列生成沿用首发回读到的真实种子（X42）。
                 seed = job.get("seed") if run["mode"] == "queue" and job.get("seed") else secrets.randbelow(2**62)
                 prefix = f"ComfyBridge_{job['id']}_{run['seq']}"
-                prompt = registry.build_prompt(run["wf"], run["grade"], job["prompt"], refs, seed, prefix)
+                params, tag = run.get("params"), run.get("gradeTag")
+                prompt = registry.build_prompt(
+                    run["wf"], run["grade"], job["prompt"], refs, seed, prefix,
+                    params=params, tag=tag)
                 # 记下这一档真正提交到 ComfyUI 的参数，页面上可核对「改了有没有生效」
-                applied = registry.grade_effective(run["wf"], run["grade"])
+                applied = registry.grade_effective(
+                    run["wf"], run["grade"], params=params, tag=tag)
                 prompt_id = self.comfy.submit(prompt)
                 with state.lock:
                     run["prompt_id"] = prompt_id
@@ -548,6 +614,11 @@ class TaskService:
             "seed": run.get("seed"), "paths": [f.get("path") for f in run.get("files", [])],
             "error": (run.get("err") or {}).get("msg"),
         }
+        if job.get("sheet"):
+            # 设定图多记一笔结构：以后按版式/画法统计哪一类出得最多
+            sheet = job["sheet"]
+            record["sheet"] = {"layout": sheet.get("layoutName"), "ink": sheet.get("ink"),
+                               "ref": sheet.get("ref"), "style": sheet.get("style")}
         try:
             RECORD_FILE.parent.mkdir(parents=True, exist_ok=True)
             with RECORD_FILE.open("a", encoding="utf-8") as handle:
@@ -757,6 +828,18 @@ class TaskService:
             src = Path(str(info.get("path") or ""))
             if not src.is_file():
                 continue            # 文件被手动清掉了，跳过（前端会提示少了几张）
+            # 同一张图已经登记过就直接复用：不然每点一次「基于上一条」就多复制一份，
+            # 上传目录会被自己的副本塞满（实测点 19 次就多出 19 个文件）。
+            existing = next(
+                (r for r in state.refs.as_list()
+                 if str(r.get("path") or "") and
+                 Path(str(r["path"])).resolve() == src.resolve()),
+                None,
+            )
+            if existing:
+                out.append({"id": existing["id"], "kind": "image",
+                            "name": existing.get("name") or src.name})
+                continue
             ref_id = state.next_id("ref")
             filename = f"{ref_id}{src.suffix.lower() or '.png'}"
             dest = uploads / filename
@@ -781,11 +864,27 @@ class TaskService:
 
         为什么要清：参考图不能一移除就从输入框里删文件（要留给「基于上一条」），
         可上传目录也不能无限涨。策略是「正在编辑的 + 最近任务的」保留，其余先清。
+
+        保护范围（少一条就会误删用户还要用的图）：
+        1. 调用方给的保护项（当前草稿里的参考图）；
+        2. 任何能力草稿里引用的 ref id；
+        3. 未从会话删除的任务引用的 ref id，以及它们 `refsInfo` 里记的磁盘路径——
+           ref id 只活在内存里，服务重启或「基于上一条」重新登记后会换 id，
+           只有路径是跨重启可靠的锚。以前只按 id 保护，正是「图被当孤儿删掉」的根因。
         """
         protected = set(protect)
+        protected_paths: set[str] = set()
         with state.lock:
+            for draft in (state.ui.get("drafts") or {}).values():
+                protected.update((draft or {}).get("refs") or [])
             for job in state.jobs:
+                if job.get("sessionRemoved"):
+                    continue
                 protected.update(job.get("refs") or [])
+                for info in job.get("refsInfo") or []:
+                    path_text = str(info.get("path") or "")
+                    if path_text:
+                        protected_paths.add(path_text.replace("/", "\\").lower())
         items = state.refs.as_list()
         removed = 0
         for ref in items:
@@ -793,8 +892,10 @@ class TaskService:
                 break
             if ref.get("id") in protected:
                 continue
-            path = Path(str(ref.get("path") or ""))
-            outcome = self._remove_file(path) if str(ref.get("path") or "") else "deleted"
+            ref_path = str(ref.get("path") or "")
+            if ref_path and ref_path.replace("/", "\\").lower() in protected_paths:
+                continue
+            outcome = self._remove_file(Path(ref_path)) if ref_path else "deleted"
             if outcome == "blocked":
                 continue          # 文件动不了就先留着登记，下次再试；绝不因此让上传 500
             state.refs.remove(ref["id"])
@@ -1050,7 +1151,7 @@ class TaskService:
 
     # ------------------------------------------------------------------ 对外
     def ai_capabilities(self) -> dict[str, Any]:
-        """看菜单：只列可用能力；1.01 只有 image.generate 一条。"""
+        """看菜单：只列「已启用且配了工作流」的能力（当前是图片生成 + 角色设定图）。"""
         caps = []
         for cap in config.raw.get("capabilities", []):
             if not cap.get("enabled") or not cap.get("workflows"):

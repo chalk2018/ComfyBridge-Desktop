@@ -15,12 +15,26 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import ROOT, ConfigError, config
+from .promptlib import SheetError, library as sheet_library
 from .services import service
 from .state import state
 
 WEB_DIR = ROOT / "web"
 logger = logging.getLogger("comfybridge.api")
 ALLOWED_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+SHEET_CAP = "sheet.character"
+
+
+class SheetPayload(BaseModel):
+    """角色设定图的结构化输入：服务端据此拼提示词，前端不用自己拼字符串。"""
+
+    layout: str = "A"            # 版式 id：A 四视图横排 / B 四宫格 / C 单张全身
+    character: str = ""          # 角色行：年龄身份 + 五官 + 发型 + 服装 + 标志物
+    style: str = "写实摄影"       # 风格预设名或自写风格句
+    ink: str = "color"           # color 彩色 / line 线稿
+    lineStyle: str | None = None  # 线稿风格句 id（W1~W4）
+    ref: str = "none"            # none 无参考 / lock 锁定同角色 / style 只借画风
+    grade: str = ""              # 档位名：留空＝母版；只能是当前组合下存在的档位
 
 
 class TaskRequest(BaseModel):
@@ -29,6 +43,7 @@ class TaskRequest(BaseModel):
     grade: str = "默认"
     refs: list[str] = Field(default_factory=list)
     wf: str | None = None  # 前端显式选择的子工作流（文生图/参考生图），None 时按参考图数量自动挑
+    sheet: SheetPayload | None = None  # 角色设定图专用：结构化输入，服务端组装提示词
 
 
 class QueueRequest(BaseModel):
@@ -112,6 +127,73 @@ def blocked(reason: str) -> dict[str, Any]:
     return {"ok": False, "reason": reason}
 
 
+def _prepare_sheet(
+    payload: SheetPayload, cap: dict[str, Any], refs: list[str]
+) -> dict[str, Any]:
+    """角色设定图：结构化输入 → (组合, 档位, 提示词, 工作流, 参数, 卡片摘要)。
+
+    这里的分工必须清楚，否则「加入队列生成」会变成换了个配方：
+
+    - 组合（版式 × 画法 × 参考方式）决定**配方的全部内容**：提示词段落、参考图怎么用、
+      走哪条工作流、母版画幅。这部分只由用户在创作台选的东西决定，档位管不着。
+    - 档位只提供**参数覆盖**（画幅 / 像素 / CFG / sigma），提示词一个字都不变。
+
+    Raises:
+        SheetError: 参考图与参考方式不匹配、组合或档位不存在、角色描述为空等。
+    """
+    from . import combos
+    from .workflows import pick_workflow
+
+    ref_mode = payload.ref if payload.ref in combos.REFS else "none"
+    if refs and ref_mode == "none":
+        # 传了图却没选参考方式：按「锁定同角色」处理（比静默丢掉参考图更符合直觉）
+        ref_mode = "lock"
+    if ref_mode != "none" and not refs:
+        raise SheetError("「锁定同角色 / 只借画风」都要先上传一张参考图")
+    layout = sheet_library.layout(payload.layout)
+    cid = combos.combo_id(str(layout["id"]), payload.ink, ref_mode)
+    info = combos.meta(cid)
+    wf_name, _why = pick_workflow(cap, len(refs))
+    if not wf_name:
+        raise SheetError("这个能力还没配置工作流")
+    if wf_name != info["wf"]:
+        # 组合推出的工作流和 config 的规则对不上：宁可报错，也别拿参考生图跑文生图组合
+        raise SheetError(
+            f"组合「{info['name']}」要用「{info['wf']}」，但当前规则挑到「{wf_name}」，"
+            "请检查能力里的工作流规则"
+        )
+    grade_name = (payload.grade or combos.MASTER).strip() or combos.MASTER
+    grade = combos.find_grade(cid, grade_name)
+    if not grade:
+        names = "、".join(g["name"] for g in combos.grades(cid))
+        raise SheetError(f"「{info['name']}」没有档位「{grade_name}」（可选：{names}）")
+    params = combos.effective_params(cid, grade_name)
+    prompt = sheet_library.compose(
+        layout["id"], payload.character, payload.style,
+        ink=payload.ink, ref=ref_mode, line_style=payload.lineStyle,
+    )
+    brief = sheet_library.brief(
+        layout["id"], payload.character, ink=payload.ink, ref=ref_mode, style=payload.style,
+    )
+    return {
+        "prompt": prompt,
+        "wf": wf_name,
+        "grade": grade_name,
+        "params": params,
+        "tag": combos.tag(cid, grade_name),
+        "size": grade["size"],
+        "brief": brief,
+        "combo": info,
+        "sheet": {
+            "layout": layout["id"], "layoutName": layout["name"], "ratio": layout["ratio"],
+            "ink": payload.ink, "ref": ref_mode, "style": payload.style,
+            "character": payload.character.strip(), "lineStyle": payload.lineStyle or "",
+            # 组合与档位要跟着任务走：换档重跑/基于上一条都得知道自己是哪套配方
+            "combo": cid, "comboName": info["name"], "grade": grade_name,
+        },
+    }
+
+
 @app.exception_handler(Exception)
 async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
     """任何没接住的异常也回一段 JSON。
@@ -149,8 +231,28 @@ async def api_ui(body: UIPatch) -> dict[str, Any]:
 # ---------------------------------------------------------------- 任务
 @app.post("/api/tasks")
 async def api_tasks(body: TaskRequest) -> dict[str, Any]:
+    """提交一次生成。
+
+    角色设定图走结构化输入（sheet）：服务端按「组合」组装整条提示词并推导参数，
+    档位只提供参数覆盖；其它能力仍旧直接收 prompt 文本，行为不变。
+    """
+    prompt, grade, wf = body.prompt, body.grade, body.wf
+    sheet_info: dict[str, Any] | None = None
+    params: dict[str, Any] | None = None
+    tag: str | None = None
+    brief = ""
+    if body.sheet is not None and body.capId == SHEET_CAP:
+        cap = config.capability(body.capId) or {}
+        try:
+            prepared = _prepare_sheet(body.sheet, cap, body.refs)
+        except SheetError as exc:
+            return blocked(str(exc))
+        prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
+        sheet_info, brief = prepared["sheet"], prepared["brief"]
+        params, tag = prepared["params"], prepared["tag"]
     accepted, job_id, reason = service.submit_normal(
-        body.capId, body.prompt, body.grade, body.refs, wf=body.wf)
+        body.capId, prompt, grade, body.refs, wf=wf, sheet=sheet_info, brief=brief,
+        params=params, tag=tag)
     return ok({"job_id": job_id}) if accepted else blocked(reason)
 
 
@@ -202,14 +304,24 @@ async def _store_upload(file: UploadFile) -> dict[str, Any]:
         raise HTTPException(400, f"单文件不能超过 {config.service.uploadMaxMB}MB")
     cap = config.capability(state.ui.get("capId", "image.generate")) or {}
     max_refs = int(cap.get("maxRefs", 3) or 3)
-    limit = max_refs * 10
+    # 上限按「已启用能力里最大的参考图数」算，而不是只看当前能力：
+    # 临时图是全局共享的，改成只收 1 张参考图的设定图时，不该因为别处攒了十几张
+    # 就突然一张都传不上来（原来 maxRefs=1 → 上限 10，切过去直接死锁）。
+    try:
+        widest = max([int(c.get("maxRefs", 3) or 3) for c in config.raw.get("capabilities", [])
+                      if c.get("enabled") and c.get("workflows")] or [max_refs])
+    except (TypeError, ValueError):
+        widest = max_refs
+    limit = max(max_refs, widest) * 10
     if len(state.refs.as_list()) >= limit:
         # 参考图不随「移除」立刻删文件（要留给「基于上一条」复用），所以超限时
-        # 先清掉既不在草稿里、也没被任何任务引用的旧临时图，再谈拒绝
+        # 先清掉既不在草稿里、也没被任何仍在会话里的任务引用的旧临时图，再谈拒绝
         draft = (state.ui.get("drafts") or {}).get(cap.get("id", ""), {}) or {}
         service.prune_refs(draft.get("refs") or [], max(max_refs, limit // 3))
-        if len(state.refs.as_list()) >= limit:
-            raise HTTPException(400, "上传目录里的临时文件太多，先清一清")
+        left = len(state.refs.as_list())
+        if left >= limit:
+            raise HTTPException(400, f"临时图已存 {left} 张（上限 {limit} 张）：先在右栏删掉不用的"
+                                     "会话任务，或减少参考图张数再传")
     # 需求 04 章：上传目录塞满要明确提示，不能让用户以为文件丢了
     try:
         free = shutil.disk_usage(str(config.resolve(config.service.uploadDir))).free
@@ -414,6 +526,95 @@ async def api_grade_effective(name: str, grade: str) -> dict[str, Any]:
         return ok(registry.grade_effective(name, grade))
     except WorkflowError as exc:
         return blocked(str(exc))
+
+
+# ---------------------------------------------------------------- 角色设定图提示词库
+@app.get("/api/sheet/library")
+async def api_sheet_library() -> dict[str, Any]:
+    """提示词库快照：通用块、版式、风格预设、15 条已实测组合。"""
+    try:
+        return ok(sheet_library.view())
+    except SheetError as exc:
+        return blocked(str(exc))
+
+
+@app.put("/api/sheet/library")
+async def api_sheet_library_save(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """管理台保存通用块 / 风格预设；先校验再写回，写坏了不让过。"""
+    try:
+        sheet_library.save(body)
+        return ok(sheet_library.view())
+    except SheetError as exc:
+        return blocked(str(exc))
+
+
+@app.post("/api/sheet/preview")
+async def api_sheet_preview(body: SheetPayload) -> dict[str, Any]:
+    """创作台「看完整提示词」：不提交任务，只回组装结果与这一档的出图尺寸。"""
+    from .workflows import registry
+    cap = config.capability(SHEET_CAP) or {}
+    # 预览阶段还没必要逼用户先传图：按「有没有选参考方式」假定图已就位
+    refs = ["preview"] if body.ref in ("lock", "style") else []
+    try:
+        prepared = _prepare_sheet(body, cap, refs)
+    except SheetError as exc:
+        return blocked(str(exc))
+    try:
+        # 尺寸以「真正要提交的那份工作流」为准，和生成时用的是同一套参数
+        effective = registry.grade_effective(
+            prepared["wf"], prepared["grade"],
+            params=prepared["params"], tag=prepared["tag"],
+        )
+        size = effective["size"]["label"]
+        all_ok = effective["allOk"]
+    except Exception:  # noqa: BLE001 - 尺寸只是提示，算不出来不影响预览
+        size, all_ok = prepared["size"], False
+    return ok({
+        "prompt": prepared["prompt"], "brief": prepared["brief"],
+        "grade": prepared["grade"], "wf": prepared["wf"],
+        "combo": prepared["combo"], "comboId": prepared["combo"]["id"],
+        "sheet": prepared["sheet"], "size": size, "allOk": all_ok,
+        "params": prepared["params"],
+    })
+
+
+@app.get("/api/sheet/combos")
+async def api_sheet_combos() -> dict[str, Any]:
+    """管理台「档位表」：18 个组合 + 每个组合的档位（母版 + 自建），带参数生效自检。"""
+    from . import combos
+    from .workflows import registry
+    out: list[dict[str, Any]] = []
+    for info in combos.all_combos():
+        item = combos.view_one(info["id"])
+        rows: list[dict[str, Any]] = []
+        for grade in item["grades"]:
+            try:
+                eff = registry.grade_effective(
+                    info["wf"], grade["name"],
+                    params=combos.effective_params(info["id"], grade["name"]),
+                    tag=combos.tag(info["id"], grade["name"]),
+                )
+                rows.append({**grade, "allOk": eff["allOk"], "size": eff["size"]["label"],
+                             "paramsRows": eff["rows"]})
+            except Exception as exc:  # noqa: BLE001 - 单档算不出来不能拖垮整表
+                rows.append({**grade, "allOk": False, "error": str(exc)})
+        out.append({**item, "grades": rows})
+    return ok({"combos": out, "master": combos.MASTER,
+               "inks": list(combos.INKS), "refs": list(combos.REFS)})
+
+
+@app.put("/api/sheet/combos/{cid}/grades")
+async def api_sheet_combo_grades(cid: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """保存某个组合的自建档位（整体替换）；母版不落盘，也不许被覆盖。"""
+    from . import combos
+    from .workflows import registry
+    try:
+        combos.save_grades(cid, list(body.get("grades") or []))
+    except SheetError as exc:
+        return blocked(str(exc))
+    registry.invalidate()
+    registry.rebuild_all_copies()
+    return ok(combos.view_one(cid))
 
 
 # ---------------------------------------------------------------- 对外接口（斜线技能用）

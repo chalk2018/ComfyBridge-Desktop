@@ -1,4 +1,4 @@
-version: 1.01
+version: 1.02
 service:
   comfy: http://127.0.0.1:8188
   port: 8190
@@ -16,7 +16,7 @@ service:
 capabilities:
 - id: image.generate
   name: 图片生成
-  em: 🖼
+  em: 🖼️
   group: 图像
   enabled: true
   desc: 文字描述生成图片，支持参考图
@@ -59,10 +59,19 @@ capabilities:
   name: 角色设定图
   em: 👤
   group: 设定图
-  enabled: false
-  desc: 多视角角色设定
-  maxRefs: 0
-  workflows: []
+  enabled: true
+  desc: 多视角角色设定，四视图/四宫格/单张全身，支持参考角色与线稿
+  maxRefs: 1
+  requiredRef: false
+  rules:
+  - when: 图片 = 0
+    wf: 设定图-文生图
+  - when: 图片 ≥ 1
+    wf: 设定图-参考生图
+  fallback: auto
+  workflows:
+  - 设定图-文生图
+  - 设定图-参考生图
 - id: sheet.scene
   name: 场景设定图
   em: 🏞
@@ -215,3 +224,272 @@ workflows:
           aspect_ratio: 16:9 (Widescreen)
           megapixels: 2
           multiple: 20
+  设定图-文生图:
+    file: workflows/角色设定图-文生图-qwen2.1turbo.json
+    bridge: workflows/角色设定图-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '13'
+      field: aspect_ratio
+    - node: '13'
+      field: megapixels
+    - node: '13'
+      field: multiple
+    - node: '459_489'
+      field: cfg
+    - node: '459_484'
+      field: sigmas
+    grades: []
+  设定图-参考生图:
+    file: workflows/角色设定图-参考生图-qwen2.1turbo.json
+    bridge: workflows/角色设定图-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+sheetGrades:
+  A.color.none:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+      '459_489':
+        cfg: 1.0
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  B.color.none:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  C.color.none:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  A.line.none:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  B.line.none:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  C.line.none:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  A.color.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.color.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.color.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  A.line.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.line.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.line.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  A.color.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.color.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.color.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  A.line.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.line.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.line.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20

@@ -1,0 +1,103 @@
+<section id="ch-08" class="chapter-sep"><h1 class="chapter"><em>第 08 章</em>手机端（同一套功能，另一种摆法）</h1><div class="bar"></div></section>
+
+<h2 id="sec-44">一、原则：只是摆法不同，功能一个不少</h2>
+<p>手机上不砍功能，只换摆放方式。屏幕窄，三栏塞不下，于是：</p>
+<table>
+<thead><tr><th>桌面</th><th>手机</th></tr></thead>
+<tbody>
+<tr><td>左栏能力列表常驻</td><td>收进<b>左侧抽屉</b>，点顶栏最左的 <code>☰</code> 拉开</td></tr>
+<tr><td>右栏状态与任务常驻</td><td>收进<b>右侧抽屉</b>，点顶栏的「任务」图标拉开</td></tr>
+<tr><td>按钮带文字标签</td><td>按钮只留图标，文字藏起来（功能不变）</td></tr>
+<tr><td>整页滚动</td><td>整屏固定，只有聊天区内部滚</td></tr>
+<tr><td>输入区想多高就多高</td><td>输入区最高占半屏，超出的部分在里面滚</td></tr>
+</tbody>
+</table>
+
+<h2 id="sec-45">二、屏幕上的四块</h2>
+<p><figure class="phone">{{img:m_studio}}<figcaption>手机端创作台：顶栏 50px 一横条，中间是任务卡，底部是输入区。三栏全收进抽屉，但一个都没少。</figcaption></figure></p>
+
+<h3>2.1 顶栏：菜单最左，状态居中</h3>
+<p><figure class="phone">{{img:m_studio_nav}}<figcaption>拉开左抽屉的样子：抽屉从上到下占满整屏，顶部有标题栏和关闭键，下面是能力列表。点任意一项切过去，抽屉自己收起。</figcaption></figure></p>
+<table>
+<thead><tr><th>位置</th><th>元素</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td>最左</td><td><code>☰</code> 菜单</td><td>拉开左抽屉（创作台是能力列表，管理台是页面菜单）</td></tr>
+<tr><td>其次</td><td>Logo + ComfyBridge</td><td>屏幕特别窄（≤480px）时只留 Logo，把位置让给按钮</td></tr>
+<tr><td><b>正中</b></td><td>状态灯 + <code>已连接</code>/<code>未连接</code> + <code>空闲</code>/<code>生成中</code> 小胶囊</td><td>绝对定位在中轴上，左右按钮各占一边，不会把状态挤歪。这里<b>只报状态，不写描述</b>——「ComfyUI 未连接，请先启动」这种整句留给抽屉里那块</td></tr>
+<tr><td>右侧</td><td><code>任务</code> / <code>历史</code> / <code>管理台</code> 三个图标</td><td>任务 = 拉开右抽屉；历史 = 历史页；管理台 = 管理台</td></tr>
+</tbody>
+</table>
+<div class="callout a"><p>桌面用字符图标（<code>🗂</code> <code>⚙</code>），手机换成线性图标。同一份代码，靠 CSS 切换，不是两套页面。</p></div>
+
+<h3>2.2 左抽屉：能力 / 管理台菜单</h3>
+<table>
+<thead><tr><th>属性</th><th>值</th></tr></thead>
+<tbody>
+<tr><td>宽度</td><td>屏幕宽的 80%，最大 308px</td></tr>
+<tr><td>高度</td><td><b>占满整个竖屏</b>（<code>100dvh</code>），不是只占内容高度——否则下面会空出一大块，看着像菜单缺了一角</td></tr>
+<tr><td>内容</td><td>顶部标题栏（标题 + 关闭 <code>×</code>）→ 下面是列表；超出可滚动，滚到底不会带动后面的页面</td></tr>
+<tr><td>关闭方式</td><td>点选任意一项（自动收起）、点关闭键、点右侧遮罩</td></tr>
+<tr><td>安全区</td><td>底部留出手机手势条的高度，最后一项不会被遮住</td></tr>
+</tbody>
+</table>
+<p>管理台的抽屉是同一套：五页菜单 + <code>2 档位表</code> 下面挂的能力子菜单，缩进照旧保留。</p>
+<p><figure class="phone">{{img:m_admin_nav}}<figcaption>手机端管理台抽屉：同样占满竖屏，五页 + 档位表子菜单。</figcaption></figure></p>
+
+<h3>2.3 右抽屉：ComfyUI 状态与本会话任务</h3>
+<table>
+<thead><tr><th>属性</th><th>值</th></tr></thead>
+<tbody>
+<tr><td>位置与宽度</td><td>从<b>右侧</b>滑出，占屏幕约 1/3（最小 300px，最大 88%）</td></tr>
+<tr><td>内容</td><td>标题栏「ComfyUI 状态与本会话任务」→ <code>ComfyUI</code> 状态块 → 任务清单</td></tr>
+<tr><td><b>全选 / 批量删除</b></td><td>改成了<b>图标按钮</b>：全选是勾选图标，批量删除是垃圾桶图标，右上角带一个红色数字角标显示已选条数</td></tr>
+<tr><td>关闭方式</td><td>点关闭键或点遮罩</td></tr>
+</tbody>
+</table>
+<p><figure class="phone">{{img:m_studio_sheet}}<figcaption>右抽屉：状态块在上，任务清单在下，每条一个勾选框加一个 <code>✕</code>。</figcaption></figure></p>
+
+<h3>2.4 输入区：最高半屏，底栏常驻</h3>
+<p>角色设定图的输入区有五行分段按钮加描述框，桌面上一屏放得下，手机上会直接把聊天区吃掉。所以手机上给输入区设了硬上限：</p>
+<table>
+<thead><tr><th>规则</th><th>具体行为</th></tr></thead>
+<tbody>
+<tr><td>整体高度</td><td>最高 <b>屏幕的一半</b>（<code>50dvh</code>）</td></tr>
+<tr><td>滚动位置</td><td>滚动只发生在<b>中间那块内容区</b>（版式/画法/参考/档位/风格 + 描述框），描述框里也能滚</td></tr>
+<tr><td>底栏</td><td>「上传 / 收起提示词 / 复制 / 发送」永远露在外面，<b>不用滚到底才能点发送</b></td></tr>
+<tr><td>安全区</td><td>底部留出手势条高度</td></tr>
+</tbody>
+</table>
+<p><figure class="phone">{{img:m_studio_sheetcap}}<figcaption>手机端角色设定图的输入区：五行选择在中间那块里滚，底栏按钮一直贴在下面。</figcaption></figure></p>
+
+<h2 id="sec-46">三、逐条验收（手机上点一遍）</h2>
+<table>
+<thead><tr><th>#</th><th>动作</th><th>应有的表现</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>打开创作台</td><td>顶栏一横条：最左 <code>☰</code>，接着 Logo，<b>状态正好在屏幕正中</b>，右侧三个图标</td></tr>
+<tr><td>2</td><td>点 <code>☰</code></td><td>左抽屉从左侧滑出，占满整个竖屏高度，下面没有空白缺口</td></tr>
+<tr><td>3</td><td>点抽屉里任一能力</td><td>切到该能力，抽屉自动收起</td></tr>
+<tr><td>4</td><td>点抽屉外面</td><td>抽屉收起</td></tr>
+<tr><td>5</td><td>点顶栏「任务」图标</td><td>右抽屉从右侧滑出，宽约屏幕 1/3</td></tr>
+<tr><td>6</td><td>看右抽屉的「全选 / 批量删除」</td><td>都是图标按钮，批量删除带红色数字角标</td></tr>
+<tr><td>7</td><td>进角色设定图</td><td>输入区不超过屏幕一半，中间那块能滚，底栏「发送」一直看得见</td></tr>
+<tr><td>8</td><td>输一段长描述</td><td>描述框内部滚动，输入区不会越撑越高</td></tr>
+<tr><td>9</td><td>进管理台</td><td>菜单同样是左抽屉，点 <code>☰</code> 拉开，抽屉占满竖屏</td></tr>
+<tr><td>10</td><td>进管理台「能力与工作流」</td><td>卡片一行放得下：图标和文案在左，开关和「配置」在右，卡片比以前矮</td></tr>
+<tr><td>11</td><td>进管理台「档位表」</td><td>档位名不会被挤成竖排字；页头「保存」靠右，「返回列表」在左</td></tr>
+<tr><td>12</td><td>进管理台「设定图模板」</td><td>「已实测组合」不再是横表格，每一项竖排成一张小卡（左边标签右边值）；「保存」靠右</td></tr>
+<tr><td>13</td><td>进历史</td><td>两列瀑布式，像相册</td></tr>
+<tr><td>14</td><td>手指点成品图</td><td>悬浮按钮不用"悬停"就常驻可见（触屏没有 hover）</td></tr>
+<tr><td>15</td><td>在右抽屉里点「批量删除」</td><td>确认弹窗盖在抽屉上面，不被遮住</td></tr>
+<tr><td>16</td><td>把手机横过来</td><td>仍然可用，输入区随高度自适应</td></tr>
+</tbody>
+</table>
+
+<h2 id="sec-47">四、手机上明确不做的事</h2>
+<table>
+<thead><tr><th>不做</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>不单独做一套手机页面</td><td>一套代码 + 媒体查询就够，两套页面迟早会出现"手机能点、电脑不能点"的差异</td></tr>
+<tr><td>不在手机上做参数微调</td><td>档位表那种十来个数字输入框，在手机上改容易点错。手机上只做「选档位」，改参数回电脑</td></tr>
+<tr><td>不在顶栏写长句描述</td><td>状态只报「已连接 / 未连接 + 空闲 / 生成中」，说明文字放抽屉里</td></tr>
+<tr><td>不靠 hover 暴露操作</td><td>触屏没有悬停，所有操作按钮默认可见</td></tr>
+</tbody>
+</table>

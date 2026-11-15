@@ -170,15 +170,27 @@ def run_checks(cdp: CDP) -> None:
           "topbar 是 .app 的直接子元素")
     check("A2 四个区域都在", cdp.js("['.rail','.chat','.composer','.drawer'].every(s=>!!document.querySelector(s))"))
     check("A3 顶栏显示已连接", cdp.js("document.querySelector('.health .txt').textContent.includes('已连接')"))
-    check("A4 左栏 17 个能力、16 个未配置标签", cdp.js(
-        "document.querySelectorAll('.rail .item').length===17 && document.querySelectorAll('.rail .item .tag').length===16"))
+    # 能力数量/未配置数量按服务端实际计算：以后启用新能力时这里不用再改数字
+    caps = api("/api/state").get("capabilities") or []
+    unconf = sum(1 for c in caps if not (c.get("workflows") or []))
+    check(f"A4 左栏 {len(caps)} 个能力、{unconf} 个未配置标签", cdp.js(
+        f"document.querySelectorAll('.rail .item').length==={len(caps)} && "
+        f"document.querySelectorAll('.rail .item .tag').length==={unconf}"),
+        str(cdp.js("[document.querySelectorAll('.rail .item').length,"
+                   " document.querySelectorAll('.rail .item .tag').length]")))
     check("A5 控制台没有 JS 异常", not any(
         e.get("method") == "Runtime.exceptionThrown" for e in cdp.events), str(len(cdp.events)) + " 条事件")
     check("A6 配置红条不误报", cdp.js("!document.querySelector('.configerr')"))
 
-    # 复位到文生图模式（避免上次测试残留的 i2i 草稿影响发送逻辑）
+    # 复位到「图片生成 · 文生图」：服务端会记住上次选的能力，跑过设定图的测试套件后
+    # 页面会停在角色设定图，导致这里的发送按钮/档位按钮全都取不到
+    if cdp.js("UI.capId!=='image.generate'"):
+        click(cdp, '.rail [data-cap="image.generate"]')
+        cdp.pause(400)
     cdp.js("(()=>{UI.mode='t2i'; UI.refs=[]; UI.prompt=''; refreshComposer();})()")
     cdp.pause(300)
+    check("B0 复位到图片生成 · 文生图", cdp.js("UI.capId==='image.generate'&&UI.mode==='t2i'"),
+          str(cdp.js("[UI.capId,UI.mode]")))
 
     # ---------- B. 输入区 ----------
     # 服务端会记住上次的草稿，先清空再验证「空描述」行为（contenteditable 用 set_editor）
@@ -305,7 +317,11 @@ def run_checks(cdp: CDP) -> None:
     # ---------- E. 管理台：能力与工作流 ----------
     click(cdp, '[data-nav="admin"]')
     cdp.pause(350)
-    check("E1 进入管理台、四页菜单齐全", cdp.js("document.querySelectorAll('.admin-nav [data-page]').length===4"))
+    # 五个页面：能力与工作流 / 档位表 / 设定图模板 / 服务设置 / 自检（设定图模板是新增模块）
+    check("E1 进入管理台、五页菜单齐全", cdp.js(
+        "document.querySelectorAll('.admin-nav [data-page]').length===5 && "
+        "['caps','grades','sheet','service','diag'].every(k=>!!document.querySelector(`.admin-nav [data-page=\"${k}\"]`))"),
+        str(cdp.js("[...document.querySelectorAll('.admin-nav [data-page]')].map(e=>e.dataset.page)")))
     check("E2 能力与工作流页列出 17 个能力", cdp.js("document.querySelectorAll('.cap-row').length===17"))
     toggle_before = api("/api/state")["capabilities"][0]["enabled"]
     click(cdp, '[data-toggle="image.generate"]')
@@ -315,15 +331,27 @@ def run_checks(cdp: CDP) -> None:
     cdp.pause(500)
     check("E4 再点一次恢复启用", api("/api/state")["capabilities"][0]["enabled"] == toggle_before)
     caps_before = len(api("/api/state")["capabilities"])
-    click(cdp, '[data-copy="image.reference"]')
-    cdp.pause(500)
-    check("E5 复制能力", len(api("/api/state")["capabilities"]) == caps_before + 1)
-    clone = api("/api/state")["capabilities"][-1]["id"]
-    check("E6 删除副本后恢复", api(f"/api/capabilities/delete/{clone}", "POST", {})["ok"]
+    # 能力清单固定：卡片上的复制/删除、页面上的「重读配置」都去掉了
+    check("E5 能力卡片没有复制/删除按钮",
+          cdp.js("document.querySelectorAll('.cap-row [data-copy],.cap-row [data-del]').length===0"))
+    check("E6 页面没有「重读配置」按钮、能力数不变",
+          cdp.js("!document.querySelector('[data-reload]')")
           and len(api("/api/state")["capabilities"]) == caps_before)
-    click(cdp, "[data-reload]")
-    cdp.pause(400)
-    check("E7 重读配置不报错", cdp.js("!document.querySelector('.configerr')"))
+    # 「档位表」下面挂子菜单，一点直接跳到对应能力的档位表
+    check("E7 档位表下挂能力子菜单", cdp.js(
+        "document.querySelectorAll('.nav-sub [data-grades-cap]').length===2"),
+        str(cdp.js("[...document.querySelectorAll('.nav-sub [data-grades-cap]')].map(e=>e.dataset.gradesCap)")))
+    click(cdp, '.nav-sub [data-grades-cap="sheet.character"]')
+    cdp.pause(500)
+    check("E8 点子菜单直达角色设定图档位表", cdp.js(
+        "UI.adminPage==='grades'&&UI.capId==='sheet.character'"
+        "&&document.body.textContent.includes('版式')&&document.body.textContent.includes('画法')"),
+        str(cdp.js("[UI.adminPage,UI.capId]")))
+    # 子菜单也能点回图片生成；后面的 F 段测的是图片生成的档位表
+    click(cdp, '.nav-sub [data-grades-cap="image.generate"]')
+    cdp.pause(500)
+    check("E9 子菜单能切回图片生成档位表", cdp.js("UI.capId==='image.generate'"),
+          str(cdp.js("[UI.adminPage,UI.capId]")))
 
     # ---------- F. 档位表（用户报的两个问题） ----------
     click(cdp, '[data-page="grades"]')
@@ -414,8 +442,17 @@ def run_checks(cdp: CDP) -> None:
     cdp.pause(300)
     check("H7 恢复默认成果目录", api("/api/state")["service"]["archiveDir"] == old_archive)
     click(cdp, '[data-page="diag"]')
-    cdp.pause(800)
-    check("H8 自检自动出两项结果", cdp.js("document.querySelectorAll('.diag-row').length===2"))
+    # 进自检页是异步的（拉接口 → 写草稿 → 重绘），固定 sleep 在机器忙时会抢跑；
+    # 等到 DOM 里真的出现两行自检结果再断言，既是更严的判定也不会假失败。
+    got_diag = cdp.wait("document.querySelectorAll('.diag-row').length===2", 10)
+    check("H8 自检自动出两项结果", got_diag, str(cdp.js("""(() => ({
+        route: UI.route, page: UI.adminPage, cap: UI.capId,
+        rows: Array.isArray(S.diagRows) ? S.diagRows.length : String(S.diagRows),
+        dom: document.querySelectorAll('.diag-row').length,
+        busy: !!UI._diagLoading, navPending: !!UI._navPending,
+        main: (document.querySelector('.admin-main') || {}).textContent
+              ? document.querySelector('.admin-main').textContent.trim().slice(0, 90) : '(无 admin-main)',
+    }))()"""))[:300])
     check("H9 自检项包含连接与目录可写", cdp.js(
         "document.querySelector('.diag-row') && document.body.textContent.includes('成果目录可写')"))
 
@@ -452,7 +489,11 @@ def run_checks(cdp: CDP) -> None:
     check("K5 恢复配置后重读成功、红条消失", reload_ok.get("ok") is True and cdp.wait("!document.querySelector('.configerr')", 8))
 
     # ---------- L. 对外接口 ----------
-    check("L1 看菜单只列可用能力", len(api("/api/v1/capabilities")["capabilities"]) == 1)
+    # 看菜单只列「已启用且配了工作流」的能力：图片生成 + 角色设定图（新增模块）
+    listed = api("/api/v1/capabilities")["capabilities"]
+    enabled_ids = {c["id"] for c in api("/api/state")["capabilities"] if c.get("enabled") and c.get("workflows")}
+    check("L1 看菜单只列可用能力", {c["id"] for c in listed} == enabled_ids and "sheet.character" in enabled_ids,
+          str(sorted(c["id"] for c in listed)))
     check("L2 健康检查", api("/api/v1/health")["comfy_online"] is True)
     check("L3 技能文本可读", "四步" in HTTP.get("/api/v1/skill").text)
     check("L4 预检接口", "ready" in api("/api/v1/precheck", "POST", {"prompt": "x"}))
@@ -616,9 +657,13 @@ def main() -> int:
     CONFIG_BACKUP = CONFIG.read_text(encoding="utf-8")
     proc, cdp = start_browser()
     try:
-        # 服务端会记住上次所在页面（状态唯一在服务端），测试前先把路由复位到创作台
-        api("/api/ui", "POST", {"patch": {"route": "studio", "adminPage": "caps", "galleryFilter": "全部"}})
-        cdp.call("Page.reload", {"ignoreCache": True})
+        # 服务端会记住上次所在页面与上次用的能力（状态唯一在服务端），测试前都复位：
+        # 这个用例针对的是图片生成，跑到别的能力上会找不到 #promptInput。
+        # 另外必须连地址栏一起复位：页面会把当前路由写进 location.hash，
+        # 而 hash 是深链接、优先级高于服务端状态——只 reload 的话会被旧 hash 拽回管理台。
+        api("/api/ui", "POST", {"patch": {"route": "studio", "adminPage": "caps",
+                                          "capId": "image.generate", "galleryFilter": "全部"}})
+        cdp.call("Page.navigate", {"url": BASE + "/#studio"})
         cdp.wait("!!document.querySelector('#root .topbar')", 25)
         if not cdp.wait("!!document.querySelector('.app .studio')", 15):
             print("WARN: 页面没有回到创作台，后续创作台用例可能失败", flush=True)

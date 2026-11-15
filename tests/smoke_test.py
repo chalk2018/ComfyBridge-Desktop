@@ -62,7 +62,10 @@ def main() -> int:
     check("状态接口字段", all(k in state for k in ("service", "capabilities", "jobs", "wfLib", "ui", "health")))
     check("17 个能力 / 图片生成可用",
           len(state["capabilities"]) == 17 and len(state["capabilities"][0]["workflows"]) == 2)
-    check("档位表 2 个母版 tab", len(state["wfLib"]) == 2)
+    # 默认 = 每个子工作流一条：图片生成 2 条 + 角色设定图 2 条（新增模块）
+    check("档位表 4 个默认 tab", len(state["wfLib"]) == 4 and
+          {"文生图", "参考生图", "设定图-文生图", "设定图-参考生图"} <= set(state["wfLib"]),
+          str(list(state["wfLib"])))
     check("顶栏健康灯", state["health"]["online"] is True, str(state["health"]["queue"]))
 
     # 2. 忙闲判定：ComfyUI 队列必须空闲才能开始
@@ -172,8 +175,12 @@ def main() -> int:
     check("打开目录白名单", post("/api/open-folder", {"path": "C:/Windows"}).get("ok") is False)
 
     # 8. 对外接口（斜线技能用）
+    # 只列「已启用且配了工作流」的能力：图片生成 + 角色设定图（新增模块）
+    enabled_ids = {c["id"] for c in state["capabilities"] if c.get("enabled") and c.get("workflows")}
     menu = get("/api/v1/capabilities")
-    check("看菜单只列可用能力", len(menu["capabilities"]) == 1 and menu["capabilities"][0]["id"] == "image.generate")
+    check("看菜单只列可用能力",
+          {c["id"] for c in menu["capabilities"]} == enabled_ids and "sheet.character" in enabled_ids,
+          str(sorted(c["id"] for c in menu["capabilities"])))
     precheck = post("/api/v1/precheck", {"capability": "image.generate", "prompt": "测试"})
     check("预检接口", "ready" in precheck)
     tasks = get("/api/v1/tasks")

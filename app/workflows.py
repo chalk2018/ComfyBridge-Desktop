@@ -110,21 +110,46 @@ class WorkflowRegistry:
             # 配置坏掉时继续用内存里上一份可用配置，页面顶部红条另行提示
             pass
 
-    def load(self, wf_name: str, grade: str | None = None) -> dict[str, Any]:
+    def grade_params(self, wf_name: str, grade: str | None) -> dict[str, Any]:
+        """档位名 → 该档的参数覆盖（默认档返回空，表示母版原样）。"""
+        wf = config.workflow(wf_name)
+        if not wf:
+            raise WorkflowError(f"配置里没有工作流「{wf_name}」")
+        if not grade or grade == "默认":
+            return {}
+        grade_def = next((g for g in wf.get("grades", []) if g.get("name") == grade), None)
+        if not grade_def:
+            raise WorkflowError(f"「{wf_name}」没有档位「{grade}」")
+        return dict(grade_def.get("params") or {})
+
+    def load(
+        self,
+        wf_name: str,
+        grade: str | None = None,
+        params: dict[str, Any] | None = None,
+        tag: str | None = None,
+    ) -> dict[str, Any]:
         """返回一份可直接提交的工作流：默认档用母版，其余档用最新参数重建的拷贝。
 
         以前只在启动时补「不存在的」拷贝，导致页面改完参数 / 手改配置后
         生成时仍读旧文件——这正是「改成 16:9 却还是 1:1」的一类根因。
+
+        Args:
+            wf_name: 配置里的工作流名。
+            grade: 配置里的档位名（图片生成用；给了 params 就不再查它）。
+            params: 直接给一份参数覆盖（角色设定图的组合档位走这条路，
+                因为它的档位不在 config 的 grades 里，而是按组合算出来的）。
+            tag: 参数覆盖的缓存键与拷贝文件名后缀，默认用档位名。
         """
         self._sync_external_config()
         wf = config.workflow(wf_name)
         if not wf:
             raise WorkflowError(f"配置里没有工作流「{wf_name}」")
-        if grade and grade != "默认":
-            grade_def = next((g for g in wf.get("grades", []) if g.get("name") == grade), None)
-            if not grade_def:
-                raise WorkflowError(f"「{wf_name}」没有档位「{grade}」")
-            path = self._ensure_fresh_copy(wf_name, grade_def)
+        if params is None:
+            params = self.grade_params(wf_name, grade)
+            tag = tag or grade
+        if params:
+            path = self._ensure_fresh_copy(wf_name, {"name": tag or grade or "默认", "params": params})
             return self._read(path)
         return self._read(config.resolve(wf["file"]))
 
@@ -217,25 +242,39 @@ class WorkflowRegistry:
                 self._ensure_fresh_copy(wf_name, grade)
 
     # ---------------------------------------------------------- 参数生效自检
-    def grade_effective(self, wf_name: str, grade: str) -> dict[str, Any]:
+    def grade_effective(
+        self,
+        wf_name: str,
+        grade: str,
+        params: dict[str, Any] | None = None,
+        tag: str | None = None,
+    ) -> dict[str, Any]:
         """核对这一档的每个配置值是否真的落到即将提交的 prompt 上。
 
         返回逐项 want/got 对照、是否全部生效、以及该档的出图尺寸说明。
         页面用它显示「参数已生效」，测试用它逐参数断言。
+
+        Args:
+            params: 显式参数覆盖（角色设定图组合档位用）；不给就按档位名查 config。
+            tag: 缓存键，需与 `load()` 用的一致，否则会读到别的档的旧结论。
         """
+        self._sync_external_config()
         wf = config.workflow(wf_name) or {}
-        grade_def = next((g for g in wf.get("grades", []) if g.get("name") == grade), None)
-        key = f"{wf_name}|{grade}"
-        stamp = self._copy_signature(wf_name, grade_def or {"name": grade})
+        if params is None:
+            params = self.grade_params(wf_name, grade)
+            tag = tag or grade
+        tag = tag or grade
+        grade_def = {"name": tag, "params": params}
+        key = f"{wf_name}|{tag}"
+        stamp = self._copy_signature(wf_name, grade_def)
         cached = self._effective_cache.get(key)
         if cached and cached.get("stamp") == stamp:
             return copy.deepcopy(cached["data"])
         master = self._read(config.resolve(wf["file"]))
-        raw_params = (grade_def or {}).get("params", {}) or {}
-        params = self._normalize_params(master, raw_params)
-        api = self.load(wf_name, grade)
+        params = self._normalize_params(master, params)
+        api = self.load(wf_name, grade, params=params, tag=tag)
         bridge = self.bridge(wf_name)
-        size_explicit = self._apply_size_gate(api, wf_name, grade, bridge)
+        size_explicit = self._apply_size_gate(api, wf_name, params)
         rows: list[dict[str, Any]] = []
         applied: dict[str, Any] = {}
         for node_id, fields in params.items():
@@ -269,22 +308,22 @@ class WorkflowRegistry:
         return data
 
     def _apply_size_gate(
-        self, api: dict[str, Any], wf_name: str, grade: str, bridge: dict[str, Any]
+        self, api: dict[str, Any], wf_name: str, params: dict[str, Any]
     ) -> bool:
-        """参考生图的「尺寸门」：非默认档显式指定宽高比时，切到 EmptyLatentImage。
+        """参考生图的「尺寸门」：显式指定宽高比时，切到 EmptyLatentImage。
 
         缘由：参考工作流里 `459_468 ComfySwitchNode` 默认 switch=False，采样用
         TextEncodeQwenImage21 编码出的「参考图 latent」——它的宽高比等于参考图，
-        所以档位里配了 16:9 也照样出竖屏（用户报的正是这个）。只有该档显式设置了
+        所以档位里配了 16:9 也照样出竖屏（用户报的正是这个）。只有显式设置了
         aspect_ratio/width/height 时，才把开关切到 on_true（EmptyLatentImage，
-        由 ResolutionSelector 按档位算出 16:9 等尺寸）。默认档（原样出图）保持不变。
+        由 ResolutionSelector 按档位算出 16:9 等尺寸）。
+
+        Args:
+            params: 这一档归一化后的参数覆盖（按节点存）；不给就等于「原样出图」。
         """
-        gate = bridge.get("size_gate")
+        gate = self.bridge(wf_name).get("size_gate")
         if not gate:
             return False
-        wf = config.workflow(wf_name) or {}
-        gdef = next((g for g in wf.get("grades", []) if g.get("name") == grade), None)
-        params = (gdef or {}).get("params") or {}
         explicit = any(
             any(k in ("aspect_ratio", "width", "height") for k in (fields or {}))
             for fields in params.values()
@@ -304,11 +343,21 @@ class WorkflowRegistry:
         refs: list[dict[str, Any]],
         seed: int | None,
         prefix: str,
+        params: dict[str, Any] | None = None,
+        tag: str | None = None,
     ) -> dict[str, Any]:
-        """把用户描述、参考图、种子、文件名前缀填进工作流，得到可提交的 prompt。"""
-        api = self.load(wf_name, grade)
+        """把用户描述、参考图、种子、文件名前缀填进工作流，得到可提交的 prompt。
+
+        Args:
+            params: 参数覆盖（角色设定图的组合档位用）；不给就按档位名查 config。
+            tag: 与 `load()` 一致的缓存键，保证「同一组合同一档」每次都读到同一份拷贝。
+        """
+        if params is None:
+            params = self.grade_params(wf_name, grade)
+            tag = tag or grade
+        api = self.load(wf_name, grade, params=params, tag=tag)
         bridge = self.bridge(wf_name)
-        self._apply_size_gate(api, wf_name, grade, bridge)
+        self._apply_size_gate(api, wf_name, params)
         for target in bridge.get("prompt_targets", []):
             node = api.get(target["node"])
             if node:
@@ -405,6 +454,11 @@ class WorkflowRegistry:
                     "status": wf.get("status", "ok"),
                 })
             item["workflows"] = wfs
+            if cap.get("id") == "sheet.character":
+                # 设定图的档位挂在「组合」上（组合才是母版），页面按组合渲染档位表。
+                # 放在能力里而不是顶层：管理台的档位表本来就是「按能力」进去的。
+                from . import combos as sheet_combos
+                item["combos"] = sheet_combos.view()
             caps.append(item)
         return caps
 

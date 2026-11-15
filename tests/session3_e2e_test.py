@@ -128,8 +128,8 @@ def done_run_id() -> str:
 
 
 def run_checks(cdp: CDP) -> None:
-    # 回到创作台
-    api("/api/ui", "POST", {"patch": {"route": "studio", "adminPage": "caps"}})
+    # 回到创作台；能力也复位到图片生成（服务端会记住上次选的能力，跑过设定图的套件会留下 sheet.character）
+    api("/api/ui", "POST", {"patch": {"route": "studio", "adminPage": "caps", "capId": "image.generate"}})
     cdp.call("Page.reload", {"ignoreCache": True})
     cdp.wait("!!document.querySelector('.app .topbar')", 25)
     cdp.wait("!!document.querySelector('.composer')", 15)
@@ -141,16 +141,30 @@ def run_checks(cdp: CDP) -> None:
       const st=getComputedStyle(document.querySelector('.studio'));
       const rail=document.querySelector('.rail'); const rs=getComputedStyle(rail);
       const chat=document.querySelector('.chat'); const comp=document.querySelector('.composer');
-      return {studio:st.display, dir:st.flexDirection, railDir:rs.flexDirection,
-              railOverflow:rs.overflowX, railScrollable: rail.scrollWidth>rail.clientWidth+2,
+      return {studio:st.display, dir:st.flexDirection, railPos:rs.position,
+              railRight:Math.round(rail.getBoundingClientRect().right),
               chatW:Math.round(chat.getBoundingClientRect().width),
               compW:Math.round(comp.getBoundingClientRect().width),
               vw:window.innerWidth, bodyOverflowX: document.documentElement.scrollWidth<=window.innerWidth+2};
     })()""")
     check("A1 手机(375)纵向堆叠布局", layout and layout["studio"] == "flex" and layout["dir"] == "column", str(layout))
-    check("A2 左栏变顶部横向可滑胶囊条", layout and layout["railDir"] == "row" and layout["railOverflow"] in ("auto", "scroll"), str(layout.get("railDir") if layout else ""))
+    # 手机端左栏改成抽屉（参考豆包）：默认整块移出屏幕，点 ☰ 才滑出来
+    check("A2 左栏收成左侧抽屉、默认在屏幕外",
+          layout and layout["railPos"] == "fixed" and layout["railRight"] <= 2,
+          f"position={layout.get('railPos') if layout else ''} right={layout.get('railRight') if layout else ''}")
     check("A3 聊天区与输入区占满屏宽", layout and layout["chatW"] >= 340 and layout["compW"] >= 340, str(layout))
     check("A4 页面无横向溢出", layout and layout["bodyOverflowX"] is True, str(layout.get("bodyOverflowX") if layout else ""))
+    click(cdp, "#navToggle")
+    cdp.pause(500)
+    check("A5 点 ☰ 抽屉滑出到左边", cdp.js(
+        "document.querySelector('.app').classList.contains('nav-open')"
+        "&&document.querySelector('.rail').getBoundingClientRect().left >= -2"),
+        str(cdp.js("Math.round(document.querySelector('.rail').getBoundingClientRect().left)")))
+    click(cdp, "#sideMask")
+    cdp.pause(450)
+    check("A6 点遮罩收回抽屉", cdp.js(
+        "!document.querySelector('.app').classList.contains('nav-open')"
+        "&&document.querySelector('.rail').getBoundingClientRect().right <= 2"))
     cdp.call("Emulation.clearDeviceMetricsOverride")
 
     # ---------- B. 档位表保存不被只读默认档卡住（#2） ----------

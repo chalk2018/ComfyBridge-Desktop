@@ -1,0 +1,241 @@
+{
+  "prompt_targets": [
+    {
+      "node": "459_484",
+      "field": "on_false",
+      "scope_slot": 1
+    },
+    {
+      "node": "459_500",
+      "field": "prompt",
+      "scope_slot": 1
+    }
+  ],
+  "seed_targets": [
+    {
+      "node": "459_500",
+      "field": "sampling_mode.seed",
+      "scope_slot": 11
+    },
+    {
+      "node": "459_504",
+      "field": "noise_seed",
+      "scope_slot": 11
+    },
+    {
+      "node": "459_504",
+      "field": "noise_seed",
+      "scope_slot": -1
+    }
+  ],
+  "ref_slots": [
+    {
+      "name": "images.image_1",
+      "slot": 18,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_1",
+          "scope_slot": 18
+        },
+        {
+          "node": "459_485",
+          "field": "images.image0",
+          "scope_slot": 18
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_2",
+      "slot": 19,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_2",
+          "scope_slot": 19
+        },
+        {
+          "node": "459_485",
+          "field": "images.image1",
+          "scope_slot": 19
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_3",
+      "slot": 20,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_3",
+          "scope_slot": 20
+        },
+        {
+          "node": "459_485",
+          "field": "images.image5",
+          "scope_slot": 20
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_4",
+      "slot": 21,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_4",
+          "scope_slot": 21
+        },
+        {
+          "node": "459_485",
+          "field": "images.image6",
+          "scope_slot": 21
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_5_1",
+      "slot": 22,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_5",
+          "scope_slot": 22
+        },
+        {
+          "node": "459_485",
+          "field": "images.image7",
+          "scope_slot": 22
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_6",
+      "slot": 23,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_6",
+          "scope_slot": 23
+        },
+        {
+          "node": "459_485",
+          "field": "images.image8",
+          "scope_slot": 23
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_7",
+      "slot": 24,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_7",
+          "scope_slot": 24
+        },
+        {
+          "node": "459_485",
+          "field": "images.image9",
+          "scope_slot": 24
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_8",
+      "slot": 25,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_8",
+          "scope_slot": 25
+        },
+        {
+          "node": "459_485",
+          "field": "images.image10",
+          "scope_slot": 25
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_9",
+      "slot": 26,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_9",
+          "scope_slot": 26
+        },
+        {
+          "node": "459_485",
+          "field": "images.image11",
+          "scope_slot": 26
+        }
+      ],
+      "linked": true
+    },
+    {
+      "name": "images.image_10",
+      "slot": 27,
+      "targets": [
+        {
+          "node": "459_474",
+          "field": "images.image_10",
+          "scope_slot": 27
+        },
+        {
+          "node": "459_485",
+          "field": "images.image12",
+          "scope_slot": 27
+        }
+      ],
+      "linked": true
+    }
+  ],
+  "output_nodes": [
+    "461"
+  ],
+  "root_load_images": [
+    "470"
+  ],
+  "size_gate": {
+    "node": "459_468",
+    "field": "switch",
+    "value": true
+  },
+  "class_types": {
+    "459_451": "UNETLoader",
+    "459_453": "CLIPLoader",
+    "459_454": "VAELoader",
+    "459_456": "EmptyLatentImage",
+    "459_457": "VAEDecode",
+    "459_468": "ComfySwitchNode",
+    "459_469": "QwenImage21Cache",
+    "459_474": "TextEncodeQwenImage21",
+    "459_477": "CLIPLoader",
+    "459_479": "PrimitiveStringMultiline",
+    "459_480": "PreviewAny",
+    "459_484": "ComfySwitchNode",
+    "459_485": "BatchImagesNode",
+    "459_500": "TextGenerate",
+    "459_502": "ManualSigmas",
+    "459_503": "KSamplerSelect",
+    "459_504": "RandomNoise",
+    "459_505": "SamplerCustomAdvanced",
+    "459_507": "CFGGuider",
+    "461": "SaveImageAdvanced",
+    "470": "LoadImage",
+    "502": "ResolutionSelector"
+  },
+  "notes": [
+    "由 图片生成-参考生图-qwen2.1turbo.json 拷贝，供「角色设定图」使用；出图尺寸由档位决定（16:9 1536×864 / 9:16 864×1536）"
+  ]
+}

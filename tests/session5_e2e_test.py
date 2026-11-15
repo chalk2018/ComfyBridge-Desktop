@@ -181,10 +181,16 @@ def run_checks(cdp: CDP) -> None:
     check("A4 历史里不再出现这几张", not still, f"残留={still}")
 
     # ================= B. 卡片里的提示词最多 5 行（需求 2） =================
+    # 先自己造一条超长提示词：以前靠会话里恰好留着一条长任务，删任务用例一跑就没了，
+    # 「最长的那张卡」退化成两行短卡，这里会假失败。自带数据才稳。
     api("/api/ui", "POST", {"patch": {"route": "studio"}})
+    long_prompt = "S5 长提示词卡片：窗台上的橘猫，午后阳光，胶片颗粒。" * 40
+    api("/api/tasks", "POST", {"capId": "image.generate", "prompt": long_prompt,
+                               "grade": "快速（16:9）", "refs": [], "wf": "文生图"})
     cdp.js("location.hash = '#studio'")
     cdp.call("Page.reload", {"ignoreCache": True})
     cdp.wait("!!document.querySelector('.job .body .msg-u')", 25)
+    cdp.wait(f"[...document.querySelectorAll('.job .body .msg-u')].some(e=>e.textContent.length>{len(long_prompt) // 2})", 20)
     box = cdp.js("""(() => {
       const list = [...document.querySelectorAll('.job .body .msg-u')];
       if (!list.length) return null;

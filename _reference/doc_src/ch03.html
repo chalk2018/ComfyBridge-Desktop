@@ -1,0 +1,363 @@
+<section id="ch-03" class="chapter-sep"><h1 class="chapter"><em>第 03 章</em>功能规格（以当前画面为准）</h1><div class="bar"></div></section>
+
+<p class="lede">本章不写"应该怎样"，只写"现在点开看到什么、点什么会发生什么"。每条描述都能在界面上找到对应的控件；界面上没有的东西，这里也不会出现。截图全部取自当前版本的真实运行界面。</p>
+
+<h2 id="sec-12">一、创作台：图片生成</h2>
+
+<h3>1.1 一屏分三栏</h3>
+<p>打开应用就是创作台。除了顶栏和底部输入区，中间横着分成三栏：左边是能力列表，中间是对话流（任务卡一张接一张），右边是本次会话的任务清单。</p>
+<p><figure class="shot">{{img:d_studio_image}}<figcaption>创作台全景：左能力栏 / 中对话流 / 右任务栏，顶栏左是健康状态、右是「历史」「管理台」，底部是输入区。图中是「图片生成」的图生图状态，已生成多张成品。</figcaption></figure></p>
+<table>
+<thead><tr><th>区域</th><th>里面有什么</th><th>怎么用</th></tr></thead>
+<tbody>
+<tr><td>顶栏（吸附在顶部）</td><td>应用图标与名称、<b>ComfyUI 连接状态</b>、<code>🗂 历史</code>、<code>⚙ 管理台</code></td><td>状态灯绿色=已连接，红色=未连接。右边两个按钮切到另外两页</td></tr>
+<tr><td>左栏 · 能力列表</td><td>17 个能力，按分组排列</td><td>点哪个就切到哪个能力的输入区；灰色带「未配置」标记的点了没反应</td></tr>
+<tr><td>中栏 · 对话流</td><td>任务卡，从下往上追加</td><td>主战场：提交、看进度、看成品、复制图片、重跑</td></tr>
+<tr><td>右栏 · 本会话任务</td><td><code>ComfyUI</code> 状态块 + <code>本会话任务</code> 清单</td><td>勾选任务做批量删除；点单条跳到对应卡片</td></tr>
+<tr><td>底部输入区</td><td>模式、档位、参考图、描述框、发送</td><td>内容随能力变化（见 §1.5）</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 左栏：17 个能力，2 个能用</h3>
+<p>能力列表是写死在 <code>config.yaml</code> 里的固定清单，顺序也固定。每个能力右边会带一个状态标记：</p>
+<table>
+<thead><tr><th>状态标记</th><th>含义</th><th>点它会发生什么</th></tr></thead>
+<tbody>
+<tr><td><b>无标记</b>（正常黑字）</td><td>已挂上工作流、有档位，可用</td><td>切换到这个能力的创作界面</td></tr>
+<tr><td><span class="tag">未配置（下个版本开放）</span></td><td>能力位留着，但还没接 ComfyUI 工作流</td><td>点了不切页，只提示还没开放</td></tr>
+</tbody>
+</table>
+<p>当前版本<b>可用的是 2 个</b>：<code>🖼️ 图片生成</code>、<code>👤 角色设定图</code>。其余 15 个（参考风格生图、线稿图生成、简单手绘创作、场景设定图、道具设定图、4/6/9 宫格故事板、视频生成、参考生成视频、首尾帧生成视频、音乐生成、参考生成音乐、语音生成、声音克隆）都还是「未配置」。</p>
+<div class="callout a"><p>为什么把没配的也列出来：这三个字不是给用户看的，是给"要不要现在去配"这个决定看的。列表在，说明这个能力的位置已经留好了，挂个工作流就能用，不用改代码。</p></div>
+
+<h3>1.3 中栏：一张任务卡从提交到成品</h3>
+<p>每次点发送就新开一张卡。<b>一张卡就是一个任务</b>，卡里可以挂多个成品（批量出图时）。</p>
+<p><figure class="shot">{{img:d_jobcard}}<figcaption>一张已完成的任务卡：卡头写「已完成 · 子工作流名 · 档位名 · 用时」；成品右下角标真实像素尺寸；卡底三个动作按钮；右上角 ✕ 把这张卡移出会话。</figcaption></figure></p>
+<table>
+<thead><tr><th>卡上的位置</th><th>显示什么</th><th>点它会怎样</th></tr></thead>
+<tbody>
+<tr><td>卡头</td><td><code>已完成 · 参考生图 默认 用时 21 秒</code>——状态 · 跑的是哪个子工作流 · 用的是哪一档 · 花了多久</td><td>不可点，纯信息</td></tr>
+<tr><td>成品图</td><td>图片按原比例完整显示（<code>object-fit:contain</code>，不裁切）</td><td>点开看大图</td></tr>
+<tr><td>成品上的三个悬浮按钮</td><td><code>⤢</code> 看大图 · <code>⬇</code> 下载 · <code>⧉</code> 复制图片</td><td>分别是：弹大图窗 / 存到本地 / 把图片二进制写进剪贴板</td></tr>
+<tr><td>成品右下角</td><td><code>1024×1024</code> 这样的真实尺寸</td><td>不可点。放在右下角是为了不挡按钮</td></tr>
+<tr><td>卡底三个按钮</td><td><code>🕒 加入队列生成</code> · <code>↻ 再来一张</code> · <code>↗ 基于上一条</code></td><td>见下表</td></tr>
+<tr><td>右上角 <code>✕</code></td><td>删除按钮</td><td>把这张卡移出本次会话。<b>只从列表里消失，图片文件不动</b>，历史里照样能找到</td></tr>
+</tbody>
+</table>
+<h4>卡底三个按钮的区别</h4>
+<table>
+<thead><tr><th>按钮</th><th>做什么</th><th>什么时候用</th></tr></thead>
+<tbody>
+<tr><td><code>🕒 加入队列生成</code></td><td>用和这张卡<b>完全相同的参数与种子</b>再排一个任务，但排在队尾，不打断正在跑的那张</td><td>想多要一张一样的，又不想等它插队</td></tr>
+<tr><td><code>↻ 再来一张</code></td><td>同档位、同描述，<b>换一个新种子</b>重新生成，新开一张卡</td><td>构图还行、想再看看别的随机结果</td></tr>
+<tr><td><code>↗ 基于上一条</code></td><td>把这条的描述和档位<b>填回输入区</b>，不动队列</td><td>想改几个字再生成，不用重新打一遍</td></tr>
+</tbody>
+</table>
+<div class="callout r"><p><b>界面没有"复制种子"这个按钮</b>，也不提供手填种子。要复现某张图，用卡底的 <code>🕒 加入队列生成</code>（同种子）或 <code>↻ 再来一张</code>（新种子）。种子在哪能看：大图弹窗和执行详情里有真实回读的种子值。</p></div>
+
+<h4>生成中长什么样</h4>
+<table>
+<thead><tr><th>状态</th><th>卡头</th><th>卡片主体</th></tr></thead>
+<tbody>
+<tr><td>排队中</td><td><code>排队中 · 子工作流 档位</code></td><td>一行「等待显卡空闲」，进度条空着</td></tr>
+<tr><td>运行中</td><td><code>生成中 · 子工作流 档位</code></td><td>进度条 + <code>正在采样 · 6/8 步</code> + <code>已用 18 秒</code>。这一步<b>不显示预览小图</b></td></tr>
+<tr><td>已完成</td><td><code>已完成 · 子工作流 档位 用时 N 秒</code></td><td>成品图 + 三个悬浮按钮 + 尺寸</td></tr>
+<tr><td>失败</td><td><code>失败 · 子工作流 档位</code></td><td>红色卡，一句人话原因，展开看 ComfyUI 原文</td></tr>
+<tr><td>已取消</td><td><code>已取消 · 子工作流</code></td><td>提示已取消，不可续跑，只能重新提交</td></tr>
+</tbody>
+</table>
+
+<h3>1.4 右栏：ComfyUI 状态 + 本会话任务</h3>
+<table>
+<thead><tr><th>块</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td><code>ComfyUI</code></td><td>连接地址（<code>http://127.0.0.1:8188</code>）、在线与否、队列里有几个任务在跑</td></tr>
+<tr><td><code>本会话任务</code></td><td>本次会话提交过的全部任务，每条前面一个勾选框、后面一个 <code>✕</code>；顶部有总勾选框和 <code>批量删除（N）</code></td></tr>
+</tbody>
+</table>
+<p><b>批量删除</b>点下去会先弹确认框，确认后这些卡从会话里移出——和单条 <code>✕</code> 一样，<b>只移出会话，不删文件</b>。图片还在成果目录里，历史页照样能看到。</p>
+
+<h3>1.5 底部输入区：图片生成这一套</h3>
+<p><figure class="shot">{{img:d_composer}}<figcaption>图片生成的输入区：上一行是模式分段（文生图 / 图生图）和当前档位，右边是 <code>＋ 上传</code>（只有图生图才有）和发送键；中间一行参数条实时说明"这次到底按什么参数出图"。</figcaption></figure></p>
+<table>
+<thead><tr><th>控件</th><th>可选项</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>模式分段</td><td><code>文生图</code> / <code>图生图</code></td><td>切换会同时换掉档位列表、参考图区和提示文案。两个模式各存各的草稿，切回来还在</td></tr>
+<tr><td>档位</td><td><code>默认</code> / <code>快速（16:9）</code> / <code>精细（16:9）</code></td><td>档位是参数覆盖，名字后面括号里是画幅，选之前就能看出比例</td></tr>
+<tr><td>参数条</td><td>一句话 + 生效值</td><td>例：<code>纯文字描述，不上传图片</code> + <code>原样出图 · 出图 1:1 (Square) · 约 1024 × 1024</code>。这一行是<b>实际生效值</b>，不是配置里的理论值</td></tr>
+<tr><td><code>＋ 上传</code></td><td>图生图才出现</td><td>选图后显示缩略图（完整显示不裁切），每张右下角有 <code>@</code> 引用按钮</td></tr>
+<tr><td>描述框</td><td>可编辑</td><td>支持直接拖图进来、粘贴截图；<code>@</code> 插入的引用会变成一个行内 chip</td></tr>
+<tr><td>发送 <code>↑</code></td><td>—</td><td>发送后输入框立刻清空，可以接着写下一句</td></tr>
+</tbody>
+</table>
+
+<h4><code>@</code> 引用：让描述能指名道姓地用某张参考图</h4>
+<p>图生图上传多张参考图后，每张缩略图右下角有个 <code>@</code>。点它会在光标处插入一个引用 chip，写出来的提示词里对应变成 <code>&lt;image1&gt;</code>、<code>&lt;image2&gt;</code>。删掉某个 chip，后面的编号会自动归位（<code>&lt;image2&gt;</code> 变成 <code>&lt;image1&gt;</code>），不会留空号。</p>
+<table>
+<thead><tr><th>规则</th><th>具体行为</th></tr></thead>
+<tbody>
+<tr><td>编号顺序</td><td>按参考图在界面上从左到右的顺序，从 <code>&lt;image1&gt;</code> 开始</td></tr>
+<tr><td>删除后</td><td>重新编号，不留空号</td></tr>
+<tr><td>提交时</td><td>令牌原样进服务端提示词，模型能识别"第几张图"</td></tr>
+<tr><td>上限</td><td>图片生成最多 3 张参考图（<code>maxRefs: 3</code>），超了不让加</td></tr>
+</tbody>
+</table>
+
+<h3>1.6 发送前后的拦截规则</h3>
+<table>
+<thead><tr><th>情况</th><th>界面反应</th></tr></thead>
+<tbody>
+<tr><td>描述为空且这个模式要求描述</td><td>不提交，输入区给一行浅灰提示</td></tr>
+<tr><td>图生图但一张参考图都没有</td><td>拦下并提示需要先上传参考图，<b>不新建任务</b></td></tr>
+<tr><td>ComfyUI 未连接</td><td>顶栏红灯，发送被拦，提示先启动 ComfyUI</td></tr>
+<tr><td><b>ComfyUI 正忙着</b><br>（发送 / 再来一张 / 重试）</td><td><b>不排队</b>。弹一句「〈刚才那张〉还在跑」，等它出来再发。这是故意的：普通生成要求显卡是空的，不然出来的时间不可预期</td></tr>
+<tr><td><b>ComfyUI 正忙着</b><br>（加入队列生成）</td><td>这一种<b>会排队</b>，卡头显示「排队中 · 等待显卡空闲」，轮到它自动开始。但正在跑的是另一个能力时仍会拦一下，提示等它结束</td></tr>
+<tr><td>队列已满（上限 20）</td><td>提示「已经排了 N 个，等前面出来几个再加」</td></tr>
+<tr><td>ComfyUI 空闲</td><td>直接提交，不排队</td></tr>
+</tbody>
+</table>
+<div class="callout a"><p>「不排队」和「排队」是两条路，别混：普通生成（含再来一张、重试）只在显卡空闲时提交；只有卡底的 <code>🕒 加入队列生成</code> 才会把任务堆到后面。</p></div>
+
+<h3>1.7 大图弹窗</h3>
+<p>点成品图或 <code>⤢</code> 打开大图窗，里面有：完整原图、<b>归档后的真实路径</b>、<code>复制图片</code>、<code>打开目录</code>、<code>下载</code>、关闭。路径显示的是归档之后的最终位置（<code>成果目录/能力名/文件名</code>），不是 ComfyUI 的临时输出路径。</p>
+
+<h2 id="sec-12b">二、创作台：角色设定图</h2>
+
+<h3>2.1 和图片生成是同一个创作台，换了一套输入区</h3>
+<p>中栏、右栏、任务卡、大图弹窗、历史全都一样，唯一变的是<b>底部输入区</b>：从「一句话 + 档位」变成「五行结构化选择」。因为角色设定图的参数不是一维的——版式、画法、参考方式三个维度互相组合，光靠档位下拉表达不清。</p>
+<p><figure class="shot">{{img:d_studio_sheet}}<figcaption>角色设定图的创作台：输入区五行，从上到下是版式 / 画法 / 参考 / 档位 / 风格。每行左边是行名，中间是按钮，右边那句灰字是<b>当前选择的解释</b>，会随选择变。</figcaption></figure></p>
+
+<h3>2.2 五行分别是什么</h3>
+<table>
+<thead><tr><th>行</th><th>选项</th><th>行右侧那句说明（随选择变化）</th></tr></thead>
+<tbody>
+<tr><td><b>版式</b></td><td><code>四视图横排 16:9</code> / <code>四宫格 9:16</code> / <code>单张全身 9:16</code></td><td>例：<code>版式决定画幅：16:9 1536 × 864</code>。选版式等于同时定了画幅，不用另外挑比例</td></tr>
+<tr><td><b>画法</b></td><td><code>彩色</code> / <code>线稿</code></td><td><code>彩色：风格行用下面的「风格」</code>。选线稿时风格行换成线稿风格句</td></tr>
+<tr><td><b>参考</b></td><td><code>锁定同角色</code> / <code>只借画风</code></td><td>锁定同角色：<code>图 1 就是这个人：不换人、不改性别</code>；只借画风：<code>图 1 只用来参考画风和笔触，不要照抄图 1 里的人物</code></td></tr>
+<tr><td><b>档位</b></td><td><code>默认</code>（有的组合还有 <code>快速</code> / <code>精细</code>）</td><td><code>默认就是这个组合的完整配方 · 出图 1536 × 864</code>——默认档不可改，它是这个组合的原始配方</td></tr>
+<tr><td><b>风格</b></td><td>12 类预设 + <code>自定义…</code></td><td>写实摄影 / 3D 动画 / 游戏概念 / 奇幻立绘 / 厚涂插画 / 水墨国风 / 日系赛璐璐 / 扁平矢量 / Q 版 / 绘本 / 古典油画 / 暗黑哥特</td></tr>
+</tbody>
+</table>
+<p>输入区底部还有 <code>＋ 上传</code>、<code>收起提示词</code>/<code>看完整提示词</code>、<code>复制</code>、发送 <code>↑</code>。</p>
+
+<h3>2.3 「组合」是什么：18 个组合 = 18 套配方</h3>
+<p>版式 × 画法 × 参考方式是<b>相乘</b>的关系，每乘出一种就叫一个「组合」。每个组合有自己的工作流拷贝和档位，互不影响。</p>
+<table>
+<thead><tr><th>模式</th><th>组合数</th><th>算式</th></tr></thead>
+<tbody>
+<tr><td>文生图</td><td>6</td><td>3 版式 × 2 画法（没有参考方式，因为不吃参考图）</td></tr>
+<tr><td>图生图</td><td>12</td><td>3 版式 × 2 画法 × 2 参考方式（锁定同角色 / 只借画风）</td></tr>
+<tr><td><b>合计</b></td><td><b>18</b></td><td>管理台能力卡片上写的就是「18 个组合 · 19 档」</td></tr>
+</tbody>
+</table>
+<div class="callout"><p>选文生图时，「参考」那一行不出选项，只有一句提示：<code>文生图不吃参考图；要锁角色 / 借画风就切到「图生图」。</code>——不是禁用了，是这个维度在这一支里不存在。</p></div>
+<p>图生图模式下，模式分段旁边还有一句 <code>拿现有角色图重画成设定图</code>，说清图生图在这里的用途。</p>
+
+<h3>2.4 提示词预览与复制</h3>
+<p>点 <code>看完整提示词</code> 会在输入区上方展开一条预览，里面是把「版式模板 + 通用块 + 风格句 + 你写的描述」拼起来的<b>完整提示词</b>，和提交给 ComfyUI 的是同一份（都走 <code>promptlib.compose()</code>，前端不另拼）。</p>
+<table>
+<thead><tr><th>按钮</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td><code>看完整提示词</code> / <code>收起提示词</code></td><td>展开 / 收起预览。展开后按钮文字跟着变</td></tr>
+<tr><td><code>复制</code></td><td>把整条提示词复制到剪贴板，可以拿去别处用</td></tr>
+</tbody>
+</table>
+
+<h2 id="sec-12c">三、生成历史</h2>
+
+<h3>3.1 一页网格看完所有成品</h3>
+<p>顶栏点 <code>🗂 历史</code> 进来。所有生成过的成品按时间倒序铺成网格，跨能力合并在一起——图片生成和角色设定图的成品在同一个列表里。</p>
+<p><figure class="shot">{{img:d_gallery}}<figcaption>历史页：顶部两个筛选下拉、全选框、<code>⬇ 批量下载（N）</code> 和 <code>🗑 删除（N）</code>；每张卡片右上角有 <code>✕</code>，左上角是勾选框。</figcaption></figure></p>
+
+<h3>3.2 两个筛选</h3>
+<table>
+<thead><tr><th>筛选</th><th>选项</th></tr></thead>
+<tbody>
+<tr><td>按能力</td><td><code>全部</code> / <code>图片生成</code> / <code>角色设定图</code>（只列已配置的能力）</td></tr>
+<tr><td>按日期</td><td><code>全部</code> / <code>今天</code> / <code>近 7 天</code></td></tr>
+</tbody>
+</table>
+<p>两个筛选可以叠加。筛完的视图会记在服务端状态里，刷新页面回来还是这个筛选。</p>
+
+<h3>3.3 多选、批量下载、删除</h3>
+<table>
+<thead><tr><th>控件</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td>每张卡左上角的勾选框</td><td>选中 / 取消选中一张，按钮上的数字实时变</td></tr>
+<tr><td>顶部总勾选框</td><td>全选当前筛选下的全部成品 / 取消全选</td></tr>
+<tr><td><code>⬇ 批量下载（N）</code></td><td>把选中的 N 张打成<b>一个 zip</b> 下载。没选时按钮上是 0</td></tr>
+<tr><td><code>🗑 删除（N）</code></td><td>删除选中的记录，先弹确认框</td></tr>
+<tr><td>每张卡右上角 <code>✕</code></td><td>删单张，同样先确认</td></tr>
+</tbody>
+</table>
+<div class="callout a"><p>历史页的「删除」和创作台的「移出会话」不是一回事：历史删除会真的删掉这条记录（带确认），创作台的 <code>✕</code> 只是把卡片从本次会话里收起来。</p></div>
+
+<h2 id="sec-13">四、管理台</h2>
+
+<h3>4.1 左边五页，档位表下面还挂子菜单</h3>
+<p><figure class="shot">{{img:d_admin_caps}}<figcaption>管理台：左栏是固定五页，<code>2 档位表</code> 展开后挂着两个能力的子菜单，点一下直接跳到对应能力的档位表，不用先回列表。右上是 <code>← 返回创作台</code>。</figcaption></figure></p>
+<table>
+<thead><tr><th>菜单项</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>1 能力与工作流</code></td><td>所有能力的总览与启用开关，进各能力配置的入口</td></tr>
+<tr><td><code>2 档位表</code></td><td>调某个能力的参数、加减档位。下面是子菜单：<code>🖼️ 图片生成</code>、<code>👤 角色设定图</code>，点子菜单直达</td></tr>
+<tr><td><code>3 设定图模板</code></td><td>角色设定图的提示词库（版式模板、通用块、线稿风格句、风格预设、已实测组合）</td></tr>
+<tr><td><code>4 服务设置</code></td><td>连接、成品存放、路径、存储与清理</td></tr>
+<tr><td><code>5 自检</code></td><td>查 ComfyUI 连接和成果目录可写</td></tr>
+</tbody>
+</table>
+<p>底部有一行「<b>N 个能力可用</b>」的统计。左栏最上面是 <code>🗂 历史</code>，和创作台共用。</p>
+
+<h3>4.2 页面一：能力与工作流</h3>
+<p>17 个能力一行一个，每行显示图标、名称、状态标记、一句话描述，右边是<code>配置</code>按钮。</p>
+<table>
+<thead><tr><th>列</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>状态标记</td><td><span class="chip green">可用</span> 或 <span class="chip gray">未配置</span></td></tr>
+<tr><td>规模信息</td><td>可用能力显示 <code>3 档可选</code>（图片生成）或 <code>18 个组合 · 19 档</code>（角色设定图）；未配置的显示「还没排档位」</td></tr>
+<tr><td>描述</td><td>一句话说明这个能力干什么。未配置的显示 <code>未配置（下个版本开放）</code></td></tr>
+<tr><td><code>配置</code> 按钮</td><td>只有可用的能力有，点它进这个能力的档位表</td></tr>
+</tbody>
+</table>
+<div class="callout g"><p><b>这一页没有复制、删除按钮，也没有「重读配置」。</b>能力清单来自 <code>config.yaml</code>，加能力是在配置文件里加，不是在界面上点出来的。要重读档位，进对应能力的档位表页，用那条 <code>↻ 重读档位</code>。</p></div>
+
+<h3>4.3 页面二：档位表</h3>
+<p>这是一个能力的参数控制台。上面是切换带，下面是五步结构。</p>
+<h4>顶部切换带</h4>
+<table>
+<thead><tr><th>行</th><th>内容</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>子功能</td><td>图片生成：<code>文生图</code> / <code>参考生图</code>（共 2 个子工作流）<br>角色设定图：<code>文生图 6</code> / <code>图生图 12</code>（共 18 个组合）</td><td>每个子工作流 / 组合各有一条默认档</td></tr>
+<tr><td>版式 / 画法 / 参考</td><td>只有角色设定图有这三行</td><td>选哪个组合就编辑哪个组合的档位</td></tr>
+<tr><td><b>当前</b></td><td>组合名 + 标签 + <code>↻ 重读档位</code> + <code>去创作台试这个组合</code></td><td>白框那一条：左边两个标签写清楚现在选的是谁、画幅多少，右边两个按钮是操作</td></tr>
+</tbody>
+</table>
+<p><figure class="shot">{{img:d_grades_bar}}<figcaption>「当前」这一条：<code>当前 文生图 3 档 1:1 (Square) · 约 1024 × 1024</code>，右边两个按钮是 <code>↻ 重读档位</code> 和 <code>去创作台试这个组合</code>。</figcaption></figure></p>
+<p>两个按钮的分工：<code>↻ 重读档位</code> 把 <code>workflows/</code> 下的档位文件重新读一遍（在外部改了文件、或换了工作流文件时用）；<code>去创作台试这个组合</code> 直接跳回创作台、把能力、模式、版式、画法、参考、档位、风格一次性对上——省得手动一层层点。</p>
+<p><figure class="shot">{{img:d_admin_grades_image}}<figcaption>图片生成的档位表：顶部切换带 + ① 工作流文件 ② 参数节点 ③ 不用设的节点 ④ 新增档位 ⑤ 已有档位。</figcaption></figure></p>
+<h4>五步结构</h4>
+<table>
+<thead><tr><th>步骤</th><th>里面是什么</th><th>怎么用</th></tr></thead>
+<tbody>
+<tr><td><b>① 工作流文件</b></td><td>这个子工作流对应的 JSON 文件名（在 <code>workflows/ComfyBridge/</code> 下）</td><td>只读，让人知道改的是哪个文件</td></tr>
+<tr><td><b>② 参数节点 N 个</b></td><td>工作流里所有可调节点，逐行列出节点 id 和 class 名，前面带勾选框</td><td>勾上=这个节点进档位。id 用等宽字体单独一列，长 id 不换行、不压到 class 名</td></tr>
+<tr><td><b>③ 不用设的节点 N 个</b></td><td>已在配置里被排除的节点</td><td>点「移出」可以把节点放回 ②</td></tr>
+<tr><td><b>④ 新增档位</b></td><td>把刚勾上的节点里的参数挑出来，填名字和值</td><td>填完点 <code>＋ 添加</code> 生成一条新档位</td></tr>
+<tr><td><b>⑤ 已有档位 N 档</b></td><td>档位列表，一行一条：序号、拖动点、<b>N 项改动</b>、生效画幅、<code>✎ 编辑</code> / <code>👁 查看</code>、<code>✕</code></td><td>名字就地改；改动项数是和默认档比出来的；拖动点可以调顺序</td></tr>
+</tbody>
+</table>
+<p><figure class="shot">{{img:d_grades_rows}}<figcaption>⑤ 里的档位行：序号 + 拖动点 + 改动项数 + 生效画幅 + 编辑/查看 + 删除。第 1 条「默认」带 🔒 和「原始 只读」，删不掉也改不了。</figcaption></figure></p>
+<div class="callout"><p><b>「默认」档是只读的。</b>它就是这个组合的原始配方，删不掉（点了会提示不可删）、名字改不了、参数也不能动。所有自定义档位都是相对它做参数覆盖。</p></div>
+<p>页面右上角是 <code>← 返回列表</code> 和 <code>保存</code>。改完必须点保存才写回配置文件。</p>
+<p><figure class="shot">{{img:d_admin_grades_sheet}}<figcaption>角色设定图的档位表：子功能变成「文生图 6 / 图生图 12」，切换带多了版式、画法两行，参数节点的数量和图片生成完全不同。</figcaption></figure></p>
+
+<h3>4.4 页面三：设定图模板</h3>
+<p>只有角色设定图用得上这一页：管的是<b>提示词库</b>，不是参数。左栏「3 设定图模板」进来。</p>
+<p><figure class="shot">{{img:d_admin_sheet}}<figcaption>设定图模板页：档位与画幅 / 版式模板 / 通用块 / 线稿风格句 / 风格预设 / 已实测组合，六块一页。</figcaption></figure></p>
+<table>
+<thead><tr><th>块</th><th>规模</th><th>干什么</th></tr></thead>
+<tbody>
+<tr><td><b>档位与画幅</b></td><td>2 个子工作流</td><td>看每个子工作流当前的档位和出图尺寸；<code>去档位表调参数</code> 跳到档位表</td></tr>
+<tr><td><b>版式模板</b></td><td>3 个（16:9 四视图横排、9:16 四宫格、9:16 单张全身）</td><td>每个版式一段模板文字。带 <code>预览整条提示词</code>（看这一版拼出来是什么）和 <code>填入创作台</code>（把这一版带到创作台试）</td></tr>
+<tr><td><b>通用块</b></td><td>6 段</td><td>不管什么版式都要带上的硬要求：分栏要求、分格要求、同一个人、不要投影、正面平光、不要分割线/边框/网格……一段一个文本框，可以就地改</td></tr>
+<tr><td><b>线稿风格句</b></td><td>4 条</td><td>画法选「线稿」时用的风格描述（工业设计草图 / 美式动画勾线 / 铅笔线稿等），和彩色风格是两套</td></tr>
+<tr><td><b>风格预设</b></td><td>12 类</td><td>每类一个名字 + 一段描述，就是创作台「风格」下拉里的那 12 个。可以改名、改描述</td></tr>
+<tr><td><b>已实测组合</b></td><td>15 条</td><td>验证过能出好结果的组合清单，每条可以 <code>填入</code> 直接带到创作台</td></tr>
+</tbody>
+</table>
+<p>页面右上角：<code>↻ 重读提示词库</code>（把 <code>prompts/</code> 下的文件重读一遍）、<code>保存</code>。底部还有一个 <code>保存提示词库</code>。</p>
+<p><figure class="shot">{{img:d_admin_sheet_presets}}<figcaption>风格预设区：一行两个输入框（名字 + 描述），12 类排下来。</figcaption></figure></p>
+
+<h3>4.5 页面四：服务设置</h3>
+<p><figure class="shot">{{img:d_admin_service}}<figcaption>服务设置：连接 / 成品存放 / 路径 / 存储与清理四块，底部 <code>放弃修改</code> 和 <code>保存并生效</code>。</figcaption></figure></p>
+<table>
+<thead><tr><th>块</th><th>字段</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td rowspan="2"><b>连接</b></td><td>ComfyUI 地址（<code>http://127.0.0.1:8188</code>）</td><td>带 <code>测试连接</code> 按钮，当场验证通不通</td></tr>
+<tr><td>本服务端口（<code>8190</code>）</td><td>改完要重启服务才生效</td></tr>
+<tr><td><b>成品存放</b></td><td>成果目录（<code>…/ComfyUI/output/ComfyBridgeOutput</code>）</td><td>成品最终归档到这里，按能力名分文件夹。右边 <code>打开成果目录</code> 直接在资源管理器里打开</td></tr>
+<tr><td rowspan="3"><b>路径</b></td><td>工作流目录 <code>./workflows</code></td><td>ComfyUI API 格式的 JSON 放这里</td></tr>
+<tr><td>上传目录 <code>./data/uploads</code></td><td>参考图暂存</td></tr>
+<tr><td>任务记录 <code>./data/tasks</code></td><td>任务与运行记录</td></tr>
+<tr><td rowspan="2"><b>存储与清理</b></td><td>保留天数（7）</td><td>超过这个天数的历史成品会被清理</td></tr>
+<tr><td>最多记录（500）</td><td>历史记录条数上限，超了从最旧的开始丢</td></tr>
+</tbody>
+</table>
+<p>顶部还有一块<b>各目录占用</b>的实时数字：上传 / 任务记录 / 档位拷贝 / 成品，各自多少 MB——这些是实测扫目录得到的，不是估算。</p>
+<div class="callout a"><p>这一页<b>没有「访问口令」这类字段</b>。它是本机工具，默认只监听本机；要开给局域网得显式改配置。</p></div>
+
+<h3>4.6 页面五：自检</h3>
+<p><figure class="shot">{{img:d_admin_diag}}<figcaption>自检页：进来就自动查一次，上方一个绿色 chip 写「2 项正常」，下面两行结果。</figcaption></figure></p>
+<table>
+<thead><tr><th>自检项</th><th>查什么</th><th>通过时显示</th></tr></thead>
+<tbody>
+<tr><td><b>ComfyUI 连接</b></td><td>能不能连上 ComfyUI、队列是不是空闲</td><td><code>http://127.0.0.1:8188 · 队列空闲</code></td></tr>
+<tr><td><b>成果目录可写</b></td><td>成果目录在不在、能不能真的写进去</td><td>显示实际路径</td></tr>
+</tbody>
+</table>
+<p>进页面自动跑一次；改了配置想再验一遍，点右上角 <code>重新自检</code>。某一项没过就变红色，并把原因写在下面一行。</p>
+
+<h2 id="sec-14">五、能力库与状态</h2>
+
+<h3>5.1 三种状态</h3>
+<table>
+<thead><tr><th>状态</th><th>判定标准</th><th>界面上长什么样</th></tr></thead>
+<tbody>
+<tr><td><b>可用</b></td><td>启用 + 至少挂了一个工作流 + 有可用档位</td><td>左栏正常黑字，可点进创作界面；管理台标 <span class="chip green">可用</span> 并给 <code>配置</code> 按钮</td></tr>
+<tr><td><b>停用</b></td><td>在 <code>config.yaml</code> 里 <code>enabled: false</code></td><td>管理台开关关着；创作台不出现</td></tr>
+<tr><td><b>未配置</b></td><td>能力位在，但没有工作流文件</td><td>创作台灰字带「未配置（下个版本开放）」；管理台标 <span class="chip gray">未配置</span></td></tr>
+</tbody>
+</table>
+
+<h3>5.2 启用开关</h3>
+<p>管理台「能力与工作流」每行右边的开关可以当场开/关。关掉后创作台左栏不再显示这个能力，但它的档位、工作流文件、提示词库都原样保留，重新打开就回来。</p>
+
+<h2 id="sec-15">六、外部接口（给 AI 用）</h2>
+
+<h3>6.1 三个必需接口</h3>
+<table>
+<thead><tr><th>用途</th><th>接口</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>问有什么能力</td><td><code>GET /api/v1/capabilities</code></td><td>返回能力清单，含每个能力的参数说明和可选档位</td></tr>
+<tr><td>下单</td><td><code>POST /api/v1/orders</code></td><td>传能力 id + 参数，返回任务 id</td></tr>
+<tr><td>取货</td><td><code>GET /api/v1/orders/{id}</code></td><td>查状态和成品地址</td></tr>
+</tbody>
+</table>
+
+<h3>6.2 配套的小接口</h3>
+<table>
+<thead><tr><th>接口</th><th>干什么</th></tr></thead>
+<tbody>
+<tr><td><code>GET /api/v1/health</code></td><td>探活</td></tr>
+<tr><td><code>POST /api/v1/uploads</code></td><td>传参考图，拿 ref id</td></tr>
+<tr><td><code>POST /api/v1/precheck</code></td><td>先检查这次提交会不会被拦，不真的下单</td></tr>
+<tr><td><code>POST /api/v1/orders/{id}/cancel</code></td><td>取消</td></tr>
+<tr><td><code>GET /api/v1/tasks</code></td><td>列出任务</td></tr>
+<tr><td><code>GET /api/v1/files/{run}/{index}</code></td><td>取成品文件</td></tr>
+<tr><td><code>GET /api/v1/skill</code></td><td>取技能说明书原文</td></tr>
+</tbody>
+</table>
+
+<h3>6.3 失败时说人话</h3>
+<p>所有接口失败都返回 <code>{"ok": false, "reason": "一句中文原因"}</code>。原因不是堆栈，是「ComfyUI 没启动」「参考图超过 3 张」这种能直接转述给人的话。</p>
+
+<h2 id="sec-16">七、技能（给 AI 的说明书）</h2>
+
+<h3>7.1 技能里写什么</h3>
+<table>
+<thead><tr><th>内容</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td>能力清单与参数</td><td>告诉 AI 有哪些能力、每个参数的取值范围</td></tr>
+<tr><td>什么时候用哪个能力</td><td>例：要人物多视角设定图就走角色设定图，不要用图片生成拼</td></tr>
+<tr><td>调用顺序</td><td>先 <code>capabilities</code> 再 <code>orders</code> 再轮询 <code>orders/{id}</code></td></tr>
+<tr><td>失败怎么转述</td><td>把 <code>reason</code> 原样说给用户，不要自己编</td></tr>
+</tbody>
+</table>
+
+<h3>7.2 一个完整对话长什么样</h3>
+<blockquote>
+<p>用户：帮我生成一张赛博朋克风格的竖图</p>
+<p>AI →（查能力）→ 选 <code>image.generate</code>，模式文生图，档位「默认」</p>
+<p>AI →（下单）→ 拿到任务 id →（轮询）→ 状态 done → 把成品地址和图片给用户</p>
+</blockquote>
+<p>一次下单只出一件事，不要在一次调用里塞多个意图。</p>

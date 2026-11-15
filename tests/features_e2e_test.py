@@ -195,7 +195,7 @@ def run_checks(cdp: base.CDP) -> None:
         r["field"] == "aspect_ratio" and r["want"] == "4:3 (Standard)"
         for r in api(f"/api/workflows/{q('文生图')}/grades/{q('精细（16:9）')}/effective")["data"]["rows"]))
     # 「保存」按钮：真正把当前编辑区整体提交（用 multiple，文生图没有 cfg 字段）
-    # 注意：multiple 母版默认就是 8，按「只存相对母版改动」的语义，设成 8 会被当成
+    # 注意：multiple 默认默认就是 8，按「只存相对默认改动」的语义，设成 8 会被当成
     # 「回退默认」而跳过；所以要验证保存生效，必须用非默认值（这里用 16）。
     set_value(cdp, '[data-gval^="multiple@"]', "16", "input")
     cdp.pause(250)
@@ -231,26 +231,18 @@ def run_checks(cdp: base.CDP) -> None:
     cdp.pause(600)
     check("N3.2 能力开关能开回来", next(
         c for c in api("/api/state")["capabilities"] if c["id"] == "image.generate")["enabled"])
-    click(cdp, '.cap-row [data-copy="image.generate"]')
-    cdp.pause(800)
-    caps_now = api("/api/state")["capabilities"]
-    new_caps = [c for c in caps_now if c["id"] not in
-                {x["id"] for x in __import__("yaml").safe_load(CONFIG_BACKUP)["capabilities"]}]
-    check("N3.3 复制能力生成了新能力", len(caps_now) > cap_before and bool(new_caps),
-          str([c["id"] for c in new_caps]))
-    if new_caps:
-        new_id = new_caps[0]["id"]
-        click(cdp, f'[data-del="{new_id}"]')
-        cdp.pause(350)
-        check("N3.4 删除能力有确认弹窗", cdp.js("!!document.querySelector('[data-confirm-del]')"))
-        click(cdp, "[data-confirm-del]")
-        cdp.pause(800)
-        check("N3.5 确认删除后能力消失", new_id not in [c["id"] for c in api("/api/state")["capabilities"]])
-    click(cdp, "[data-reload]")
-    cdp.pause(700)
-    check("N3.6 重读配置可用", api("/api/state")["health"]["online"] is True)
+    # 能力清单在 config.yaml 里固定：卡片上的复制/删除、页面上的「重读配置」都已经去掉了
+    check("N3.3 能力卡片没有复制/删除按钮",
+          cdp.js("document.querySelectorAll('.cap-row [data-copy],.cap-row [data-del]').length===0"))
+    check("N3.4 页面没有「重读配置」按钮",
+          cdp.js("!document.querySelector('[data-reload]') && !document.body.textContent.includes('重读配置')"))
+    check("N3.5 能力数没变（复制/删除确实没跑）",
+          len(api("/api/state")["capabilities"]) == cap_before,
+          f"{cap_before} → {len(api('/api/state')['capabilities'])}")
 
     goto(cdp, "admin", "grades")
+    check("N3.6 档位表下挂能力子菜单", cdp.js(
+        "document.querySelectorAll('.nav-sub [data-grades-cap]').length>0"))
     check("N3.7 档位表多个工作流 tab 可切换", cdp.js(
         "document.querySelectorAll('[data-wfswitch]').length>0") and bool(click(cdp, '[data-wfswitch="1"]')))
     cdp.pause(450)
