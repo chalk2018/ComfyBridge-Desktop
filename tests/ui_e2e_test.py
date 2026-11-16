@@ -287,8 +287,10 @@ def run_checks(cdp: CDP) -> None:
         "(document.querySelector('.tile-size').textContent||'').indexOf('×') >= 0"))
     click(cdp, ".job.done .tile [data-zoom]")
     cdp.pause(300)
-    check("D12 大图弹窗：路径 + 复制图片 + 打开目录 + 下载", cdp.js(
-        "!!document.querySelector('#mask') && !!document.querySelector('#copyImg') && !!document.querySelector('#openDir') && !!document.querySelector('#zoomDl')"))
+    # 本轮需求：弹窗删掉「复制图片」按钮（Ctrl+C 复制保留），加「放大」，打开目录/下载移到种子行
+    check("D12 大图弹窗：路径 + 放大 + 打开目录 + 下载（无复制图片按钮）", cdp.js(
+        "!!document.querySelector('#mask') && !!document.querySelector('#zoomExpand') && "
+        "!document.querySelector('#copyImg') && !!document.querySelector('#openDir') && !!document.querySelector('#zoomDl')"))
     check("D13 弹窗里显示归档后的路径", cdp.js(
         "document.querySelector('#mask .m-foot').textContent.includes('ComfyBridgeOutput')"))
     click(cdp, "#mask [data-close]")
@@ -318,9 +320,11 @@ def run_checks(cdp: CDP) -> None:
     click(cdp, '[data-nav="admin"]')
     cdp.pause(350)
     # 五个页面：能力与工作流 / 档位表 / 设定图模板 / 服务设置 / 自检（设定图模板是新增模块）
-    check("E1 进入管理台、五页菜单齐全", cdp.js(
-        "document.querySelectorAll('.admin-nav [data-page]').length===5 && "
-        "['caps','grades','sheet','service','diag'].every(k=>!!document.querySelector(`.admin-nav [data-page=\"${k}\"]`))"),
+    # 本轮需求：设定图模板移入档位表（模态框），菜单从 5 页变 4 页
+    check("E1 进入管理台、四页菜单齐全（设定图模板已移入档位表）", cdp.js(
+        "document.querySelectorAll('.admin-nav [data-page]').length===4 && "
+        "['caps','grades','service','diag'].every(k=>!!document.querySelector(`.admin-nav [data-page=\"${k}\"]`)) && "
+        "!document.querySelector('.admin-nav [data-page=\"sheet\"]')"),
         str(cdp.js("[...document.querySelectorAll('.admin-nav [data-page]')].map(e=>e.dataset.page)")))
     check("E2 能力与工作流页列出 17 个能力", cdp.js("document.querySelectorAll('.cap-row').length===17"))
     toggle_before = api("/api/state")["capabilities"][0]["enabled"]
@@ -343,9 +347,10 @@ def run_checks(cdp: CDP) -> None:
         str(cdp.js("[...document.querySelectorAll('.nav-sub [data-grades-cap]')].map(e=>e.dataset.gradesCap)")))
     click(cdp, '.nav-sub [data-grades-cap="sheet.character"]')
     cdp.pause(500)
-    check("E8 点子菜单直达角色设定图档位表", cdp.js(
+    # 本轮需求：档位表去掉画法/参考切换（只留子功能+版式），所以断言「版式」在、且没有画法切换按钮
+    check("E8 点子菜单直达角色设定图档位表（仅子功能+版式）", cdp.js(
         "UI.adminPage==='grades'&&UI.capId==='sheet.character'"
-        "&&document.body.textContent.includes('版式')&&document.body.textContent.includes('画法')"),
+        "&&document.body.textContent.includes('版式')&&!document.querySelector('[data-combo-ink]')"),
         str(cdp.js("[UI.adminPage,UI.capId]")))
     # 子菜单也能点回图片生成；后面的 F 段测的是图片生成的档位表
     click(cdp, '.nav-sub [data-grades-cap="image.generate"]')

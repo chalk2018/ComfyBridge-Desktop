@@ -438,9 +438,11 @@ def section_admin(cdp: CDP) -> None:
     print("\n--- E 管理台：设定图模板 ---", flush=True)
     cdp.js("location.hash='#admin/sheet'")
     cdp.pause(900)
-    check("E1 管理台出现「设定图模板」页", cdp.js("!!document.querySelector('[data-page=\"sheet\"]')"))
-    check("E2 导航里有这一项且处于选中态", cdp.js(
-        "(()=>{const e=document.querySelector('[data-page=\"sheet\"]');return !!e && e.classList.contains('on');})()"))
+    # 本轮需求：设定图模板从菜单移入档位表（模态框）；保留 #admin/sheet 直接访问兼容
+    check("E1 「设定图模板」页内容能渲染（入口已移到档位表）",
+          cdp.js("UI.adminPage==='sheet' && !!document.querySelector('.lcard')"))
+    check("E2 导航里已无该项（不再是全局功能）", cdp.js(
+        "!document.querySelector('.admin-nav [data-page=\"sheet\"]')"))
     check("E3 版式卡片三张", cdp.js("document.querySelectorAll('.lcard').length===3"),
           str(cdp.js("document.querySelectorAll('.lcard').length")))
     check("E4 通用块十个编辑框", cdp.js("document.querySelectorAll('[data-blk]').length===10"),

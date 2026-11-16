@@ -241,11 +241,15 @@ def run_checks(cdp: CDP) -> None:
       return { texts, hasClose: texts.includes('关闭'),
                hasCopy: texts.some(t => t.includes('复制图片')),
                hasDir: texts.some(t => t.includes('打开所在目录')),
+               hasZoom: !!m.querySelector('#zoomExpand'),
+               hasDl: !!m.querySelector('#zoomDl'),
                footerBtns: texts.length };
     })()""")
     check("D1 弹窗里没有「关闭」按钮", modal and modal["hasClose"] is False, str(modal))
-    check("D2 「复制路径」已换成「复制图片」，并保留打开所在目录",
-          modal and modal["hasCopy"] and modal["hasDir"] and not any("复制路径" in (t or "") for t in modal["texts"]), str(modal))
+    # 需求（本轮）：弹窗里删掉「复制图片」按钮，打开所在目录 + 下载移到种子行，并新增「放大」
+    check("D2 弹窗无「复制图片」按钮、保留打开所在目录、新增「放大」",
+          modal and not modal["hasCopy"] and modal["hasDir"] and modal["hasZoom"] and modal["hasDl"]
+          and not any("复制路径" in (t or "") for t in modal["texts"]), str(modal))
 
     before_clip = len(cdp.js("window.__clip") or [])
     cdp.js("document.body.dispatchEvent(new KeyboardEvent('keydown', {key:'c', ctrlKey:true, bubbles:true, cancelable:true}))")

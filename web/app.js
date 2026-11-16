@@ -11,7 +11,7 @@ const UI = {
   mode: 't2i',                                   // 't2i' = 文生图, 'i2i' = 图生图（参考生图）
   prompt: '',                                    // 序列化后的提示词文本（含 <imageN> 引用令牌）
   // 角色设定图的表单（只有 sheet.character 用）：版式/画法/参考方式/角色行/风格
-  sheetForm: { layout: 'A', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '' },
+  sheetForm: { layout: 'A', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '', styleCustom: false },
   sheetOpen: false,                              // 「看完整提示词」面板是否展开
   sheetPreview: null,                            // 最近一次服务端组装结果
   comboSel: '',                                  // 管理台档位表当前选中的组合（C.color.lock 这种）
@@ -235,13 +235,17 @@ function sheetLayoutOf(id) { return sheetLayouts().find(l => l.id === id) || nul
 function sheetForm() {
   // 库改过 / 档位被删时把表单拉回合法值，避免「版式不存在」这种低级报错
   const f = UI.sheetForm = UI.sheetForm || {};
-  const defs = { layout: '', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '' };
+  // 需求 #6：每次进入页面默认选「自定义…」风格。f.style 仍保留第一预设作为兜底，
+  // 这样即使用户不填自定义句，sheetStyleValue() 也能回退到合法风格、不会提交空风格句。
+  const defs = { layout: '', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '', styleCustom: true, refChips: [] };
   Object.keys(defs).forEach(k => { if (f[k] === undefined || f[k] === null) f[k] = defs[k]; });
   const layouts = sheetLayouts();
   if (layouts.length && !layouts.some(l => l.id === f.layout)) f.layout = layouts[0].id;
   if (!f.lineStyle) f.lineStyle = (sheetLineStyles()[0] || {}).id || '';
   const styles = sheetStyles();
-  if (!f.style && styles.length) f.style = styles[0];
+  // 空 style 可能只是「还没选过」，也可能是用户选了「自定义…」；后者靠 styleCustom 区分，
+  // 不能再把空值悄悄改回第一个预设，否则下拉会自己跳回去、和实际提交的风格句对不上。
+  if (!f.style && !f.styleCustom && styles.length) f.style = styles[0];
   return f;
 }
 function sheetLayout() { return sheetLayoutOf(sheetForm().layout) || sheetLayouts()[0] || null; }
@@ -265,12 +269,16 @@ function sheetGrade() {
 }
 function sheetStyleValue() {
   const f = sheetForm(), custom = String(f.styleText || '').trim();
-  return custom || f.style;
+  // 只有真的选了「自定义…」才用自由输入；没写内容时回退预设，别把空风格句提交出去。
+  if (f.styleCustom && custom) return custom;
+  return f.style || (sheetStyles()[0] || '');
 }
 function sheetPayload() {
   const f = sheetForm();
   return {
     layout: f.layout, character: String(f.character || '').trim(), style: sheetStyleValue(),
+    // 风格原样带给服务端，供「基于上一条」精确还原（含自定义句）
+    styleCustom: !!f.styleCustom, styleText: String(f.styleText || ''),
     ink: f.ink, lineStyle: f.ink === 'line' ? (f.lineStyle || null) : null,
     ref: UI.mode === 'i2i' ? f.ref : 'none',
     // 档位只影响参数（画幅/像素/CFG/步数），提示词由组合决定，跟档位无关
@@ -308,16 +316,17 @@ function viewSheetComposer(cap) {
   if (!lib.layouts || !lib.layouts.length) {
     return `<div class="composer"><div class="composer-inner"><div class="inputbox" style="border-color:var(--line);box-shadow:none;background:#fafbfe">
       <div class="tiny muted" style="padding:18px 4px;text-align:center;line-height:1.9">提示词库读不到（prompts/character_sheet.json）。<br>
-      去管理台 →「设定图模板」看一眼，或点顶栏「重读配置」。</div></div></div></div>`;
+      去管理台 →「档位表 → 角色设定图」点「✎ 设定图模板」看一眼。</div></div></div></div>`;
   }
   const layout = sheetLayout();
   const grade = sheetGrade();
   const grades = sheetGrades();
   const i2i = UI.mode === 'i2i';
-  const empty = !String(f.character || '').trim();
+  // 图生图纯转换允许空角色描述；文生图才要求写描述（需求 #8）
+  const empty = !String(f.character || '').trim() && !i2i;
   const styles = sheetStyles(), lineStyles = sheetLineStyles();
-  const curStyle = styles.includes(f.style) ? f.style : '';
-  const custom = !curStyle;
+  const curStyle = (!f.styleCustom && styles.includes(f.style)) ? f.style : '';
+  const custom = !!f.styleCustom;
   return `<div class="composer"><div class="composer-inner">
     <div class="parambar">
       <div class="modepick" role="group" aria-label="生成方式">
@@ -345,7 +354,7 @@ function viewSheetComposer(cap) {
         ${f.ink === 'line'
           ? `<select class="input segsel" id="sheetLine" title="线稿风格句">
               ${lineStyles.map(s => `<option value="${esc(s.id)}" ${s.id === f.lineStyle ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
-            </select><span class="warnhint">线稿别写颜色词</span>`
+            </select><span class="warnhint">线稿别写颜色词 · 画风只借造型</span>`
           : '<span class="tiny muted">彩色：风格行用下面的「风格」</span>'}
       </div>
       ${i2i ? `<div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
@@ -356,8 +365,14 @@ function viewSheetComposer(cap) {
           <button class="segb ${f.ref === 'style' ? 'on' : ''}" data-sheet-ref="style">只借画风</button>
         </div>
         <span class="tiny muted">${f.ref === 'style' ? '图 1 只借画风笔触，人物照文字新写' : '图 1 就是这个人：不换人、不改性别'}</span>
-      </div>` : ''}
-      <textarea class="sheetchar" id="sheetChar" rows="3" placeholder="角色描述：年龄身份 + 脸型五官 + 发型发色 + 服装分件（上衣/下装/外套/鞋）+ 2~3 个标志物">${esc(f.character)}</textarea>
+      </div>
+      <div class="refquoted" id="sheetQuoted"><span class="slb">已引用</span>
+        ${(f.refChips || []).map(rid => {
+          const ref = UI.refs.find(r => r.id === rid); const slot = UI.refs.findIndex(r => r.id === rid) + 1;
+          return ref ? `<span class="qchipimg" data-ref="${esc(rid)}"><img src="${refUrl(rid)}" alt="图${slot}"><b>图${slot}</b><span class="x" data-unquote="${esc(rid)}" title="取消引用">✕</span></span>` : '';
+        }).join('')}
+        <span class="tiny muted">点参考图上的 @ 引用到这里；生成时按上面的参考方式使用</span></div>` : ''}
+      <textarea class="sheetchar" id="sheetChar" rows="3" placeholder="${i2i ? '角色描述（可留空）：只做图片转换时不用写，直接生成即可' : '角色描述：年龄身份 + 脸型五官 + 发型发色 + 服装分件（上衣/下装/外套/鞋）+ 2~3 个标志物'}">${esc(f.character)}</textarea>
       <div class="sheetbar">
         <span class="slb">档位</span>
         <div class="seg" role="group" aria-label="档位">
@@ -371,12 +386,13 @@ function viewSheetComposer(cap) {
       </div>
       <div class="sheetbar">
         <span class="slb">风格</span>
-        <select class="input segsel" id="sheetStyle" style="min-width:148px" title="12 类实测画风">
-          ${styles.map(n => `<option ${n === curStyle ? 'selected' : ''}>${esc(n)}</option>`).join('')}
-          <option value="" ${custom ? 'selected' : ''}>自定义…</option>
+        <select class="input segsel" id="sheetStyle" style="min-width:148px" title="${i2i ? '图生图只能用自定义风格' : '12 类实测画风'}">
+          ${styles.map(n => `<option value="${esc(n)}" ${n === curStyle ? 'selected' : ''} ${i2i ? 'disabled' : ''}>${esc(n)}</option>`).join('')}
+          <option value="" ${custom || i2i ? 'selected' : ''}>自定义…</option>
         </select>
         <input class="input segtext" id="sheetStyleText" placeholder="画种 + 材质笔触 + 色调 + 光线，一两句"
-          value="${esc(f.styleText)}" ${custom ? '' : 'style="display:none"'}>
+          value="${esc(f.styleText)}" ${custom || i2i ? '' : 'style="display:none"'}>
+        <span class="tiny muted">${i2i ? '图生图：只能用自定义风格（预设已禁用）' : f.ink === 'line' ? '线稿：画风只借造型比例与线条气质，不上色' : '彩色：决定「风格」那一行的画风'}</span>
       </div>
       ${UI.sheetOpen ? `<div class="pvbox" id="sheetPv">${sheetPreviewHTML()}</div>` : ''}
       </div>
@@ -390,6 +406,47 @@ function viewSheetComposer(cap) {
       </div>
     </div>
   </div></div>`;
+}
+
+/* 设定图输入区的 Ctrl+V：和普通能力输入框保持同一套语义。
+   - 剪贴板里有图片（截图 / 成品图「复制图片」）→ 直接当参考图上传；
+   - 纯文本 → 自己插到角色描述的光标处，并立刻把值同步进 UI.sheetForm。
+     页面每秒会按状态签名局部重绘输入区，只靠浏览器默认插入的话，
+     刚粘的文字/焦点容易在下一次重绘里被旧值冲掉，看起来就是「Ctrl+V 粘不上」；
+   - 焦点在「自定义…」风格输入框里时，文字交给浏览器照常粘贴，不抢。 */
+function sheetPasteInto(e, ch, fromFallback = false) {
+  const dt = e.clipboardData || window.clipboardData;
+  if (!dt) return;
+  const images = clipboardImages(e);
+  if (images.length) { e.preventDefault(); uploadFiles(images); return; }
+  const tgt = e.target || {};
+  if (tgt.id === 'sheetStyleText' || (tgt.tagName === 'INPUT' && tgt.closest && tgt.closest('.sheetbox'))) return;
+  const text = dt.getData('text/plain') || '';
+  if (!text || !ch) return;
+  e.preventDefault();
+  const start = ch.selectionStart == null ? ch.value.length : ch.selectionStart;
+  const end = ch.selectionEnd == null ? start : ch.selectionEnd;
+  ch.setRangeText(text, start, end, 'end');     // 保留选区语义；setRangeText 不会派发 input 事件
+  UI.sheetForm.character = ch.value;            // 显式同步，别等 oninput，也别被轮询重绘冲掉
+  const okToSend = !!ch.value.trim() || UI.mode === 'i2i';
+  const btn = $('#sendBtn'); if (btn) btn.disabled = !okToSend;
+  const hint = $('#emptyHint'); if (hint) hint.style.display = okToSend ? 'none' : '';
+  const box = $('#inputbox'); if (box) box.classList.remove('err');
+  if (fromFallback) ch.focus();
+  scheduleDraft();
+}
+
+/* 兜底：焦点被重绘抢走（activeElement 变成 body）时，Ctrl+V 仍然落到角色描述里。
+   只在「创作台 + 设定图输入区存在 + 焦点不在任何可编辑元素」时接管，别的能力一律放行。 */
+if (!window._sheetPasteFallbackBound) {
+  window._sheetPasteFallbackBound = true;
+  document.addEventListener('paste', e => {
+    if (UI.route !== 'studio') return;
+    const ch = $('#sheetChar'); if (!ch) return;        // 只有设定图表单才有这个框
+    const ae = document.activeElement;
+    if (ae && (ae.id || ae.isContentEditable)) return;  // 已有明确焦点就不抢
+    sheetPasteInto(e, ch, true);
+  });
 }
 
 function bindSheetComposer() {
@@ -420,22 +477,41 @@ function bindSheetComposer() {
   });
   const line = $('#sheetLine');
   if (line) line.onchange = () => { UI.sheetForm.lineStyle = line.value; after(); };
+  // 已引用参考图 chip 条：点 ✕ 取消引用（只影响 chip 展示，参考图本体仍在 refs 里）
+  $$('[data-unquote]').forEach(el => el.onclick = () => {
+    const f = sheetForm();
+    f.refChips = (f.refChips || []).filter(x => x !== el.dataset.unquote);
+    refreshComposer();
+  });
   const ch = $('#sheetChar');
   if (ch) {
     ch.oninput = () => {
       UI.sheetForm.character = ch.value;
-      const btn = $('#sendBtn'); if (btn) btn.disabled = !ch.value.trim();
-      const hint = $('#emptyHint'); if (hint) hint.style.display = ch.value.trim() ? 'none' : '';
+      const okToSend = !!ch.value.trim() || UI.mode === 'i2i';   // 图生图纯转换允许空描述
+      const btn = $('#sendBtn'); if (btn) btn.disabled = !okToSend;
+      const hint = $('#emptyHint'); if (hint) hint.style.display = okToSend ? 'none' : '';
       const box = $('#inputbox'); if (box) box.classList.remove('err');
       scheduleDraft();
     };
     ch.onkeydown = e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSend(); } };
+    ch.onpaste = e => sheetPasteInto(e, ch);
   }
+  // 点了输入区空白处（焦点不在 textarea）也能把文字/图片粘进来。
+  // 用 onpaste 事件属性而不是 addEventListener：bindStudio() 在一次渲染里可能被调多次
+  // （render / refreshComposer / refreshDynamic 里的 chat 重绘都会调它），事件属性天然不叠加。
+  const sbox = $('#inputbox');
+  if (sbox) sbox.onpaste = e => {
+    if (e.target && e.target.id === 'sheetChar') return;   // textarea 自己已处理
+    sheetPasteInto(e, ch);
+  };
   const st = $('#sheetStyle');
   if (st) st.onchange = () => {
-    // 选「自定义…」→ 清掉预设，露出自由输入框；选预设 → 收起自由输入框
-    UI.sheetForm.style = st.value;
-    if (!st.value) UI.sheetForm.styleText = '';
+    // 选「自定义…」→ 清掉预设，露出自由输入框；选预设 → 收起自由输入框。
+    // 每次换选项都丢掉上一次的自定义句：sheetStyleValue() 是「自定义优先」，
+    // 不清的话用户从自定义切回预设，页面显示预设、预览和提交却还是上一句自定义。
+    UI.sheetForm.styleCustom = !st.value;                       // 空值 = 选了「自定义…」
+    UI.sheetForm.style = st.value || UI.sheetForm.style;         // 切回预设就覆盖，选自定义先留着上次预设
+    UI.sheetForm.styleText = '';                                // 丢掉上一句自定义，避免它继续盖住预设
     after();
   };
   const stx = $('#sheetStyleText');
@@ -519,14 +595,27 @@ function serializeEditor() {
   const el = $('#promptInput');
   if (!el) return UI.prompt || '';
   let out = '';
-  el.childNodes.forEach(n => {
-    if (n.nodeType === 3) out += n.textContent;                 // 文本节点
-    else if (n.nodeType === 1 && n.classList.contains('refchip')) {
-      const id = n.dataset.ref, idx = UI.refs.findIndex(r => r.id === id);
-      out += idx >= 0 ? `<image${idx + 1}>` : '';               // 顺序随 UI.refs 实时计算
-    }
-  });
-  return out;
+  // 递归遍历：contenteditable 里回车会生成 <br> 或 <div>/<p> 块级节点，
+  // 只取文本节点会把换行后的整段丢掉——这正是「提示词被截掉 / 基于上一条不全」的根因。
+  const walk = nodes => {
+    nodes.forEach(n => {
+      if (n.nodeType === 3) { out += n.textContent; return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.tagName;
+      if (n.classList.contains('refchip')) {
+        const id = n.dataset.ref, idx = UI.refs.findIndex(r => r.id === id);
+        out += idx >= 0 ? `<image${idx + 1}>` : '';             // 顺序随 UI.refs 实时计算
+        return;
+      }
+      if (tag === 'BR') { out += '\n'; return; }
+      const block = tag === 'DIV' || tag === 'P';
+      if (block && out && !out.endsWith('\n')) out += '\n';     // 块级节点前补一个换行
+      walk(n.childNodes);
+      if (block && !out.endsWith('\n')) out += '\n';
+    });
+  };
+  walk(el.childNodes);
+  return out.replace(/\n{3,}/g, '\n\n');                       // 收敛多余空行
 }
 function onEditorInput() {
   UI.prompt = serializeEditor();
@@ -723,13 +812,9 @@ function refreshDynamic() {
     if (chat) { chat.innerHTML = viewChat(); bindStudio(); }
     const drawer = $('#drawerBody'); if (drawer) { drawer.innerHTML = drawerInner(); bindDrawer(); }
     const top = $('.topbar'); if (top) top.outerHTML = viewTopbar(); bindGlobal();
-    const comp = $('.composer');
-    if (comp) {
-      const focused = document.activeElement && document.activeElement.id === 'promptInput';
-      if (focused) UI.prompt = serializeEditor();
-      comp.outerHTML = viewComposer(); bindStudio();
-      if (focused) { const t2 = $('#promptInput'); if (t2) t2.focus(); }
-    }
+    // 输入区走统一的重绘入口：它会保住 contenteditable、角色描述框、
+    // 自定义风格框的内容和光标，不会把用户正在输的字/焦点冲掉
+    refreshComposer();
   } else if (UI.route === 'admin') {
     const top = $('.topbar'); if (top) { top.outerHTML = viewTopbar(); bindGlobal(); }
   }
@@ -838,11 +923,13 @@ function jobWfLabel(j) {
 function jobCard(j) {
   const runs = jobRuns(j), base = runs[0];
   if (!base) return '';
-  // 设定图：卡片上只放一句摘要（brief），完整提示词点「看完整提示词」再看
-  const briefText = j.brief || j.prompt;
-  const promptBox = `<div class="msg-u" style="background:#f6f8fb;color:#45505f;box-shadow:none;max-width:none;margin-bottom:10px">${esc(briefText)}</div>
-    ${j.brief ? `<div class="promptmeta"><button class="linkbtn" data-seefull="${j.id}">看完整提示词</button>
-      <span class="tiny muted">${esc(jobWfLabel(j))}${j.sheet ? ` · ${esc(j.sheet.ink === 'line' ? '线稿' : '彩色')}${j.sheet.ref === 'lock' ? ' · 锁同角色' : j.sheet.ref === 'style' ? ' · 借画风' : ''}` : ''} · ${String((j.prompt || '').length)} 字</span></div>` : ''}`;
+  // 所有生成能力的结果卡统一版式：提示词最多 5 行 + 超出滚动条 + 「看完整提示词」。
+  // 显示完整 prompt（CSS .msg-u 负责 5 行裁切），不再只给设定图显示一句摘要——
+  // 这样图片生成 / 角色设定图 / 未来的视频音频生成都用同一套 jobCard，天然一致。
+  const promptText = j.prompt || '';
+  const promptBox = `<div class="msg-u" style="background:#f6f8fb;color:#45505f;box-shadow:none;max-width:none;margin-bottom:10px">${esc(promptText)}</div>
+    <div class="promptmeta"><button class="linkbtn" data-seefull="${j.id}">看完整提示词</button>
+      <span class="tiny muted">${esc(jobWfLabel(j))}${j.sheet ? ` · ${esc(j.sheet.ink === 'line' ? '线稿' : '彩色')}${j.sheet.ref === 'lock' ? ' · 锁同角色' : j.sheet.ref === 'style' ? ' · 借画风' : ''}` : ''} · ${String(promptText.length)} 字</span></div>`;
   if (base.state === 'queued' || base.state === 'running') {
     const pct = Math.round(base.pct || 0);
     const step = Math.round(pct * (base.total || 8) / 100);
@@ -963,16 +1050,17 @@ function viewComposer() {
   </div></div>`;
 }
 function viewDrawer() {
-  // 手机上这是底部抽屉：给一个看得见的标题 + 关闭按钮，别让人只能靠点遮罩
+  // 手机上这是右侧抽屉：给一个看得见的标题 + 关闭按钮，别让人只能靠点遮罩
   return `<div class="drawer">
     <div class="sheet-hd"><b>状态与任务</b><button class="sheet-x" data-sheet-close title="收起">✕</button></div>
-    <div id="drawerBody">${drawerInner()}</div></div>`;
+    <div class="drawer-fixed">${drawerFixed()}</div>
+    <div class="drawer-scroll" id="drawerBody">${drawerList()}</div></div>`;
 }
-function drawerInner() {
+/* 右栏固定头：ComfyUI 状态 + 执行队列 + 本会话任务的「全选/批量删除」。
+   固定住，这样滚到任务列表中间也能看到状态、能点全选删除（需求 #10）。 */
+function drawerFixed() {
   const running = runningEntry(), queued = queuedEntries();
-  // 会话任务删除后不再出现在右栏；成品文件仍在，历史页照样能管理
   const doneJobs = chatJobs().filter(j => doneRuns(j).length);
-  const failJobs = chatJobs().filter(j => jobRuns(j)[0] && jobRuns(j)[0].state === 'failed');
   return `<h4>ComfyUI</h4>
     <div class="cstate ${running ? 'busy' : ''}">
       <span class="dot ${running ? 'a pulse' : 'g'}"></span>
@@ -986,11 +1074,28 @@ function drawerInner() {
       <label class="seltasks" title="全选"><input type="checkbox" id="tall" ${doneJobs.length && UI.selTasks.size === doneJobs.length ? 'checked' : ''}><span class="lbl">全选</span></label>
       <button class="task-del" id="tbatch" title="批量删除" ${UI.selTasks.size ? '' : 'disabled'}>
         <span class="lbl">批量删除（${UI.selTasks.size}）</span>
-        <span class="mic">🗑${UI.selTasks.size ? `<i>${UI.selTasks.size}</i>` : ''}</span></button></div>
-    ${doneJobs.length ? doneJobs.map(j => `<div class="task-item ${UI.selTasks.has(j.id) ? 'sel' : ''}" data-jump="${j.id}">
-      <input type="checkbox" class="tsel" data-tsel="${j.id}" ${UI.selTasks.has(j.id) ? 'checked' : ''}>
+        <span class="mic">🗑${UI.selTasks.size ? `<i>${UI.selTasks.size}</i>` : ''}</span></button></div>`;
+}
+/* 右栏滚动区：本会话任务列表 + 失败 + 归档说明。
+   每条任务底部加一行缩略图（找不到原图用图标），高度一致（需求 #11）。 */
+function taskThumbHTML(j) {
+  const runs = doneRuns(j);
+  const run = runs[0] || null;
+  // 缩略图底部一行：有成品就显示成品图，没有就按能力类型给占位图标（未来视频/音频沿用）
+  if (run) return `<div class="task-thumbs"><img src="${imgUrl(run.id, 0)}" alt="成品缩略图" loading="lazy"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="tthumb-ph" style="display:none">🖼</span></div>`;
+  const cap = j.cap || '';
+  const icon = cap.startsWith('video') ? '🎬' : cap.startsWith('audio') ? '🎵' : '🖼';
+  return `<div class="task-thumbs"><span class="tthumb-ph">${icon}</span></div>`;
+}
+function drawerList() {
+  const doneJobs = chatJobs().filter(j => doneRuns(j).length);
+  const failJobs = chatJobs().filter(j => jobRuns(j)[0] && jobRuns(j)[0].state === 'failed');
+  return `${doneJobs.length ? doneJobs.map(j => `<div class="task-item ${UI.selTasks.has(j.id) ? 'sel' : ''}" data-jump="${j.id}">
+      <div class="ti-top"><input type="checkbox" class="tsel" data-tsel="${j.id}" ${UI.selTasks.has(j.id) ? 'checked' : ''}>
       <span class="dot g"></span><div class="t"><b>${esc(j.capName)}</b><span>${doneRuns(j).length} 个成品 · ${esc(j.wf)}</span></div>
-      <button class="tdel" data-jobdel="${j.id}" title="删除这条对话">✕</button></div>`).join('')
+      <button class="tdel" data-jobdel="${j.id}" title="删除这条对话">✕</button></div>
+      ${taskThumbHTML(j)}</div>`).join('')
       : '<div class="tiny muted" style="padding:0 8px">还没有成品</div>'}
     ${failJobs.length ? `<h4 style="margin-top:14px">失败 ${failJobs.length}</h4>${failJobs.map(j => `<div class="task-item" data-jump="${j.id}">
       <span class="dot r"></span><div class="t"><b>${esc(j.capName)}</b><span>${esc(((jobRuns(j)[0].err) || {}).short || '没跑成')}</span></div>
@@ -999,6 +1104,7 @@ function drawerInner() {
     <div class="tiny muted" style="padding:0 8px;line-height:1.7">成品都存放在：<br><span class="mono" style="word-break:break-all">${esc(S.service.archiveDir)}</span></div>
     <div class="tiny muted" style="padding:8px;line-height:1.7">删对话只移记录、不删文件；要删文件去「历史记录」。</div>`;
 }
+function drawerInner() { return drawerFixed() + drawerList(); }
 function bindDrawer() {
   $$('[data-jump]').forEach(el => el.onclick = () => {
     UI.sheet = false;                                  // 手机端：从抽屉跳过去先把抽屉收起来，否则看不到目标卡片
@@ -1034,7 +1140,10 @@ function bindDrawer() {
   bindJobDelete();
 }
 function refreshDrawer() {
-  const d = $('#drawerBody'); if (d) { d.innerHTML = drawerInner(); bindDrawer(); }
+  // 固定头（全选勾选/删除计数）和滚动列表都要更新，否则勾选后计数不刷新
+  const f = $('.drawer-fixed'); if (f) f.innerHTML = drawerFixed();
+  const d = $('#drawerBody'); if (d) d.innerHTML = drawerList();
+  bindDrawer();
 }
 function bindJobDelete() {
   $$('[data-jobdel]').forEach(el => el.onclick = async e => {
@@ -1068,6 +1177,8 @@ function setMode(m) {
   if (!['t2i', 'i2i'].includes(m) || UI.mode === m) return;
   UI.mode = m;
   if (m === 't2i') UI.refs = [];                                   // 文生图不传图，清掉已上传参考
+  // 需求 #7：图生图只允许自定义风格；切过去就强制选中「自定义…」
+  if (m === 'i2i' && isSheetCap(currentCap())) { UI.sheetForm = UI.sheetForm || {}; UI.sheetForm.styleCustom = true; }
   const g = currentGrades(currentCap());                            // 档位落到当前工作流的第一档（若当前档位不属于它）
   if (g.length && !g.find(x => x.name === UI.params.grade)) UI.params.grade = g[0].name;
   saveDraft(); refreshComposer();
@@ -1128,7 +1239,20 @@ function bindStudio() {
     UI.prompt = serializeEditor();          // 参考图变少，chip 序号要重算；别让 refreshComposer 用旧 prompt 重建
     saveDraft(); refreshComposer();
   });
-  $$('[data-refat]').forEach(el => el.onclick = e => { e.stopPropagation(); insertRefChip(el.dataset.refat); });
+  $$('[data-refat]').forEach(el => el.onclick = e => {
+    e.stopPropagation();
+    // 设定图：@ = 把这张参考图引用进「已引用」条（图生图靠 ref 模式 + refs 数组生效，
+    // 不塞 <imageN> 令牌）；图片生成：@ = 往 prompt 编辑器插 chip（走 <imageN>）。
+    if (isSheetCap(currentCap())) {
+      UI.sheetForm = UI.sheetForm || {};
+      UI.sheetForm.refChips = UI.sheetForm.refChips || [];
+      if (!UI.sheetForm.refChips.includes(el.dataset.refat)) UI.sheetForm.refChips.push(el.dataset.refat);
+      refreshComposer();
+      toast('已引用到输入框，生成时按「参考」方式使用');
+      return;
+    }
+    insertRefChip(el.dataset.refat);
+  });
   $$('[data-grade]').forEach(el => el.onclick = () => {
     UI.params.grade = el.dataset.grade; saveDraft(); refreshComposer();
     toast('已切到「' + el.dataset.grade + '」');
@@ -1157,10 +1281,12 @@ function bindStudio() {
     UI.refs = refs;
     UI.mode = refs.length ? 'i2i' : 't2i';          // 图没带回来就退回文生图，免得卡在「图生图没有参考图」发不出去
     if (j.sheet) {
-      // 设定图：把整台表单（版式/画法/参考方式/档位/角色行/风格）带回来，而不是塞一整条 800 字提示词
+      // 设定图：把整台表单（版式/画法/参考方式/档位/角色行/风格含自定义句）带回来
       UI.sheetForm = { ...UI.sheetForm, ...j.sheet };
       // 老任务可能没记档位，按它当时用的那一档回填
       if (!UI.sheetForm.grade) UI.sheetForm.grade = (j.runs[0] || {}).grade || '默认';
+      // 参考图重新登记后 id 变了：把新 refs 全部设为「已引用」，缩略图 chip 才能带回来
+      UI.sheetForm.refChips = refs.map(r => r.id);
       UI.sheetPreview = null;
     } else {
       UI.prompt = j.prompt || '';
@@ -1211,16 +1337,45 @@ function bindStudio() {
   const hb = $('#healthBtn'); if (hb) hb.onclick = async () => { await api('/api/v1/health'); await pull(); toast(UI.comfyOnline ? '已连接' : 'ComfyUI 未连接，请先启动'); };
   bindDropZone();
 }
+/* 重绘输入区前把「正在编辑的内容 + 光标位置」拍照，重绘后原样还回去。
+   普通能力的 contenteditable、设定图的角色描述框、自定义风格输入框都要照顾到：
+   页面每秒会按状态签名局部重绘，漏掉哪一个，那个框就会出现「刚打/刚粘的字或焦点消失」。 */
+function snapshotComposerFocus() {
+  const ae = document.activeElement;
+  const snap = { prompt: false, sheet: null, style: null };
+  if (ae && ae.id === 'promptInput') { UI.prompt = serializeEditor(); snap.prompt = true; }
+  if (ae && ae.id === 'sheetChar') {
+    UI.sheetForm.character = ae.value;
+    snap.sheet = { start: ae.selectionStart, end: ae.selectionEnd };
+  }
+  if (ae && ae.id === 'sheetStyleText') {
+    UI.sheetForm.styleText = ae.value;
+    snap.style = { start: ae.selectionStart, end: ae.selectionEnd };
+  }
+  return snap;
+}
+function restoreComposerFocus(snap) {
+  if (snap.prompt) { const t2 = $('#promptInput'); if (t2) t2.focus(); }
+  if (snap.sheet) {
+    const c2 = $('#sheetChar'); if (c2) {
+      c2.focus();
+      const n = c2.value.length;
+      try { c2.setSelectionRange(Math.min(snap.sheet.start ?? n, n), Math.min(snap.sheet.end ?? n, n)); } catch (_) {}
+    }
+  }
+  if (snap.style) {
+    const s2 = $('#sheetStyleText'); if (s2) {
+      s2.focus();
+      const n = (s2.value || '').length;
+      try { s2.setSelectionRange(Math.min(snap.style.start ?? n, n), Math.min(snap.style.end ?? n, n)); } catch (_) {}
+    }
+  }
+}
 function refreshComposer() {
   const node = $('.composer'); if (!node) return;
-  const focused = document.activeElement && document.activeElement.id === 'promptInput';
-  if (focused) UI.prompt = serializeEditor();                 // 重绘前先存住编辑内容，viewComposer 会用它重建
-  // 设定图的角色描述框同理：重绘前把正在打的字存进表单，否则切一下版式就白打了
-  const sheetChar = document.activeElement && document.activeElement.id === 'sheetChar';
-  if (sheetChar) UI.sheetForm.character = document.activeElement.value;
+  const snap = snapshotComposerFocus();
   node.outerHTML = viewComposer(); bindStudio();
-  if (focused) { const t2 = $('#promptInput'); if (t2) t2.focus(); }
-  if (sheetChar) { const c2 = $('#sheetChar'); if (c2) { c2.focus(); c2.setSelectionRange(c2.value.length, c2.value.length); } }
+  restoreComposerFocus(snap);
 }
 function openFilePicker() {
   const input = document.createElement('input');
@@ -1262,6 +1417,7 @@ async function submitAction(path, body, successMsg) {
     // 设定图：角色描述跟着清空（和「描述框发完清零」一致），版式/画法/风格保持不变
     if (isSheetCap(currentCap())) {
       UI.sheetForm.character = ''; UI.sheetPreview = null;
+      UI.sheetForm.styleCustom = true; UI.sheetForm.styleText = ''; UI.sheetForm.refChips = [];  // 需求 #6：生成后回到默认自定义风格
       const sc = $('#sheetChar'); if (sc) sc.value = '';
     }
     // 需求 #3：不再自动把模式切回文生图、档位切回默认。用户选了什么就保持什么，除非他自己切换。
@@ -1291,7 +1447,9 @@ async function doSendSheet(cap) {
   // 设定图只校验「必填项」：角色描述 + 参考方式与参考图是否配对；其余交给服务端组装
   const f = sheetForm();
   const box = $('#inputbox');
-  if (!String(f.character || '').trim()) {
+  // 需求 #8：图生图纯转换（单人图转四视图 / 彩色转线稿）允许不写角色描述；
+  // 文生图仍要求写角色描述。
+  if (!String(f.character || '').trim() && UI.mode !== 'i2i') {
     if (box) box.classList.add('err');
     const ch = $('#sheetChar'); if (ch) ch.focus();
     toast('先写角色描述：年龄身份 + 五官 + 发型 + 服装 + 标志物');
@@ -1358,15 +1516,23 @@ function openZoom(key) {
   const r = j && j.runs.find(x => x.id === runId); if (!r) return;
   const path = archivePathFor(null, r);
   const src = imgUrl(runId, 0);
-  const mask = openModal(`<div class="m-head"><h3>成品预览</h3><button class="btn ghost sm" data-close>✕</button></div>
+  const mask = openModal(`<div class="m-head"><h3>成品预览</h3>
+      <div class="row"><button class="btn ghost sm" id="zoomExpand" title="放大预览（接近全屏）">⤢ 放大</button>
+      <button class="btn ghost sm" data-close>✕</button></div></div>
     <div class="m-body" style="padding:0"><img id="zoomImg" src="${src}" style="width:100%;display:block" title="Ctrl+C 复制这张图"></div>
     <div class="m-foot" style="flex-wrap:wrap">
       <span class="tiny muted mono" style="width:100%;margin-bottom:8px;word-break:break-all">${esc(path)}</span>
       <span class="tiny muted">种子 ${r.seed ?? j.seed ?? ''} · ${esc(r.grade || '默认')}<span class="zoomtip"> · Ctrl+C 复制图片</span></span><span style="flex:1"></span>
-      <button class="btn sm" id="copyImg" title="复制图片本身，可直接粘贴到输入框当参考图">复制图片</button>
       <button class="btn sm" id="openDir" title="在资源管理器里打开并选中这个文件">打开所在目录</button>
       <button class="btn sm primary" id="zoomDl">下载 ⬇</button></div>`, true);
-  $('#copyImg').onclick = () => copyImageToClipboard(src, '成品图');
+  // 放大：给弹窗加全屏近似类（96vw/94vh），再点还原；图片随容器放大
+  const modalEl = mask && mask.querySelector ? mask.querySelector('.modal') : null;
+  const zoomBtn = $('#zoomExpand');
+  if (zoomBtn) zoomBtn.onclick = () => {
+    if (!modalEl) return;
+    const on = modalEl.classList.toggle('zoomed');
+    zoomBtn.textContent = on ? '⤡ 还原' : '⤢ 放大';
+  };
   $('#openDir').onclick = async () => {
     const res = await api('/api/open-folder', { body: { path: path || S.service.archiveDir, select: true } });
     if (!res.ok) { toast(res.reason || '打不开所在目录'); return; }
@@ -1386,7 +1552,9 @@ function openZoom(key) {
 }
 
 /* ------------------------------------------------------------ 管理台 */
-const ADMIN_PAGES = [['caps', '能力与工作流'], ['grades', '档位表'], ['sheet', '设定图模板'], ['service', '服务设置'], ['diag', '自检']];
+// 设定图模板不再是全局菜单项：它是角色设定图的子功能，入口挪到档位表里（模态框打开）。
+// 保留 'sheet' 路由分支仅为兼容旧草稿里残留的 adminPage，不出现在菜单里。
+const ADMIN_PAGES = [['caps', '能力与工作流'], ['grades', '档位表'], ['service', '服务设置'], ['diag', '自检']];
 /* 「档位表」下挂的子菜单：能配档位的能力（有工作流的能力），点了直接跳到它的档位表。
    能力清单在 config.yaml 里是固定的，所以这里按实际配置生成，不写死。 */
 function gradesCaps() {
@@ -1569,48 +1737,39 @@ function comboEffHTML(row, isDef) {
       <span class="tiny muted">出图 ${esc(row.size || '')}</span></div>
     ${rows || `<div class="tiny muted">${isDef ? '这一档就是默认画幅，没有额外参数。' : '这一档没改参数，和默认一样。'}</div>`}`;
 }
+/* 档位表顶部条：只按「子功能 × 版式」6 组切档位。
+   画法/参考只改提示词、不改参数节点，所以档位按组共享——创作台里那 18 种选择照旧。 */
 function comboPickBar(combos, combo) {
-  const layouts = [], inks = [], refs = [];
+  const layouts = [];
   combos.forEach(c => {
     if (!layouts.some(l => l.id === c.layout)) layouts.push({ id: c.layout, name: c.layoutName, ratio: c.ratio });
-    if (!inks.some(i => i.id === c.ink)) inks.push({ id: c.ink, name: c.inkName });
-    if (!refs.some(r => r.id === c.ref)) refs.push({ id: c.ref, name: c.refName });
   });
   const t2i = combo.ref === 'none';
-  const n2t = combos.filter(c => c.ref === 'none').length;
-  const n2i = combos.length - n2t;
+  const groups = [...new Set(combos.map(c => `${c.layout}.${t2iFor(c.ref)}`))].length;
   return `<div class="panel" style="margin:0 0 12px;padding:4px 14px">
     <div class="sheetbar"><span class="slb">子功能</span>
       <div class="seg" role="group" aria-label="子功能">
-        <button class="segb ${t2i ? 'on' : ''}" data-combo-mode="t2i">文生图<i class="segx">${n2t}</i></button>
-        <button class="segb ${t2i ? '' : 'on'}" data-combo-mode="i2i">图生图<i class="segx">${n2i}</i></button>
+        <button class="segb ${t2i ? 'on' : ''}" data-combo-mode="t2i">文生图</button>
+        <button class="segb ${t2i ? '' : 'on'}" data-combo-mode="i2i">图生图</button>
       </div>
-      <span class="tiny muted">共 ${combos.length} 个组合（文生图 ${n2t} 个组合 · 图生图 ${n2i} 个组合）· 每个组合一条默认档</span></div>
+      <span class="tiny muted">共 ${groups} 组档位（每条配方自带一个「默认」档）· 画法与参考只改提示词，见创作台</span></div>
     <div class="sheetbar"><span class="slb">版式</span>
       <div class="seg" role="group" aria-label="版式">
         ${layouts.map(l => `<button class="segb ${combo.layout === l.id ? 'on' : ''}" data-combo-layout="${esc(l.id)}"
           title="${esc(l.name)} 出图 ${esc(combo.size || '')}">${esc(l.name)}<i class="segx">${esc(l.ratio || '')}</i></button>`).join('')}
       </div>
       <span class="tiny muted">版式决定画幅：${esc(combo.ratio)} ${esc(combo.size)}</span></div>
-    <div class="sheetbar"><span class="slb">画法</span>
-      <div class="seg" role="group" aria-label="画法">
-        ${inks.map(i => `<button class="segb ${combo.ink === i.id ? 'on' : ''}" data-combo-ink="${esc(i.id)}">${esc(i.name)}</button>`).join('')}
-      </div>
-      <span class="tiny muted">线稿与彩色是两套提示词，参数节点完全一样</span></div>
-    ${t2i ? '<div class="sheetbar"><span class="slb">参考</span><span class="tiny muted">文生图不吃参考图；要锁角色 / 借画风就切到「图生图」。</span></div>'
-      : `<div class="sheetbar"><span class="slb">参考</span>
-      <div class="seg" role="group" aria-label="参考方式">
-        ${refs.filter(r => r.id !== 'none').map(r => `<button class="segb ${combo.ref === r.id ? 'on' : ''}" data-combo-ref="${esc(r.id)}">${esc(r.name)}</button>`).join('')}
-      </div>
-      <span class="tiny muted">子工作流：${esc(combo.wf)}</span></div>`}
     <div class="sheetbar"><span class="slb">当前</span>
-      <b style="font-size:12.5px">${esc(combo.name)}</b>
+      <b style="font-size:12.5px">${esc(combo.layoutName)} · ${t2i ? '文生图' : '图生图'}</b>
       <span class="tag">${esc(combo.wf)}</span><span class="tag">${esc(combo.ratio)} ${esc(combo.size)}</span>
       <span style="flex:1"></span>
       <button class="btn sm ghost" data-combo-refresh>↻ 重读档位</button>
+      <button class="btn sm ghost" data-sheet-template>✎ 设定图模板</button>
       <button class="btn sm" data-combo-studio>去创作台试这个组合</button></div>
   </div>`;
 }
+/* 参考方式 → 子功能短名，和后端 group_of(cid) 一致 */
+function t2iFor(ref) { return ref === 'none' ? 't2i' : 'i2i'; }
 
 function pageComboGrades(cap) {
   const combos = cap.combos || [];
@@ -1699,6 +1858,7 @@ function pageComboGrades(cap) {
             const changed = Object.keys(g.params || {}).length;
             return `<div class="grow ${isOpen ? 'open' : ''} ${isDef ? 'def' : ''}" data-grow="${i}">
               <div class="grow-hd" data-gtoggle="${i}"><span class="gnum">${i + 1}</span>
+                ${isDef ? '' : `<span class="gdrag" draggable="true" data-gdrag="${i}" title="拖动改变档位顺序">⠿</span>`}
                 ${isDef ? `<span class="gname-txt">${esc(g.name)}<i class="lock">🔒 原始</i></span>`
                   : `<input class="input gname" value="${esc(g.name)}" data-gfield="name|${i}" data-stop>`}
                 ${isDef ? '<span class="gdefnote">只读</span>' : `<span class="gcopy">${changed} 项改动</span>`}
@@ -1759,25 +1919,26 @@ function bindComboGrades() {
     // 首次进这个组合：拉一次参数生效核对，拉到后自己重绘（不会再触发第二次）
     setTimeout(() => { loadComboDetail(cid); }, 0);
   }
-  // ---- 组合切换：三段拼出 cid，版式/画法/参考都只是换配方 ----
+  // ---- 档位组切换：只按「子功能 × 版式」6 组走。
+  // 画法/参考不出现在这张表里（只改提示词、不影响档位参数），固定用该组的代表组合
+  // （color + none/lock）——这样 comboById / 渲染逻辑一个字都不用改。 ----
   const go = (patch) => {
     const c = comboById(UI.comboSel) || combo;
-    const next = { layout: c.layout, ink: c.ink, ref: c.ref, ...patch };
-    if (next.ref !== 'none' && next.ref === undefined) next.ref = 'lock';
-    UI.comboSel = [next.layout, next.ink, next.ref].join('.');
+    const next = { layout: c.layout, ref: c.ref, ...patch };
+    UI.comboSel = `${next.layout}.color.${next.ref === 'none' ? 'none' : 'lock'}`;
     UI.gOpen = 0;
     render();
   };
   $$('[data-combo-mode]').forEach(el => el.onclick = () => {
     const t2i = el.dataset.comboMode === 't2i';
-    go({ ref: t2i ? 'none' : (combo.ref === 'none' ? 'lock' : combo.ref) });
+    go({ ref: t2i ? 'none' : 'lock' });
   });
   $$('[data-combo-layout]').forEach(el => el.onclick = () => go({ layout: el.dataset.comboLayout }));
-  $$('[data-combo-ink]').forEach(el => el.onclick = () => go({ ink: el.dataset.comboInk }));
-  $$('[data-combo-ref]').forEach(el => el.onclick = () => go({ ref: el.dataset.comboRef }));
   $$('[data-combo-refresh]').forEach(el => el.onclick = async () => {
     await pull(); UI.comboDetail = null; render(); toast('已重读档位');
   });
+  // 第16条：设定图模板是角色设定图的子功能，从档位表里以模态框打开
+  $$('[data-sheet-template]').forEach(el => el.onclick = () => openSheetTemplateModal());
   $$('[data-combo-studio]').forEach(el => el.onclick = async () => {
     // 把当前组合带到创作台：版式/画法/参考方式一次填好，档位停在母版
     const c = comboById(UI.comboSel) || combo;
@@ -1841,6 +2002,39 @@ function bindComboGrades() {
       toast(`已添加档位「${name}」`);
     }
   };
+  // ---- ⑤ 档位拖拽排序（默认档固定，只排自建档；顺序即创作台按钮顺序）----
+  let dragFrom = -1;
+  $$('[data-gdrag]').forEach(h => {
+    h.ondragstart = e => {
+      dragFrom = +h.dataset.gdrag;
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(dragFrom)); } catch (_) { /* 忽略 */ }
+      const row = h.closest('.grow'); if (row) row.classList.add('dragging');
+    };
+    h.ondragend = () => { dragFrom = -1; $$('.grow').forEach(r => r.classList.remove('dragging', 'dropover')); };
+  });
+  $$('[data-grow]').forEach(row => {
+    row.ondragover = e => { if (dragFrom < 0) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; row.classList.add('dropover'); };
+    row.ondragleave = () => row.classList.remove('dropover');
+    row.ondrop = async e => {
+      e.preventDefault(); row.classList.remove('dropover');
+      if (dragFrom < 0) return;
+      const grades = (comboById(cid) || combo).grades || [];
+      const fromName = grades[dragFrom] && grades[dragFrom].name;
+      const rows = comboCollectAll(cid);           // 自建档，顺序与 grades 中非默认档一致
+      const fi = rows.findIndex(r => r.name === fromName);
+      const to = +row.dataset.grow;
+      const toName = grades[to] && grades[to].name;
+      let ti = rows.findIndex(r => r.name === toName);
+      if (fi < 0) { dragFrom = -1; return; }
+      if (ti < 0) ti = rows.length - 1;            // 落在默认档上：排到末尾
+      dragFrom = -1;
+      if (ti === fi) return;
+      const [moved] = rows.splice(fi, 1);
+      rows.splice(ti, 0, moved);
+      if (await saveComboGrades(cid, rows)) toast('档位顺序已更新');
+    };
+  });
   // ---- ⑤ 展开 / 删除 ----
   $$('[data-gtoggle]').forEach(el => el.onclick = () => {
     UI.gOpen = +el.dataset.gtoggle; render();
@@ -1959,7 +2153,7 @@ function pageGrades(cap) {
 const SHEET_REF_NAME = { none: '无', lock: '锁同角色', style: '借画风' };
 function sheetLayoutName(id) { const l = sheetLayoutOf(id); return l ? l.name : id; }
 
-function pageSheet() {
+function pageSheet(inModal = false) {
   const lib = sheetLib();
   const layouts = lib.layouts || [];
   if (!layouts.length) {
@@ -1973,24 +2167,31 @@ function pageSheet() {
   const cap = (S.capabilities || []).find(c => c.id === 'sheet.character');
   const wfs = (cap && cap.workflows) || [];
   return `<div class="spread" style="margin-bottom:6px">
-      <div><h2>设定图模板</h2><div class="sub">${esc(lib.name || '角色设定图')} · 通用块改一次，所有版式同时生效 · 数据文件 ${esc(lib.file || '')}</div></div>
-      <div class="row"><button class="btn sm" data-sheetlib-reload>↻ 重读提示词库</button>
-        <button class="btn primary sm" data-sheetlib-save>保存</button></div></div>
+      <div><h2>设定图模板</h2><div class="sub">${esc(lib.name || '角色设定图')} · 只需改「风格预设」；通用块与线稿风格句只读 · 数据文件 ${esc(lib.file || '')}</div></div>
+      <div class="row">${inModal ? '' : '<button class="btn sm" data-page="grades">← 返回档位表</button>'}</div></div>
 
     <div class="panel"><h3>档位与画幅 <span class="tag">${wfs.length} 个子工作流</span></h3>
-      <div class="tiny muted" style="line-height:1.85">角色设定图的档位挂在<b>组合</b>上：版式 × 画法 × 参考方式 = 18 个组合，
-        每个组合自带一条<b>默认</b>档（参数就是版式画幅），要「快速 / 精细」去「档位表」按组合建。
+      <div class="tiny muted" style="line-height:1.85">创作台里版式 × 画法 × 参考方式 = <b>18 种选择</b>；档位按
+        <b>6 组共享</b>（版式 × 文生图 / 图生图），因为画法与参考只改提示词、不改参数节点。
+        每组都有一条<b>默认</b>档（参数就是版式画幅），要「快速 / 精细」去「档位表」按组建。
         <b>画幅由版式决定</b>（四视图横排 1536×864、宫格与单张 864×1536），档位只能改像素 / 倍数 / CFG / sigma。</div>
-      ${wfs.length ? `<table class="map-table" style="margin-top:10px"><thead><tr><th>子工作流</th><th>组合数</th><th>默认画幅</th><th>档位</th></tr></thead><tbody>
+      ${wfs.length ? `<table class="map-table" style="margin-top:10px"><thead><tr><th>子工作流</th><th>创作台选择</th><th>档位组</th><th>默认画幅</th><th>档位</th></tr></thead><tbody>
         ${wfs.map(w => { const cs = (cap.combos || []).filter(c => c.wf === w.name);
           const sizes = [...new Set(cs.map(c => c.size))].join(' / ');
-          const extra = cs.reduce((n, c) => n + Math.max((c.grades || []).length - 1, 0), 0);
-          return `<tr><td class="tiny">${esc(w.name)}</td><td class="tiny">${cs.length} 个</td>
+          // 档位按组共享：同一组里多个组合的 grades 是同一份，只能数一次，不能累加。
+          // 组 key 必须和后端 combos.group_of() 一致（版式 × 文生图/图生图）；
+          // 服务端下发的 c.group 是「文生图/图生图」大类，不能拿来数 6 组。
+          const gkey = c => `${c.layout}.${c.ref === 'none' ? 't2i' : 'i2i'}`;
+          const groups = [...new Set(cs.map(gkey))];
+          const first = cs.find(c => gkey(c) === groups[0]);
+          const extra = (first?.grades || []).filter(g => !g.locked).length;
+          return `<tr><td class="tiny">${esc(w.name)}</td><td class="tiny">${cs.length} 种</td>
+            <td class="tiny">${groups.length} 组</td>
             <td class="mono tiny">${esc(sizes || '—')}</td>
-            <td class="tiny ${extra ? '' : 'muted'}">${extra ? `默认 + ${extra} 档自建` : '只有默认档'}</td></tr>`; }).join('')}
+            <td class="tiny ${extra ? '' : 'muted'}">${extra ? `默认 + ${extra} 档自建（组内共享）` : '只有默认档'}</td></tr>`; }).join('')}
         </tbody></table>
         <div class="row" style="margin-top:10px"><button class="btn sm" data-page="grades">去档位表调参数</button>
-          <span class="tiny muted">档位表左边先选组合，再在右边加档。</span></div>`
+          <span class="tiny muted">档位表顶部选子功能 + 版式，右边加档；同组的选择共用这些档。</span></div>`
         : '<div class="brokenbox">这个能力还没配工作流，先去「能力与工作流」里配好。</div>'}
     </div>
 
@@ -2005,24 +2206,29 @@ function pageSheet() {
         <span style="color:#8a3a25">反例：${esc(hints.characterBad || '')}</span></div>
     </div>
 
-    <div class="panel"><h3>通用块 <span class="tag">一字不改也能整段搬</span></h3>
-      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">${esc(lib.note || '')}</div>
+    <div class="panel"><h3>通用块 <span class="tag gray">只读</span></h3>
+      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">${esc(lib.note || '')} 这一段是固定配方，不能在这里改。</div>
       ${Object.entries(blocks).map(([key, block]) => `<div class="sheet-block">
         <div class="bh">${esc(block.name || key)}<span class="mono">${esc(key)}</span></div>
-        <textarea data-blk="${esc(key)}" spellcheck="false" rows="4">${esc(block.text)}</textarea>
+        <textarea data-blk="${esc(key)}" spellcheck="false" rows="4" readonly>${esc(block.text)}</textarea>
         ${block.hint ? `<div class="tiny muted" style="margin-top:4px;line-height:1.7">${esc(block.hint)}</div>` : ''}</div>`).join('')}
     </div>
 
-    <div class="panel"><h3>线稿风格句 <span class="tag">${lines.length} 条</span></h3>
-      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">线稿版把「风格：」整行换成这一段；角色描述里别写颜色词。</div>
+    <div class="panel"><h3>线稿风格句 <span class="tag gray">只读 · ${lines.length} 条</span></h3>
+      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">线稿版把「风格：」整行换成这一段；「风格」下拉另起一行只借造型气质、不上色。这一段是固定配方，不能改。</div>
       ${lines.map(s => `<div class="sheet-block"><div class="bh">${esc(s.name)}<span class="mono">${esc(s.id)}</span></div>
-        <textarea data-ls="${esc(s.id)}" spellcheck="false" rows="3">${esc(s.text)}</textarea></div>`).join('')}
+        <textarea data-ls="${esc(s.id)}" spellcheck="false" rows="3" readonly>${esc(s.text)}</textarea></div>`).join('')}
     </div>
 
     <div class="panel"><h3>风格预设 <span class="tag">${styles.length} 类</span></h3>
-      <div class="tiny muted" style="margin:-2px 0 8px;line-height:1.8">画种 + 材质笔触 + 色调 + 光线，一两句；不要写场景环境（会和纯白底打架）。</div>
-      ${styles.map((s, i) => `<div class="style-row"><input class="input sname" data-stn="${i}" value="${esc(s.name)}">
-        <input class="input" data-stt="${i}" value="${esc(s.text)}"></div>`).join('')}
+      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">这是唯一可编辑的部分。画种 + 材质笔触 + 色调 + 光线，一两句；不要写场景环境（会和纯白底打架）。可新增或删除预设。</div>
+      <div id="styleRows">${styles.map(s => `<div class="style-row" data-strow="1"><input class="input sname" data-stn value="${esc(s.name)}">
+        <input class="input" data-stt value="${esc(s.text)}">
+        <button class="btn sm ghost stdel" data-stdel title="删除这个预设">✕</button></div>`).join('')}</div>
+      <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-stadd>＋ 新增预设</button>
+        <span style="flex:1"></span>
+        <button class="btn sm" data-sheetlib-reload>↻ 重读提示词库</button>
+        <button class="btn primary sm" data-sheetlib-save>保存</button></div>
     </div>
 
     <div class="panel"><h3>已实测组合 <span class="tag">${presets.length} 条</span></h3>
@@ -2033,10 +2239,79 @@ function pageSheet() {
           <td class="tiny muted" data-l="实测">${esc(p.tested || '')}</td>
           <td><button class="btn sm ghost" data-sheet-use="${esc(p.layout)}|${esc(p.ink)}|${esc(p.ref)}">填入</button></td></tr>`).join('')}
         </tbody></table>
-    </div>
+    </div>`;
+}
 
-    <div class="row pfoot"><span class="tiny muted" style="flex:1;line-height:1.8">${esc(hints.lineWarning || '')}</span>
-      <button class="btn primary" data-sheetlib-save>保存提示词库</button></div>`;
+/* 设定图模板页的按钮绑定：管理台整页与「档位表 → 设定图模板」模态框共用。
+   模态框插入 DOM 后调一次即可，不必重跑整个 bindAdmin()。 */
+function bindSheetLib() {
+  // 保存：通用块 / 线稿句 / 风格预设（整库 PUT）
+  $$('[data-sheetlib-save]').forEach(el => el.onclick = async () => {
+    const lib = sheetLib();
+    const blocks = {};
+    $$('[data-blk]').forEach(t => {
+      blocks[t.dataset.blk] = { ...((lib.blocks || {})[t.dataset.blk] || {}), text: t.value.trim() };
+    });
+    const line_styles = $$('[data-ls]').map(t => {
+      const old = (lib.line_styles || []).find(x => x.id === t.dataset.ls) || {};
+      return { id: t.dataset.ls, name: old.name || t.dataset.ls, text: t.value.trim() };
+    });
+    // 风格预设用稳定的 uid（data-stuid）配对，增删行后也不会串位
+    const styles = $$('[data-strow]').map(row => ({
+      name: ((row.querySelector('[data-stn]') || {}).value || '').trim(),
+      text: ((row.querySelector('[data-stt]') || {}).value || '').trim(),
+    })).filter(s => s.name && s.text);
+    const res = await api('/api/sheet/library', { method: 'PUT', body: { blocks, line_styles, styles } });
+    if (!res.ok) { toastBlocked('提示词库没保存', res.reason || ''); return; }
+    await pull(); render();
+    toast('提示词库已保存，创作台立刻生效');
+  });
+  $$('[data-sheetlib-reload]').forEach(el => el.onclick = async () => {
+    await pull(); render(); toast('已重读提示词库');
+  });
+  $$('[data-sheet-preview]').forEach(el => el.onclick = () => openSheetPreviewModal(el.dataset.sheetPreview));
+  $$('[data-sheet-use]').forEach(el => el.onclick = async () => {
+    const [layout, ink, ref] = String(el.dataset.sheetUse || '').split('|');
+    if (layout) UI.sheetForm.layout = layout;
+    if (ink) UI.sheetForm.ink = ink;
+    if (ref) UI.sheetForm.ref = ref;
+    UI.mode = ref && ref !== 'none' ? 'i2i' : 't2i';
+    UI.capId = 'sheet.character';
+    UI._draftCap = 'sheet.character';
+    UI._userSwitched = true;
+    UI.route = 'studio';
+    UI.sheetPreview = null;
+    closeModal();                          // 模态框里点「填入创作台」要先收起弹窗
+    await saveDraft({ route: 'studio' });
+    await pull(); render();
+    toast('已按这个组合切到创作台');
+  });
+  // 第14条：风格预设新增 / 删除（只操作 DOM，保存时由上面的 handler 统一回写）
+  $$('[data-stadd]').forEach(el => el.onclick = () => {
+    const box = $('#styleRows'); if (!box) return;
+    const row = document.createElement('div');
+    row.className = 'style-row'; row.dataset.strow = '1';
+    row.innerHTML = `<input class="input sname" data-stn placeholder="风格名" value="">
+      <input class="input" data-stt placeholder="画种 + 材质笔触 + 色调 + 光线" value="">
+      <button class="btn sm ghost stdel" data-stdel title="删除这个预设">✕</button>`;
+    box.appendChild(row);
+    row.querySelector('[data-stn]').focus();
+  });
+  $$('[data-stdel]').forEach(el => el.onclick = () => {
+    const row = el.closest('[data-strow]'); if (row) row.remove();
+  });
+}
+
+/* 第16条：档位表 →「设定图模板」以模态框打开（模板只是角色设定图的子功能）。
+   复用 pageSheet() 整页渲染 + bindSheetLib() 绑定，功能与独立页完全一致。 */
+function openSheetTemplateModal() {
+  openModal(`<div class="m-head"><h3>设定图模板</h3><button class="btn ghost sm" data-close>✕</button></div>
+    <div class="m-body" style="padding:14px 18px">${pageSheet(true)}</div>
+    <div class="m-foot"><span class="tiny muted" style="flex:1">这是角色设定图的提示词库</span>
+      <button class="btn sm" data-close>关闭</button></div>`, true);
+  const m = $('.modal:last-child') || $('.modal');
+  if (m) m.classList.add('sheetlib-modal');
+  bindSheetLib();
 }
 
 async function openSheetPreviewModal(layoutId) {
@@ -2364,46 +2639,8 @@ function bindAdmin() {
     const res = await api('/api/open-folder', { body: { path: S.service.archiveDir } });
     if (!res.ok) toast(res.reason || '打不开这个目录');
   };
-  // ---- 设定图模板页：保存提示词库 / 预览 / 填入创作台 ----
-  $$('[data-sheetlib-save]').forEach(el => el.onclick = async () => {
-    const lib = sheetLib();
-    const blocks = {};
-    $$('[data-blk]').forEach(t => {
-      blocks[t.dataset.blk] = { ...((lib.blocks || {})[t.dataset.blk] || {}), text: t.value.trim() };
-    });
-    const line_styles = $$('[data-ls]').map(t => {
-      const old = (lib.line_styles || []).find(x => x.id === t.dataset.ls) || {};
-      return { id: t.dataset.ls, name: old.name || t.dataset.ls, text: t.value.trim() };
-    });
-    const styles = $$('[data-stn]').map(n => ({
-      name: (n.value || '').trim(),
-      text: (($('[data-stt="' + n.dataset.stn + '"]') || {}).value || '').trim(),
-    })).filter(s => s.name && s.text);
-    const res = await api('/api/sheet/library', { method: 'PUT', body: { blocks, line_styles, styles } });
-    if (!res.ok) { toastBlocked('提示词库没保存', res.reason || ''); return; }
-    await pull(); render();
-    toast('提示词库已保存，创作台立刻生效');
-  });
-  $$('[data-sheetlib-reload]').forEach(el => el.onclick = async () => {
-    await pull(); render(); toast('已重读提示词库');
-  });
-  $$('[data-sheet-preview]').forEach(el => el.onclick = () => openSheetPreviewModal(el.dataset.sheetPreview));
-  $$('[data-sheet-use]').forEach(el => el.onclick = async () => {
-    // 从管理台把某个版式/组合直接填进创作台：切能力 → 切模式 → 写真表单 → 存盘 → 跳页
-    const [layout, ink, ref] = String(el.dataset.sheetUse || '').split('|');
-    if (layout) UI.sheetForm.layout = layout;
-    if (ink) UI.sheetForm.ink = ink;
-    if (ref) UI.sheetForm.ref = ref;
-    UI.mode = ref && ref !== 'none' ? 'i2i' : 't2i';
-    UI.capId = 'sheet.character';
-    UI._draftCap = 'sheet.character';        // 防止随后的轮询用旧草稿把表单覆盖回去
-    UI._userSwitched = true;
-    UI.route = 'studio';
-    UI.sheetPreview = null;
-    await saveDraft({ route: 'studio' });
-    await pull(); render();
-    toast('已按这个组合切到创作台');
-  });
+  // ---- 设定图模板页：保存 / 预览 / 填入创作台 / 预设增删（整页与模态框共用）----
+  bindSheetLib();
   if (UI.adminPage === 'service') loadStorage();
   $('#testConn') && ($('#testConn').onclick = async () => {
     const btn = $('#testConn'); btn.textContent = '连接中…';

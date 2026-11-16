@@ -287,6 +287,30 @@ class TaskService:
     def _resolve_refs(self, ref_ids: list[str]) -> list[dict[str, Any]]:
         return [r for rid in ref_ids if (r := state.refs.get(rid))]
 
+    def _ensure_job_refs(self, job: dict[str, Any]) -> list[dict[str, Any]]:
+        """按任务记录把参考图补齐，返回可直接交给 build_prompt 的完整 ref 列表。
+
+        ref id 只活在内存里的 RefStore：服务重启、或参考图缓存清理之后，老任务
+        job["refs"] 里那串 id 就查不到了。以前「加入队列生成」会带着空 refs
+        去发「参考生图」工作流（LoadImage 还指向一个失效的文件名，ComfyUI 直接
+        拒收），「再来一张」更会把 refs=[] 写进新卡，参考图永久丢失。这里按
+        refsInfo 的落盘副本重新登记，并把新 id 写回任务；图片内容不变，所以
+        同种子队列生成出来的仍然是同一张图。
+        """
+        ids = list(job.get("refs") or [])
+        refs = self._resolve_refs(ids)
+        if refs and len(refs) == len(ids):
+            return refs
+        if not ids or not (job.get("refsInfo") or []):
+            return refs
+        ok, _reason, restored = self.restore_refs(job["id"])
+        if ok and restored:
+            with state.lock:
+                job["refs"] = [r["id"] for r in restored]
+            state.persist()
+            return self._resolve_refs(job["refs"])
+        return refs
+
     def submit_normal(
         self, cap_id: str, prompt: str, grade: str, ref_ids: list[str],
         wf: str | None = None, sheet: dict[str, Any] | None = None,
@@ -383,6 +407,10 @@ class TaskService:
         ok, reason = self.check_queue(job["cap"])
         if not ok:
             return False, reason
+        # 老卡的 ref id 可能已经失效：先按落盘副本补齐，别等到执行时才发一个
+        # 没有参考图的「参考生图」工作流被 ComfyUI 拒收。
+        if job.get("refs") and not self._ensure_job_refs(job):
+            return False, "这张卡的参考图已经被清理，请重新上传后再加入队列"
         params: dict[str, Any] | None = None
         tag: str | None = None
         cid = str((job.get("sheet") or {}).get("combo") or "")
@@ -412,8 +440,11 @@ class TaskService:
         if not job or not job["runs"]:
             return False, "", "找不到这张卡片"
         run = job["runs"][0]
+        # 先按 refsInfo 把可能失效的参考图重新登记，再把新 id 传给 submit_normal；
+        # 否则新卡会记成 refs=[]，参考图从此找不回来。
+        refs = self._ensure_job_refs(job)
         return self.submit_normal(
-            job["cap"], job["prompt"], run["grade"], job["refs"],
+            job["cap"], job["prompt"], run["grade"], [r["id"] for r in refs],
             wf=job.get("wf"), sheet=job.get("sheet"), brief=job.get("brief", ""),
             # 组合档位的参数不按名字重查（名字只在那一个组合里有意义），原样透传
             params=job.get("params"), tag=job.get("gradeTag"),
@@ -465,7 +496,7 @@ class TaskService:
         try:
             resume_only = bool(run.get("resume_only"))
             if not resume_only:
-                refs = self._resolve_refs(job.get("refs", []))
+                refs = self._ensure_job_refs(job)
                 # 普通生成：等价于 ComfyUI 前端 control_after_generate=randomize；
                 # 队列生成沿用首发回读到的真实种子（X42）。
                 seed = job.get("seed") if run["mode"] == "queue" and job.get("seed") else secrets.randbelow(2**62)
@@ -841,12 +872,21 @@ class TaskService:
                             "name": existing.get("name") or src.name})
                 continue
             ref_id = state.next_id("ref")
-            filename = f"{ref_id}{src.suffix.lower() or '.png'}"
-            dest = uploads / filename
+            # 源图本来就在上传目录里（绝大多数情况）就直接复用，不再复制一份：
+            # 缓存清理现在只摘内存登记、保留磁盘文件，每恢复一次都复制会把上传目录撑满。
             try:
-                shutil.copyfile(src, dest)
-            except OSError:
-                continue
+                in_uploads = src.resolve().is_relative_to(uploads.resolve())
+            except (OSError, ValueError):
+                in_uploads = False
+            if in_uploads:
+                dest, filename = src, src.name
+            else:
+                filename = f"{ref_id}{src.suffix.lower() or '.png'}"
+                dest = uploads / filename
+                try:
+                    shutil.copyfile(src, dest)
+                except OSError:
+                    continue
             try:
                 comfy_name = self.comfy.upload_image(dest, filename)
             except ComfyError:
@@ -872,10 +912,12 @@ class TaskService:
            ref id 只活在内存里，服务重启或「基于上一条」重新登记后会换 id，
            只有路径是跨重启可靠的锚。以前只按 id 保护，正是「图被当孤儿删掉」的根因。
         """
-        protected = set(protect)
+        draft_ids = set(protect)
+        protected = set(draft_ids)
         protected_paths: set[str] = set()
         with state.lock:
             for draft in (state.ui.get("drafts") or {}).values():
+                draft_ids.update((draft or {}).get("refs") or [])
                 protected.update((draft or {}).get("refs") or [])
             for job in state.jobs:
                 if job.get("sessionRemoved"):
@@ -900,6 +942,20 @@ class TaskService:
                 continue          # 文件动不了就先留着登记，下次再试；绝不因此让上传 500
             state.refs.remove(ref["id"])
             removed += 1
+
+        # 连续创作很久时，几乎每张登记都被历史任务引用，上面一趟可能一张都删不掉，
+        # 于是第 31 张参考图直接被 400 挡住。其实每条任务的 refsInfo 都记着落盘
+        # 路径，参考图随时能重新登记（见 _ensure_job_refs / restore_refs），所以
+        # 这里只摘掉内存登记、保留磁盘文件，保证上传不会被旧任务卡死；当前正在
+        # 编辑的草稿参考图绝不动。
+        if len(state.refs.as_list()) >= keep:
+            for ref in state.refs.as_list():
+                if len(state.refs.as_list()) < keep:
+                    break
+                if ref.get("id") in draft_ids:
+                    continue
+                state.refs.remove(ref["id"])
+                removed += 1
         return removed
 
     # ------------------------------------------------------------------ 管理台

@@ -31,6 +31,8 @@ class SheetPayload(BaseModel):
     layout: str = "A"            # 版式 id：A 四视图横排 / B 四宫格 / C 单张全身
     character: str = ""          # 角色行：年龄身份 + 五官 + 发型 + 服装 + 标志物
     style: str = "写实摄影"       # 风格预设名或自写风格句
+    styleCustom: bool = False    # 风格是不是「自定义…」（用于「基于上一条」精确还原）
+    styleText: str = ""          # 自定义风格句
     ink: str = "color"           # color 彩色 / line 线稿
     lineStyle: str | None = None  # 线稿风格句 id（W1~W4）
     ref: str = "none"            # none 无参考 / lock 锁定同角色 / style 只借画风
@@ -168,9 +170,12 @@ def _prepare_sheet(
         names = "、".join(g["name"] for g in combos.grades(cid))
         raise SheetError(f"「{info['name']}」没有档位「{grade_name}」（可选：{names}）")
     params = combos.effective_params(cid, grade_name)
+    # 图生图纯转换（单人图转四视图 / 彩色转线稿）允许角色描述为空：
+    # 提示词主体由版式句 + 参考声明构成，不写「角色：」这一行。
     prompt = sheet_library.compose(
         layout["id"], payload.character, payload.style,
         ink=payload.ink, ref=ref_mode, line_style=payload.lineStyle,
+        allow_empty_character=(ref_mode != "none" and bool(refs)),
     )
     brief = sheet_library.brief(
         layout["id"], payload.character, ink=payload.ink, ref=ref_mode, style=payload.style,
@@ -187,6 +192,7 @@ def _prepare_sheet(
         "sheet": {
             "layout": layout["id"], "layoutName": layout["name"], "ratio": layout["ratio"],
             "ink": payload.ink, "ref": ref_mode, "style": payload.style,
+            "styleCustom": payload.styleCustom, "styleText": payload.styleText,
             "character": payload.character.strip(), "lineStyle": payload.lineStyle or "",
             # 组合与档位要跟着任务走：换档重跑/基于上一条都得知道自己是哪套配方
             "combo": cid, "comboName": info["name"], "grade": grade_name,

@@ -257,7 +257,7 @@ workflows:
       field: sigmas
     grades: []
 sheetGrades:
-  A.color.none:
+  A.t2i:
   - name: 快速
     note: ''
     params:
@@ -272,7 +272,39 @@ sheetGrades:
       '13':
         megapixels: 2.0
         multiple: 20
-  B.color.none:
+  - name: 高清
+    note: ''
+    params:
+      '13':
+        megapixels: 4.0
+        multiple: 20
+  A.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.t2i:
   - name: 快速
     note: ''
     params:
@@ -285,7 +317,7 @@ sheetGrades:
       '13':
         megapixels: 2.0
         multiple: 20
-  C.color.none:
+  B.t2i:
   - name: 快速
     note: ''
     params:
@@ -298,189 +330,7 @@ sheetGrades:
       '13':
         megapixels: 2.0
         multiple: 20
-  A.line.none:
-  - name: 快速
-    note: ''
-    params:
-      '13':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '13':
-        megapixels: 2.0
-        multiple: 20
-  B.line.none:
-  - name: 快速
-    note: ''
-    params:
-      '13':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '13':
-        megapixels: 2.0
-        multiple: 20
-  C.line.none:
-  - name: 快速
-    note: ''
-    params:
-      '13':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '13':
-        megapixels: 2.0
-        multiple: 20
-  A.color.lock:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  B.color.lock:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  C.color.lock:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  A.line.lock:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  B.line.lock:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  C.line.lock:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  A.color.style:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  B.color.style:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  C.color.style:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  A.line.style:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  B.line.style:
-  - name: 快速
-    note: ''
-    params:
-      '502':
-        megapixels: 1.0
-        multiple: 8
-  - name: 精细
-    note: ''
-    params:
-      '502':
-        megapixels: 2.0
-        multiple: 20
-  C.line.style:
+  C.i2i:
   - name: 快速
     note: ''
     params:

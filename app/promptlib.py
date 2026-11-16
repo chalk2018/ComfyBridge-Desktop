@@ -33,6 +33,12 @@ SLOT_VARS = "vars"
 MAX_CHARACTER = 1200
 MAX_STYLE = 400
 
+# 提示词库缺这两个新字段时的兜底模板（老版本库文件也能正常拼装）
+DEFAULT_LINE_OVERLAY = (
+    "造型气质：{name} —— {profile}（只借五官比例、形体节奏与线条节奏；"
+    "画面仍然只有黑白线条和纯白纸底，不上色、不加光影、不做材质渲染）"
+)
+
 
 class SheetError(Exception):
     """提示词库读不到 / 参数不合法；页面上直接显示这句话。"""
@@ -144,6 +150,31 @@ class SheetLibrary:
                 return item
         raise SheetError(f"没有这个线稿风格：{line_style}")
 
+    def line_style_overlay(self, lib: dict[str, Any], style: str) -> str:
+        """线稿也要用上「风格」下拉：把画风翻译成只借造型/线条气质的一行。
+
+        为什么不直接把风格句贴进线稿提示词：风格预设里写着「皮肤通透」
+        「全局光照」「色彩浓郁」这类上色与渲染要求，整句贴进来会和
+        「纯黑白线稿」打架。这里只带画风名 + 一条与画风对应的造型特征，
+        并明确仍然不上色。画风预设名/线稿句/管理台编辑都仍从库里读。
+        """
+        text = str(style or "").strip()
+        if not text:
+            return ""
+        preset = next((s for s in lib["styles"] if s["name"] == text), None)
+        if preset:
+            name = preset["name"]
+            profile = str((lib.get("line_style_profiles") or {}).get(name, "")).strip()
+        else:
+            name = "自定义画风"
+            profile = text[:120]
+        if not profile:
+            profile = f"{name} 的造型比例与线条节奏"
+        if len(profile) > MAX_STYLE:
+            raise SheetError("风格描述太长了，一两句就够")
+        tpl = str((lib.get("line_style_overlay") or {}).get("template") or DEFAULT_LINE_OVERLAY)
+        return tpl.format(name=name, profile=profile)
+
     # ---------------------------------------------------------------- 拼装
     def compose(
         self,
@@ -153,6 +184,7 @@ class SheetLibrary:
         ink: str = "color",
         ref: str = "none",
         line_style: str | None = None,
+        allow_empty_character: bool = False,
     ) -> str:
         """拼出一条可直接提交的提示词。
 
@@ -160,9 +192,10 @@ class SheetLibrary:
             layout_id: 版式 id（A 四视图横排 / B 四宫格 / C 单张全身）
             character: 角色行正文（年龄身份 + 五官 + 发型发色 + 服装分件 + 标志物）
             style: 风格预设名，或一句自写风格
-            ink: color 彩色 / line 线稿（线稿时风格行整行替换成线稿句）
+            ink: color 彩色 / line 线稿（风格行整行换成线稿句，另起一行带画风的造型气质）
             ref: none 无参考 / lock 锁定同角色（R1 插在角色行前）/ style 只借画风（R2 提到最前）
             line_style: 线稿风格句 id（W1~W4），仅 ink=line 时生效
+            allow_empty_character: 图生图纯转换场景（单人图转四视图 / 彩色转线稿）允许不写角色行
 
         Returns:
             拼好的提示词文本。
@@ -173,7 +206,7 @@ class SheetLibrary:
         lib = self.load()
         layout = self.layout(layout_id)
         character = str(character or "").strip()
-        if not character:
+        if not character and not allow_empty_character:
             raise SheetError("先写角色描述：年龄身份 + 五官 + 发型 + 服装 + 标志物")
         if len(character) > MAX_CHARACTER:
             raise SheetError(f"角色描述太长了（{len(character)} 字），控制在 {MAX_CHARACTER} 字以内")
@@ -183,9 +216,12 @@ class SheetLibrary:
             raise SheetError("参考方式只能是 无参考图 / 锁定同角色 / 只借画风")
 
         blocks = lib["blocks"]
-        # 线稿：风格行整行换成线稿句；彩色：用风格预设 / 自写句
+        # 线稿：风格行整行换成线稿句，画风另起一行只借造型气质；
+        # 彩色：风格行用风格预设 / 自写句
+        extra_line = ""
         if ink == "line":
             style_line = self.line_style(line_style)["text"]
+            extra_line = self.line_style_overlay(lib, style)
         else:
             style_line = self.style_text(style)
             if len(style_line) > MAX_STYLE:
@@ -196,7 +232,11 @@ class SheetLibrary:
         if ref == "lock":
             suffix = ("，整体线条风格与图 1 保持一致，画风与图 1 保持一致"
                       if ink == "line" else "，画风与图 1 保持一致")
-        variables = f"角色：{character}\n风格：{style_line}{suffix}"
+        # 图生图纯转换场景（allow_empty_character）不写角色行，避免空着「角色：」干扰画面；
+        # 画幅/版式/参考声明仍由其它段落照常拼进去。
+        variables = (f"角色：{character}\n" if character else "") + f"风格：{style_line}{suffix}"
+        if extra_line:
+            variables += "\n" + extra_line
 
         cells = str(layout.get("cells") or "")
         cells = cells.replace("{u2}", blocks["U2"]["text"]).replace("{u2g}", blocks["U2G"]["text"])

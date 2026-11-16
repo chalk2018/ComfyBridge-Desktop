@@ -181,18 +181,31 @@ def admin(cdp: C) -> None:
          "UI.capId='image.generate';UI.adminPage='grades';UI.editingWfIndex=0;UI.gOpen=1;"),
         ("d_admin_grades_sheet",
          "UI.capId='sheet.character';UI.adminPage='grades';UI.comboSel='C.line.lock';UI.gOpen=0;"),
-        ("d_admin_sheet", "UI.adminPage='sheet';"),
+        # 模板已不是独立菜单页：先进角色设定图档位表，再单独点按钮弹模态框
+        ("d_admin_sheet",
+         "UI.capId='sheet.character';UI.adminPage='grades';UI.comboSel='A.color.none';UI.gOpen=0;"),
         ("d_admin_service", "UI.adminPage='service';"),
         ("d_admin_diag", "UI.adminPage='diag';"),
     ]
     for name, code in plans:
         set_ui(cdp, f"(() => {{UI.route='admin';{code}render();window.scrollTo(0,0);return true}})()",
                2.0 if "grades" in name else 1.4)
+        if name == "d_admin_sheet":
+            # 模板从档位表按钮以模态框打开（不再有独立菜单页）
+            opened = cdp.js("""(() => {
+              const b=document.querySelector('[data-sheet-template]');
+              if(!b) return false; b.click(); return true;
+            })()""")
+            print("模板模态框:", "已打开" if opened else "未找到入口")
+            time.sleep(1.2)
         cdp.shot(name)
-    # 设定图模板的「已实测组合」表格局部
-    cdp.js("(() => {const t=document.querySelector('.presets'); if(t) t.scrollIntoView({block:'center'}); return true})()")
+    # 设定图模板的「风格预设」表格局部（在模态框里）
+    cdp.js("""(() => {
+      const t=[...document.querySelectorAll('.presets')].pop();
+      if(t) t.scrollIntoView({block:'center'}); return !!t;
+    })()""")
     time.sleep(0.7)
-    cdp.shot_el("d_sheet_presets", ".presets", 10)
+    cdp.shot_el("d_sheet_presets", ".sheetlib-modal .presets, .presets", 10)
     # 档位表顶部的切换带局部（白框 + 分段按钮 + 两个动作）
     set_ui(cdp, "(() => {UI.capId='image.generate';UI.adminPage='grades';UI.editingWfIndex=0;"
                 "UI.gOpen=1;render();window.scrollTo(0,0);return true})()", 1.6)
@@ -201,6 +214,15 @@ def admin(cdp: C) -> None:
     cdp.js("(() => {const g=document.querySelector('.grow-hd'); if(g) g.scrollIntoView({block:'center'}); return true})()")
     time.sleep(0.7)
     cdp.shot_el("d_grades_rows", "[data-page-rows], .grows, .grow-hd", 10)
+
+
+def close_modals(cdp: C) -> None:
+    """拍完模态框必须关掉，否则会遮住后面所有页面的配图。"""
+    cdp.js("""(() => {
+      document.querySelectorAll('.modal [data-close]').forEach(b => b.click());
+      return true;
+    })()""")
+    time.sleep(0.6)
 
 
 def gallery(cdp: C) -> None:
@@ -245,10 +267,25 @@ def phone(cdp: C) -> None:
       render(); window.scrollTo(0,0); return true;
     })()""", 2.0)
     cdp.shot("m_admin_grades_sheet")
-    set_ui(cdp, "(() => {UI.adminPage='sheet'; render(); window.scrollTo(0,0); return true})()", 1.4)
+    # 模板：角色设定图档位表 →「✎ 设定图模板」模态框（手机端宽度适配）
+    close_modals(cdp)  # 桌面轮拍完的模态框先关掉，保证从档位表正常点开
+    set_ui(cdp, """(() => {
+      UI.capId='sheet.character'; UI.adminPage='grades'; UI.comboSel='A.color.none';
+      UI.gOpen=0; render(); window.scrollTo(0,0); return true;
+    })()""", 1.6)
+    opened = cdp.js("""(() => {
+      const b=document.querySelector('[data-sheet-template]');
+      if(!b) return false; b.click(); return true;
+    })()""")
+    print("手机端模板模态框:", "已打开" if opened else "未找到入口")
+    time.sleep(1.2)
     cdp.shot("m_admin_sheet")
-    set_ui(cdp, "(() => {const t=document.querySelector('.presets'); if(t) t.scrollIntoView({block:'start'}); return true})()", 0.8)
+    set_ui(cdp, """(() => {
+      const t=[...document.querySelectorAll('.presets')].pop();
+      if(t) t.scrollIntoView({block:'start'}); return !!t;
+    })()""", 0.8)
     cdp.shot("m_admin_sheet_presets")
+    close_modals(cdp)  # 同样不能带进手机端「生成历史」配图
     set_ui(cdp, "(() => {UI.route='gallery'; render(); window.scrollTo(0,0); return true})()", 1.6)
     cdp.shot("m_gallery")
 
@@ -265,6 +302,7 @@ def main() -> None:
         studio_image_parts(cdp)
         studio_sheet(cdp)
         admin(cdp)
+        close_modals(cdp)  # 模板模态框不能带进「生成历史」配图
         gallery(cdp)
         phone(cdp)
     finally:

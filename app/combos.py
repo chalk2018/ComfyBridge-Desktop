@@ -45,6 +45,20 @@ def wf_for_ref(ref: str) -> str:
     return WF_T2I if ref == "none" else WF_I2I
 
 
+def group_of(cid: str) -> str:
+    """档位组 key：`版式.子功能`（如 `A.t2i` / `A.i2i`）。
+
+    画法（color/line）与参考方式（lock/style）只改提示词、不改工作流的参数节点，
+    所以 18 种组合的档位按「版式 × 子功能」归成 6 组共享。创作台仍保留 18 种选择，
+    只是同组的画法/参考切来切去看到的是同一份档位。
+    """
+    parsed = parse(cid)
+    if not parsed:
+        return str(cid)
+    layout, _ink, ref = parsed
+    return f"{layout}.{'t2i' if ref == 'none' else 'i2i'}"
+
+
 def combo_id(layout: str, ink: str, ref: str) -> str:
     """组合 id：`C.color.lock` 这种，稳定、可读、可直接当缓存键。"""
     return f"{layout}.{ink}.{ref}"
@@ -163,8 +177,19 @@ def layout_params(cid: str) -> dict[str, Any]:
 
 
 def _custom_grades(cid: str) -> list[dict[str, Any]]:
-    raw = (config.raw.get("sheetGrades") or {}).get(cid) or []
-    return [copy.deepcopy(g) for g in raw if isinstance(g, dict) and g.get("name")]
+    # 档位按「版式.子功能」6 组共享：同组里换画法/参考只改提示词，档位参数完全一样。
+    key = group_of(cid)
+    table = config.raw.get("sheetGrades") or {}
+    raw = table.get(key)
+    if raw is None and key != cid:
+        # 兼容旧配置：18 段 key（如 A.color.none）里的自建档位迁到 6 段组 key。
+        # 迁移只在内存里做，写回发生在用户下一次保存档位时（不悄悄改盘上的文件）。
+        for old_cid in (f"{key.split('.')[0]}.{ink}.{ref}" for ink in INKS for ref in REFS):
+            rows = table.get(old_cid)
+            if rows:
+                raw = rows
+                break
+    return [copy.deepcopy(g) for g in (raw or []) if isinstance(g, dict) and g.get("name")]
 
 
 def approx_size(cid: str, params: dict[str, Any]) -> str:
@@ -240,8 +265,11 @@ def effective_params(cid: str, name: str) -> dict[str, Any]:
 
 
 def tag(cid: str, name: str) -> str:
-    """工作流拷贝/缓存用的标签：组合 + 档位，保证不同组合同名档位互不串味。"""
-    return f"{cid}__{name}"
+    """工作流拷贝/缓存用的标签：档位组 + 档位。
+
+    同组的画法/参考共用同一份拷贝（参数节点完全一样），不同组/不同档位互不串味。
+    """
+    return f"{group_of(cid)}__{name}"
 
 
 # ------------------------------------------------------------------ 校验与保存
@@ -338,23 +366,33 @@ def normalize_grades(cid: str, rows: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def save_grades(cid: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """把某组合的自建档位整体写回 config.yaml（母版不落盘，永远算出来）。"""
+    """把某档位组的自建档位整体写回 config.yaml（母版不落盘，永远算出来）。
+
+    写的是 6 段组 key（如 A.t2i），并顺手清掉旧的 18 段 key，避免下次读时
+    旧数据盖住新数据。同组所有组合（画法/参考变体）立刻看到这份档位。
+    """
     meta(cid)                                  # 先确认组合合法
     cleaned = normalize_grades(cid, rows)
     raw = copy.deepcopy(config.raw)
     table = raw.setdefault("sheetGrades", {}) or {}
     raw["sheetGrades"] = table
+    key = group_of(cid)
+    layout = key.split(".")[0]
+    # 清掉这一组下所有旧 18 段 key（否则兼容读取会优先命中旧数据）
+    for ink in INKS:
+        for ref in REFS:
+            table.pop(f"{layout}.{ink}.{ref}", None)
     if cleaned:
-        table[cid] = cleaned
+        table[key] = cleaned
     else:
-        table.pop(cid, None)
+        table.pop(key, None)
     config.replace(raw)
     return grades(cid)
 
 
 # ------------------------------------------------------------------ 给页面的轻量视图
 def view() -> list[dict[str, Any]]:
-    """/api/state 用的组合清单：18 条，只带档位名/尺寸，不带节点级明细。"""
+    """/api/state 用的组合清单：18 种选择（档位按 6 组共享），只带档位名/尺寸。"""
     try:
         items = all_combos()
     except SheetError:

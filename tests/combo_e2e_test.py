@@ -506,11 +506,12 @@ def section_studio(cdp: CDP) -> None:
           cdp.js("UI.sheetForm.grade==='精细' && (document.body.innerText||'').includes('1080 × 1940')"),
           str(cdp.js("UI.sheetForm.grade")))
 
-    # 换到一个没有自建档位的组合：档位自动回默认
+    # 档位按「版式 × 子功能」6 组共享：A 版式的画法/参考变体切到 B 版式后，
+    # 同组的「精细」档仍在（B.t2i 也建了），只有切到子功能另一端才可能落回默认。
     cdp.js("""(()=>{ UI.sheetForm.layout='B'; UI.sheetForm.grade='精细'; render(); return true;})()""")
     cdp.pause(600)
-    check("D9 切到没有该档位的组合 → 自动回到默认且只剩 1 个档位",
-          cdp.js("UI.sheetForm.grade==='默认' && document.querySelectorAll('[data-sheet-grade]').length===1"),
+    check("D9 档位按 6 组共享：B 版式同组仍有「精细」档",
+          cdp.js("UI.sheetForm.grade==='精细' && document.querySelectorAll('[data-sheet-grade]').length>=2"),
           str(cdp.js("UI.sheetForm.grade+'/'+document.querySelectorAll('[data-sheet-grade]').length")))
 
     # 看完整提示词 = 服务端那条。两处必须对齐：
@@ -605,13 +606,13 @@ def section_admin(cdp: CDP) -> None:
     cdp.pause(600)
 
     # ---- 顶部：组合像创作台那样横着排在按钮上，不再是竖向列表 ----
-    check("E1 组合切换是顶部分段按钮（子功能/版式/画法/参考四组）",
-          cdp.js("(()=>{const g=['mode','layout','ink','ref'].map(k=>document.querySelectorAll('[data-combo-'+k+']').length);"
-                 "return g.every(n=>n>0) && document.querySelectorAll('.segb[data-combo-mode],.segb[data-combo-layout],"
-                 ".segb[data-combo-ink],.segb[data-combo-ref]').length>=9;})()"),
-          str(cdp.js("['mode','layout','ink','ref'].map(k=>k+':'+document.querySelectorAll('[data-combo-'+k+']').length)")))
-    check("E2 顶部按「子功能 / 版式 / 画法 / 参考 / 当前」五行横排，且没有旧的竖向 combo-it 列表",
-          cdp.js("document.querySelectorAll('.sheetbar').length===5 && !document.querySelector('.combo-it')"),
+    # 需求 #15：档位表去掉画法/参考切换（只改提示词、不改参数），只留子功能 + 版式 + 当前
+    check("E1 档位表切换是顶部分段按钮（子功能/版式两组，已去掉画法/参考）",
+          cdp.js("(()=>{const g=['mode','layout'].map(k=>document.querySelectorAll('[data-combo-'+k+']').length);"
+                 "return g.every(n=>n>0) && !document.querySelector('[data-combo-ink]') && !document.querySelector('[data-combo-ref]');})()"),
+          str(cdp.js("['mode','layout'].map(k=>k+':'+document.querySelectorAll('[data-combo-'+k+']').length)")))
+    check("E2 顶部按「子功能 / 版式 / 当前」三行横排，且没有旧的竖向 combo-it 列表",
+          cdp.js("document.querySelectorAll('.sheetbar').length===3 && !document.querySelector('.combo-it')"),
           str(cdp.js("document.querySelectorAll('.sheetbar').length")))
     check("E3 当前组合摘要显示组合名 / 子工作流 / 画幅",
           cdp.js("(()=>{const t=document.querySelector('.sheetbar:last-child')?.innerText||'';"
@@ -643,12 +644,13 @@ def section_admin(cdp: CDP) -> None:
     # ---- 顶部按钮真的能切组合，且档位表跟着换 ----
     cdp.js("""document.querySelector('[data-combo-layout="A"]').click(); true""")
     cdp.pause(600)
-    check("E9 点「版式 A」切到 A.line.lock（组合由四个按钮推导）",
-          cdp.js("UI.comboSel==='A.line.lock'"), str(cdp.js("UI.comboSel")))
+    # 档位组固定用 color 作代表（画法/参考共享档位），切版式只改第一段
+    check("E9 点「版式 A」切到 A.color.lock（档位组代表）",
+          cdp.js("UI.comboSel==='A.color.lock'"), str(cdp.js("UI.comboSel")))
     cdp.js("""document.querySelector('[data-combo-mode="t2i"]').click(); true""")
     cdp.pause(600)
-    check("E10 切「文生图」得到 A.line.none，参考行自动隐藏",
-          cdp.js("UI.comboSel==='A.line.none' && !document.querySelector('[data-combo-ref]')"),
+    check("E10 切「文生图」得到 A.color.none，参考行已不存在",
+          cdp.js("UI.comboSel==='A.color.none' && !document.querySelector('[data-combo-ref]')"),
           str(cdp.js("UI.comboSel")))
     cdp.js("(()=>{UI.comboSel='C.line.lock';UI.gOpen=0;render();return true})()")
     cdp.pause(700)
@@ -759,8 +761,9 @@ def section_regression(cdp: CDP) -> None:
           cdp.js("!!document.querySelector('[data-mode=\"t2i\"]') && "
                  "!!document.querySelector('[data-grade]') && !!document.querySelector('#promptInput')"))
 
-    check("F3 管理台 5 个页面都在（含设定图模板）",
-          cdp.js("(()=>{UI.route='admin';render();return document.querySelectorAll('.admin-nav [data-page]').length===5;})()"))
+    # 需求 #16：设定图模板从菜单移走（变成档位表里的模态框），菜单剩 4 项
+    check("F3 管理台 4 个页面（设定图模板已移入档位表）",
+          cdp.js("(()=>{UI.route='admin';render();return document.querySelectorAll('.admin-nav [data-page]').length===4;})()"))
 
     check("F4 设定图模板页还能打开且通用块可编辑",
           cdp.js("""(()=>{UI.route='admin';UI.adminPage='sheet';render();
