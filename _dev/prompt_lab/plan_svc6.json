@@ -1,0 +1,10 @@
+[
+ {"tag": "i01_football", "layout": "MV", "mode": "t2i",
+  "text": "一颗标准的黑白拼块足球，表面光滑，黑色五边形与白色六边形缝合"},
+ {"tag": "i02_microwave", "layout": "MV", "mode": "t2i",
+  "text": "一台白色家用微波炉，正面左侧控制面板带旋钮，右侧一扇带把手的玻璃门"},
+ {"tag": "i03_armchair", "layout": "MV", "mode": "t2i",
+  "text": "一张明代黄花梨太师椅，方形座面、弧形靠背、两侧扶手、四条直腿"},
+ {"tag": "i04_ding", "layout": "MV", "mode": "t2i",
+  "text": "一尊三足双耳青铜方鼎，方形鼎身、四角出扉棱、口沿立两耳、腹部铸饕餮纹"}
+]

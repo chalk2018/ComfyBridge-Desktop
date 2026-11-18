@@ -1,0 +1,38 @@
+{
+  "adminOpened": true,
+  "sheet.scene": {
+    "cap": true,
+    "gradesPage": true,
+    "combos": 43,
+    "stateModes": [
+      "t2i",
+      "i2i",
+      "expand"
+    ],
+    "comboSel": "N.t2i.color.yes",
+    "modes": [
+      "t2i",
+      "i2i",
+      "expand"
+    ],
+    "modesOk": true,
+    "expandSelected": true,
+    "templateModal": true
+  },
+  "sheet.prop": {
+    "cap": true,
+    "gradesPage": true,
+    "combos": 16,
+    "stateModes": [
+      "t2i",
+      "i2i"
+    ],
+    "comboSel": "MV.t2i.color.none",
+    "modes": [
+      "t2i",
+      "i2i"
+    ],
+    "modesOk": true,
+    "templateModal": true
+  }
+}

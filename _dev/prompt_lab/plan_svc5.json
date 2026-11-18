@@ -1,0 +1,10 @@
+[
+ {"tag": "h01_football", "layout": "MV", "mode": "t2i",
+  "text": "一颗标准的黑白拼块足球，表面光滑，黑色五边形与白色六边形缝合"},
+ {"tag": "h02_marble", "layout": "MV", "mode": "t2i",
+  "text": "一颗透明玻璃弹珠，内部一道蓝色螺旋纹，表面反光"},
+ {"tag": "h03_microwave", "layout": "MV", "mode": "t2i",
+  "text": "一台白色家用微波炉，正面左侧控制面板带旋钮，右侧一扇带把手的玻璃门"},
+ {"tag": "h04_desklamp", "layout": "MV", "mode": "t2i",
+  "text": "一台黑色金属护眼台灯，圆形底座、两节可折叠支臂、锥形灯罩"}
+]

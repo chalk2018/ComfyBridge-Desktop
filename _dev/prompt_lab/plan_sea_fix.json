@@ -1,0 +1,34 @@
+[
+ {
+  "tag": "haixia_P_fix",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第24镜_琼州海峡海面.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "haixia_B_fix",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第24镜_琼州海峡海面.jpg",
+  "text": "把这处场景拍成鸟瞰平面布局，镜头在正上方垂直向下"
+ },
+ {
+  "tag": "duhai_P_fix",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第24镜_琼州海峡渡海北归.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "duhai_B_fix",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第24镜_琼州海峡渡海北归.jpg",
+  "text": "把这处场景拍成鸟瞰平面布局，镜头在正上方垂直向下"
+ }
+]

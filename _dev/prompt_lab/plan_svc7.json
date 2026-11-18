@@ -1,0 +1,8 @@
+[
+ {"tag": "j01_football_auto", "layout": "MV", "mode": "t2i",
+  "text": "一颗标准的黑白拼块足球，表面光滑，黑色五边形与白色六边形缝合"},
+ {"tag": "j02_chair_auto", "layout": "MV", "mode": "t2i",
+  "text": "一张明代黄花梨太师椅，方形座面、弧形靠背、两侧扶手、四条直腿"},
+ {"tag": "j03_football_user", "layout": "MV", "mode": "t2i",
+  "text": "足球：正面、侧面、背面"}
+]

@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import ROOT, ConfigError, config
+from .boardlib import BoardError
 from .promptlib import SheetError, library as sheet_library
 from .services import service
 from .state import state
@@ -39,6 +40,37 @@ class SheetPayload(BaseModel):
     grade: str = ""              # 档位名：留空＝母版；只能是当前组合下存在的档位
 
 
+class ExtSheetPayload(BaseModel):
+    """1.03 场景/道具设定图的结构化输入（区别能力由 capId 决定）。"""
+
+    kind: str = "scene"              # scene / prop
+    mode: str = "t2i"                # 场景: t2i/i2i/expand；道具: t2i/i2i
+    layout: str = "N"                # 版式 id
+    sub: str = ""                    # 版式子选项（扩图：S/L/L45/L75/R45/R75），只改提示词
+    text: str = ""                   # 场景描述 / 道具描述（扩图可空）
+    ink: str = "color"               # color / line
+    nochar: str = "yes"              # 场景禁角色开关 yes/no
+    ref: str = "none"                # 道具参考方式 none/lock
+    refSlots: dict[str, str] = Field(default_factory=dict)  # 场景: {ref/pano/bird/sketch: 上传 ref id}
+    refs: list[str] = Field(default_factory=list)            # 预览时把已上传 ref id 带来，用于还原图序号
+    style: str = "写实摄影"
+    styleCustom: bool = False
+    styleText: str = ""
+    lineStyle: str | None = None
+    grade: str = ""
+
+
+class BoardPayload(BaseModel):
+    """宫格分镜故事板的结构化输入：版式内逐格描述，服务端统一拼装。"""
+
+    layout: str = "G4"                           # G4 / G6 / G9
+    cells: list[str] = Field(default_factory=list)
+    ink: str = "color"                           # color / line
+    lineStyle: str | None = None                 # W1~W4
+    grade: str = ""
+    refs: list[str] = Field(default_factory=list)  # 预览时还原参考图张数（决定图序号声明）
+
+
 class TaskRequest(BaseModel):
     capId: str = "image.generate"
     prompt: str = ""
@@ -46,6 +78,8 @@ class TaskRequest(BaseModel):
     refs: list[str] = Field(default_factory=list)
     wf: str | None = None  # 前端显式选择的子工作流（文生图/参考生图），None 时按参考图数量自动挑
     sheet: SheetPayload | None = None  # 角色设定图专用：结构化输入，服务端组装提示词
+    ext: ExtSheetPayload | None = None  # 1.03 场景/道具设定图结构化输入
+    board: BoardPayload | None = None   # 1.03 宫格分镜故事板结构化输入
 
 
 class QueueRequest(BaseModel):
@@ -119,6 +153,18 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="ComfyBridge", version="1.01", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+
+
+@app.middleware("http")
+async def _static_no_cache(request: Request, call_next):
+    """前端静态文件一律 no-cache：本机工具经常改页面，浏览器按启发式缓存会用旧 JS。
+
+    只加 Cache-Control（每次回源校验，etag 没变就 304），不影响任何接口。
+    """
+    resp = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 def ok(data: Any = None, **extra: Any) -> dict[str, Any]:
@@ -200,6 +246,105 @@ def _prepare_sheet(
     }
 
 
+def _prepare_ext(payload: ExtSheetPayload, refs: list[str]) -> dict[str, Any]:
+    """场景/道具设定图：结构化输入 → (提示词, 组合, 档位, 参数, 工作流, 摘要)。"""
+    from . import extsheets as ext
+    if payload.kind not in (ext.SCENE, ext.PROP):
+        raise ext.ExtSheetError(f"没有这个设定图类型：{payload.kind}")
+    kind = payload.kind
+    mode = payload.mode
+    sub = ""          # 只有场景扩图有子选项；道具留空，写进卡片时字段对齐
+    # 图序号按上传顺序：refs[0] → 图1，refs[1] → 图2 …
+    id_to_no = {rid: i + 1 for i, rid in enumerate(refs)}
+    if payload.kind == ext.SCENE:
+        slots: dict[str, int] = {}
+        for slot in ("ref", "pano", "bird", "sketch"):
+            rid = payload.refSlots.get(slot) if payload.refSlots else None
+            if rid and rid in id_to_no:
+                slots[slot] = id_to_no[rid]
+        # 按参考图顺序兜底：没显式指定槽位时，第一张当参考图
+        if not slots and refs:
+            slots = {"ref": 1}
+        inks = ("color", "line")
+        ink = payload.ink if payload.ink in inks else "color"
+        nochars = ("yes", "no")
+        nochar = payload.nochar if payload.nochar in nochars else "yes"
+        cid = (f"{payload.layout}.expand.-.-" if mode == "expand"
+               else f"{payload.layout}.{mode}.{ink}.{nochar}")
+        sub = (payload.sub or "").strip()
+        prompt = ext.compose_scene(
+            mode, payload.layout, payload.text, refs=slots, ink=ink, nochar=nochar,
+            style=payload.style, style_custom=payload.styleCustom,
+            style_text_val=payload.styleText, line_style=payload.lineStyle, sub=sub,
+        )
+        brief = ext.brief(kind, payload.layout, payload.text, mode=mode, ink=ink, sub=sub)
+    else:
+        cid = f"{payload.layout}.{mode}.{payload.ink}.{payload.ref}"
+        # 图生图会在最前面垫一张纯白占位图（见 services.submit_normal），
+        # 用户那张参考图就排到第 2 位，提示词里的「图 N」要跟着对。
+        ref_no = 2 if (mode == "i2i" and payload.ref == "lock" and refs) else 1
+        prompt = ext.compose_prop(
+            mode, payload.layout, payload.text, ref=payload.ref, ink=payload.ink,
+            style=payload.style, style_custom=payload.styleCustom,
+            style_text_val=payload.styleText, line_style=payload.lineStyle,
+            allow_empty=(mode == "i2i" and bool(refs)),
+            ref_no=ref_no,
+        )
+        brief = ext.brief(kind, payload.layout, payload.text, mode=mode, ink=payload.ink)
+
+    info = ext.meta(kind, cid)
+    grade_name = (payload.grade or ext.MASTER).strip() or ext.MASTER
+    grade = ext.find_grade(kind, cid, grade_name)
+    if not grade:
+        names = "、".join(g["name"] for g in ext.grades(kind, cid))
+        raise ext.ExtSheetError(f"「{info['name']}」没有档位「{grade_name}」（可选：{names}）")
+    params = ext.effective_params(kind, cid, grade_name)
+    return {
+        "prompt": prompt, "wf": info["wf"], "grade": grade_name,
+        "params": params, "tag": ext.tag(kind, cid, grade_name),
+        "size": grade["size"], "brief": brief, "combo": info,
+        "ext": {
+            "kind": kind, "mode": mode, "layout": payload.layout, "sub": sub,
+            "ink": payload.ink,
+            "nochar": payload.nochar, "ref": payload.ref, "refSlots": payload.refSlots,
+            "style": payload.style, "styleCustom": payload.styleCustom,
+            "styleText": payload.styleText, "lineStyle": payload.lineStyle or "",
+            "text": payload.text.strip(), "combo": cid, "comboName": info["name"],
+            "grade": grade_name,
+        },
+    }
+
+
+def _prepare_board(payload: BoardPayload, refs: list[str]) -> dict[str, Any]:
+    """宫格分镜故事板：逐格描述 → (提示词, 组合, 档位, 参数, 工作流, 摘要)。"""
+    from . import boardlib as board
+    cid = f"{payload.layout}.{payload.ink if payload.ink in ('color', 'line') else 'color'}"
+    info = board.meta(cid)
+    cells = [str(x or "") for x in (payload.cells or [])][:int(info["cells"])]
+    if not any(x.strip() for x in cells):
+        raise BoardError("至少写一格的画面描述再发送")
+    if len(refs) > 6:
+        raise BoardError("宫格分镜故事板最多 6 张参考图")
+    prompt = board.compose(payload.layout, cells, ink=payload.ink,
+                           line_style=payload.lineStyle, refs=len(refs))
+    grade_name = (payload.grade or board.MASTER).strip() or board.MASTER
+    grade = board.find_grade(cid, grade_name)
+    if not grade:
+        names = "、".join(g["name"] for g in board.grades(cid))
+        raise BoardError(f"「{info['name']}」没有档位「{grade_name}」（可选：{names}）")
+    params = board.effective_params(cid, grade_name)
+    return {
+        "prompt": prompt, "wf": info["wf"], "grade": grade_name,
+        "params": params, "tag": board.tag(cid, grade_name), "size": grade["size"],
+        "brief": board.brief(payload.layout, cells), "combo": info,
+        "sheet": {
+            "kind": "board", "layout": payload.layout, "cells": cells,
+            "ink": payload.ink, "lineStyle": payload.lineStyle or "",
+            "combo": cid, "comboName": info["name"], "grade": grade_name,
+        },
+    }
+
+
 @app.exception_handler(Exception)
 async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
     """任何没接住的异常也回一段 JSON。
@@ -253,6 +398,27 @@ async def api_tasks(body: TaskRequest) -> dict[str, Any]:
             prepared = _prepare_sheet(body.sheet, cap, body.refs)
         except SheetError as exc:
             return blocked(str(exc))
+        prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
+        sheet_info, brief = prepared["sheet"], prepared["brief"]
+        params, tag = prepared["params"], prepared["tag"]
+    if body.ext is not None:
+        cap = config.capability(body.capId) or {}
+        try:
+            prepared = _prepare_ext(body.ext, body.refs)
+        except Exception as exc:  # noqa: BLE001 - ExtSheetError 与其它异常都给人话
+            reason = str(exc) if exc.__class__.__name__ == "ExtSheetError" else f"设定图参数有误：{exc}"
+            return blocked(reason)
+        prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
+        sheet_info, brief = prepared["ext"], prepared["brief"]
+        params, tag = prepared["params"], prepared["tag"]
+    if body.board is not None:
+        if body.capId != "board.story":
+            return blocked("宫格分镜故事板的能力编号不对")
+        try:
+            prepared = _prepare_board(body.board, body.refs)
+        except Exception as exc:  # noqa: BLE001 - 提示词库/参数错误都给人话
+            reason = str(exc) if exc.__class__.__name__ == "BoardError" else f"分镜故事板参数有误：{exc}"
+            return blocked(reason)
         prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
         sheet_info, brief = prepared["sheet"], prepared["brief"]
         params, tag = prepared["params"], prepared["tag"]
@@ -623,6 +789,103 @@ async def api_sheet_combo_grades(cid: str, body: dict[str, Any] = Body(...)) -> 
     return ok(combos.view_one(cid))
 
 
+# ---------------------------------------------------------------- 1.03 扩展设定图（场景 / 道具）
+def _ext_kind(cap_id: str) -> str:
+    from . import extsheets as ext
+    if cap_id == "sheet.scene":
+        return ext.SCENE
+    if cap_id == "sheet.prop":
+        return ext.PROP
+    raise HTTPException(400, "不是场景/道具设定图能力")
+
+
+@app.post("/api/ext/preview")
+async def api_ext_preview(body: ExtSheetPayload) -> dict[str, Any]:
+    """创作台「看完整提示词」：与提交走同一个 compose。"""
+    from .workflows import registry
+    from . import extsheets as ext
+    try:
+        # 预览阶段优先用前端已上传的 ref id 还原图序号；没有才用占位图
+        if body.mode == "t2i":
+            refs = []
+        else:
+            refs = body.refs or (["preview"] * (4 if body.mode == "i2i" else 1))
+        prepared = _prepare_ext(body, refs)
+    except Exception as exc:  # noqa: BLE001
+        reason = str(exc) if exc.__class__.__name__ == "ExtSheetError" else f"设定图参数有误：{exc}"
+        return blocked(reason)
+    try:
+        effective = registry.grade_effective(
+            prepared["wf"], prepared["grade"], params=prepared["params"], tag=prepared["tag"])
+        size, all_ok = effective["size"]["label"], effective["allOk"]
+    except Exception:  # noqa: BLE001
+        size, all_ok = prepared["size"], False
+    return ok({
+        "prompt": prepared["prompt"], "brief": prepared["brief"],
+        "grade": prepared["grade"], "wf": prepared["wf"],
+        "combo": prepared["combo"], "comboId": prepared["combo"]["id"],
+        "ext": prepared["ext"], "size": size, "allOk": all_ok,
+        "params": prepared["params"],
+    })
+
+
+@app.get("/api/ext/{cap_id}/library")
+async def api_ext_library(cap_id: str) -> dict[str, Any]:
+    from . import extsheets as ext
+    try:
+        return ok(ext.library_view(_ext_kind(cap_id)))
+    except ext.ExtSheetError as exc:
+        return blocked(str(exc))
+
+
+@app.put("/api/ext/{cap_id}/library")
+async def api_ext_library_save(cap_id: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    from . import extsheets as ext
+    try:
+        return ok(ext.update_template(_ext_kind(cap_id), body))
+    except ext.ExtSheetError as exc:
+        return blocked(str(exc))
+
+
+@app.get("/api/ext/{cap_id}/combos")
+async def api_ext_combos(cap_id: str) -> dict[str, Any]:
+    """管理台档位表：组合清单 + 档位 + 参数生效自检。"""
+    from . import extsheets as ext
+    from .workflows import registry
+    kind = _ext_kind(cap_id)
+    out: list[dict[str, Any]] = []
+    for info in ext.all_combos(kind):
+        rows: list[dict[str, Any]] = []
+        for g in ext.grades(kind, info["id"]):
+            try:
+                eff = registry.grade_effective(
+                    info["wf"], g["name"],
+                    params=ext.effective_params(kind, info["id"], g["name"]),
+                    tag=ext.tag(kind, info["id"], g["name"]))
+                rows.append({**g, "allOk": eff["allOk"], "size": eff["size"]["label"],
+                             "paramsRows": eff["rows"]})
+            except Exception as exc:  # noqa: BLE001
+                rows.append({**g, "allOk": False, "error": str(exc)})
+        out.append({**info, "grades": rows,
+                    "fields": [{"node": str(f["node"]), "field": str(f["field"])}
+                               for f in ext._fields(info["wf"])]})
+    return ok({"combos": out, "master": ext.MASTER, "kind": kind})
+
+
+@app.put("/api/ext/{cap_id}/combos/{cid}/grades")
+async def api_ext_combo_grades(cap_id: str, cid: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    from . import extsheets as ext
+    from .workflows import registry
+    kind = _ext_kind(cap_id)
+    try:
+        ext.save_grades(kind, cid, list(body.get("grades") or []))
+    except ext.ExtSheetError as exc:
+        return blocked(str(exc))
+    registry.invalidate()
+    registry.rebuild_all_copies()
+    return ok({"id": cid, "grades": ext.grades(kind, cid)})
+
+
 # ---------------------------------------------------------------- 对外接口（斜线技能用）
 @app.get("/api/v1/health")
 async def v1_health() -> dict[str, Any]:
@@ -691,3 +954,85 @@ async def v1_skill() -> PlainTextResponse:
     if not path.exists():
         return PlainTextResponse("", status_code=404)
     return PlainTextResponse(path.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- 1.03 宫格分镜故事板
+@app.post("/api/board/preview")
+async def api_board_preview(body: BoardPayload) -> dict[str, Any]:
+    """创作台「看完整提示词」：与提交走同一个 compose。"""
+    from .workflows import registry
+    try:
+        prepared = _prepare_board(body, body.refs)
+    except Exception as exc:  # noqa: BLE001
+        reason = str(exc) if exc.__class__.__name__ == "BoardError" else f"分镜故事板参数有误：{exc}"
+        return blocked(reason)
+    try:
+        effective = registry.grade_effective(
+            prepared["wf"], prepared["grade"], params=prepared["params"], tag=prepared["tag"])
+        size, all_ok = effective["size"]["label"], effective["allOk"]
+    except Exception:  # noqa: BLE001
+        size, all_ok = prepared["size"], False
+    return ok({
+        "prompt": prepared["prompt"], "brief": prepared["brief"],
+        "grade": prepared["grade"], "wf": prepared["wf"],
+        "combo": prepared["combo"], "comboId": prepared["combo"]["id"],
+        "sheet": prepared["sheet"], "size": size, "allOk": all_ok,
+        "params": prepared["params"],
+    })
+
+
+@app.get("/api/board/library")
+async def api_board_library() -> dict[str, Any]:
+    from . import boardlib as board
+    try:
+        return ok(board.library_view())
+    except BoardError as exc:
+        return blocked(str(exc))
+
+
+@app.put("/api/board/library")
+async def api_board_library_save(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    from . import boardlib as board
+    try:
+        from .config import config as _config
+        # 只改提示词数据文件，不碰配置与其它库
+        board._LIB.save(body)
+        return ok(board.library_view())
+    except Exception as exc:  # noqa: BLE001
+        return blocked(str(exc))
+
+
+@app.get("/api/board/combos")
+async def api_board_combos() -> dict[str, Any]:
+    from . import boardlib as board
+    from .workflows import registry
+    out: list[dict[str, Any]] = []
+    for info in board.all_combos():
+        item = board.view_one(info["id"])
+        rows: list[dict[str, Any]] = []
+        for g in item["grades"]:
+            try:
+                eff = registry.grade_effective(
+                    info["wf"], g["name"],
+                    params=board.effective_params(info["id"], g["name"]),
+                    tag=board.tag(info["id"], g["name"]),
+                )
+                rows.append({**g, "allOk": eff["allOk"], "size": eff["size"]["label"],
+                             "paramsRows": eff["rows"]})
+            except Exception as exc:  # noqa: BLE001
+                rows.append({**g, "allOk": False, "error": str(exc)})
+        out.append({**item, "grades": rows})
+    return ok({"combos": out, "master": board.MASTER})
+
+
+@app.put("/api/board/combos/{cid}/grades")
+async def api_board_combo_grades(cid: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    from . import boardlib as board
+    from .workflows import registry
+    try:
+        board.save_grades(cid, list(body.get("grades") or []))
+    except BoardError as exc:
+        return blocked(str(exc))
+    registry.invalidate()
+    registry.rebuild_all_copies()
+    return ok(board.view_one(cid))

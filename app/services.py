@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import copy
+import base64
 import io
 import json
 import logging
@@ -28,6 +29,9 @@ from .config import CONFIG_PATH, ROOT, ConfigError, config
 from .promptlib import SheetError, library as sheet_library
 from .state import now_ms, state
 from .workflows import WorkflowError, flatten_params, pick_workflow, registry
+
+# 故事板 0 张参考图时给 LoadImage 的占位图文件名（固定名，上传目录里只存一份）
+BLANK_IMAGE_NAME = "_board_blank_ref.png"
 
 logger = logging.getLogger("comfybridge.services")
 
@@ -204,6 +208,22 @@ class TaskService:
         except Exception:  # noqa: BLE001 - 组合同样不能拖垮页面
             sheet_combos = []
         with state.lock:
+            from . import extsheets as ext
+            from . import boardlib as board
+            ext_libs, ext_combos = {}, {}
+            for _kind in (ext.SCENE, ext.PROP):
+                try:
+                    ext_libs[_kind] = ext.library_view(_kind)
+                except Exception:  # noqa: BLE001
+                    ext_libs[_kind] = {}
+                try:
+                    ext_combos[_kind] = ext.view(_kind)
+                except Exception:  # noqa: BLE001
+                    ext_combos[_kind] = []
+            try:
+                board_lib, board_combos = board.library_view(), board.view()
+            except Exception:  # noqa: BLE001
+                board_lib, board_combos = {}, []
             return {
                 "service": {**config.state_service(), "maxQueue": config.service.maxQueue},
                 "capabilities": registry.state_capabilities(),
@@ -213,6 +233,10 @@ class TaskService:
                 "schema": registry.schema,
                 "sheetLib": sheet_lib,
                 "sheetCombos": sheet_combos,
+                "extLibs": ext_libs,
+                "extCombos": ext_combos,
+                "boardLib": board_lib,
+                "boardCombos": board_combos,
                 "health": {"online": state.comfy_online, "comfy": config.service.comfy,
                            "queue": copy.deepcopy(state.comfy_queue)},
                 "seeded": True,
@@ -287,6 +311,30 @@ class TaskService:
     def _resolve_refs(self, ref_ids: list[str]) -> list[dict[str, Any]]:
         return [r for rid in ref_ids if (r := state.refs.get(rid))]
 
+    def ensure_blank_image(self) -> str:
+        """故事板 0 张参考图时给 LoadImage 的纯白占位图，返回 ComfyUI 里的文件名。
+
+        为什么要它：参考生图工作流里有一个 LoadImage 节点，节点上写的默认图片名
+        在 ComfyUI 输入目录里并不存在。一格描述都不带参考图时，这个失效文件名会
+        被原样提交，ComfyUI 以 prompt_outputs_failed_validation 拒收整条任务。
+        占位图只填空位，提示词里不会引用它（compose 已声明参考图仅作素材线索）。
+        """
+        uploads = config.resolve(config.service.uploadDir)
+        uploads.mkdir(parents=True, exist_ok=True)
+        dest = uploads / BLANK_IMAGE_NAME
+        if not dest.is_file():
+            try:
+                from PIL import Image
+                Image.new("RGB", (1536, 864), "white").save(dest)
+            except Exception:  # noqa: BLE001 - 没有 PIL 也要给出一张合法 PNG
+                dest.write_bytes(base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+                    "z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+        try:
+            return self.comfy.upload_image(dest, BLANK_IMAGE_NAME)
+        except ComfyError:
+            return BLANK_IMAGE_NAME
+
     def _ensure_job_refs(self, job: dict[str, Any]) -> list[dict[str, Any]]:
         """按任务记录把参考图补齐，返回可直接交给 build_prompt 的完整 ref 列表。
 
@@ -342,6 +390,15 @@ class TaskService:
         if cap.get("requiredRef") and not refs:
             return False, "", "这个能力需要参考图"
         # 显式工作流优先：仅当它确实属于这个能力时才采用，避免伪造/越权选择
+        # 道具设定图的图生图：用户图只当「造型参考」。若让它占住 LoadImage 位，
+        # 模型会把它当「要编辑的原图」整张照抄（场景里的窗棂、垫着的桌子全跟着进来）。
+        # 前面垫一张纯白图把 LoadImage 位顶掉，用户图就落到「参考」位。
+        if cap_id == "sheet.prop" and refs and str((sheet or {}).get("mode") or "") == "i2i":
+            try:
+                blank = self.ensure_blank_image()
+                refs = [{"id": "__blank__", "comfyName": blank, "path": "", "name": "blank.png"}] + refs
+            except ComfyError:
+                pass
         wf_name: str | None = None
         if wf and wf in (cap.get("workflows") or []):
             wf_name = wf
@@ -415,11 +472,25 @@ class TaskService:
         tag: str | None = None
         cid = str((job.get("sheet") or {}).get("combo") or "")
         if cid:
-            from . import combos
-            if not combos.find_grade(cid, grade):
-                return False, f"「{combos.meta(cid)['name']}」没有档位「{grade}」"
-            params = combos.effective_params(cid, grade)
-            tag = combos.tag(cid, grade)
+            if job.get("cap") in ("sheet.scene", "sheet.prop"):
+                from . import extsheets as ext
+                kind = ext.SCENE if job.get("cap") == "sheet.scene" else ext.PROP
+                if not ext.find_grade(kind, cid, grade):
+                    return False, f"「{ext.meta(kind, cid)['name']}」没有档位「{grade}」"
+                params = ext.effective_params(kind, cid, grade)
+                tag = ext.tag(kind, cid, grade)
+            elif job.get("cap") == "board.story":
+                from . import boardlib as board
+                if not board.find_grade(cid, grade):
+                    return False, f"「{board.meta(cid)['name']}」没有档位「{grade}」"
+                params = board.effective_params(cid, grade)
+                tag = board.tag(cid, grade)
+            else:
+                from . import combos
+                if not combos.find_grade(cid, grade):
+                    return False, f"「{combos.meta(cid)['name']}」没有档位「{grade}」"
+                params = combos.effective_params(cid, grade)
+                tag = combos.tag(cid, grade)
         else:
             wf = config.workflow(job["wf"]) or {}
             grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
@@ -504,7 +575,8 @@ class TaskService:
                 params, tag = run.get("params"), run.get("gradeTag")
                 prompt = registry.build_prompt(
                     run["wf"], run["grade"], job["prompt"], refs, seed, prefix,
-                    params=params, tag=tag)
+                    params=params, tag=tag,
+                    placeholder=None if refs or job.get("cap") != "board.story" else self.ensure_blank_image())
                 # 记下这一档真正提交到 ComfyUI 的参数，页面上可核对「改了有没有生效」
                 applied = registry.grade_effective(
                     run["wf"], run["grade"], params=params, tag=tag)
@@ -582,7 +654,30 @@ class TaskService:
                 info["width"] = (item.get("metadata") or {}).get("width")
                 info["height"] = (item.get("metadata") or {}).get("height")
                 self._archive(job, run, info)
+                # 道具多视图：模型会把同一视角复制几份凑满画布，出图后做一次视觉去重
+                if (job.get("cap") == "sheet.prop"
+                        and str((job.get("sheet") or {}).get("layout") or "") == "MV"
+                        and info.get("path")):
+                    try:
+                        from .extsheets import view_source
+                        from .viewdedup import dedup_views
+                        # 只有系统自动凑的三个视角才允许把同一个圆形态合掉；
+                        # 用户自己点了「正面、背面」，一个都不许动。
+                        src = view_source(str((job.get("sheet") or {}).get("text") or ""))
+                        info["dedup"] = dedup_views(Path(info["path"]), auto=(src == "auto"))
+                    except Exception as exc:  # noqa: BLE001
+                        info["dedup"] = {"ok": False, "reason": str(exc)}
                 files.append(info)
+        if not files:
+            # 工作流"跑完"但一个成品都没产出：ComfyUI 那句
+            # "Failed to validate prompt / Output will be ignored / Prompt executed in 0.0X seconds"
+            # 就是这种情形（工作流里的模型名或节点在本机 ComfyUI 里对不上）。
+            # 以前这里照样写 done，页面显示"成功但没图"，比直接报错更难查。
+            self._finish_error(job, run, err(
+                "NO_OUTPUT", "ComfyUI 跑完了，但一张图都没产出",
+                "多半是工作流里的模型/节点在本机 ComfyUI 里对不上；看 ComfyUI 控制台日志确认",
+                short="没有产出图片", retriable=True))
+            return
         seed = read_seed_from_history(entry) or run.get("seed") or job.get("seed")
         with state.lock:
             run["state"] = "done"

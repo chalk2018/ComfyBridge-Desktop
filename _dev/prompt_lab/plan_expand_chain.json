@@ -1,0 +1,83 @@
+[
+ {
+  "tag": "pano_TURN_L45",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "L45",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4727_4729_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "pano_TURN_R45",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "R45",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4727_4729_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "pano_PUSH_S",
+  "layout": "PUSH",
+  "mode": "expand",
+  "sub": "S",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4727_4729_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "pano_PULL_S",
+  "layout": "PULL",
+  "mode": "expand",
+  "sub": "S",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4727_4729_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "bird_TURN_L45",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "L45",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4739_4741_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "bird_TURN_R45",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "R45",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4739_4741_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "bird_PUSH_S",
+  "layout": "PUSH",
+  "mode": "expand",
+  "sub": "S",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4739_4741_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "bird_PULL_L",
+  "layout": "PULL",
+  "mode": "expand",
+  "sub": "L",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4739_4741_00001.png",
+  "text": ""
+ },
+ {
+  "tag": "sea_PUSH_S",
+  "layout": "PUSH",
+  "mode": "expand",
+  "sub": "S",
+  "slot": "ref",
+  "ref": "D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput/场景设定图/ComfyBridge_job_4731_4733_00001.png",
+  "text": ""
+ }
+]

@@ -1,0 +1,98 @@
+[
+ {
+  "tag": "kaochang_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第1镜_汴京科举考场大全景.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "kaochang_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第1镜_汴京科举考场大全景.jpg",
+  "text": "按这张图把场景画成鸟瞰平面布局，镜头在正上方垂直向下"
+ },
+ {
+  "tag": "laofang_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第13镜_御史台监狱牢房.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "laofang_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第13镜_御史台监狱牢房.jpg",
+  "text": "按这张图把场景画成鸟瞰平面布局，镜头在正上方垂直向下"
+ },
+ {
+  "tag": "lizhilin_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第22镜_惠州罗浮山荔枝林.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "lizhilin_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第22镜_惠州罗浮山荔枝林.jpg",
+  "text": "按这张图把场景画成鸟瞰平面布局，镜头在正上方垂直向下"
+ },
+ {
+  "tag": "haixia_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第24镜_琼州海峡海面.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "haixia_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第24镜_琼州海峡海面.jpg",
+  "text": "按这张图把场景画成鸟瞰平面布局，镜头在正上方垂直向下"
+ },
+ {
+  "tag": "sudishangkong_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第26镜_镜头1_苏堤上空大远景.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "sudishangkong_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第26镜_镜头1_苏堤上空大远景.jpg",
+  "text": "按这张图把场景画成鸟瞰平面布局，镜头在正上方垂直向下"
+ },
+ {
+  "tag": "huafang_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第7镜_西湖湖面画舫.jpg",
+  "text": "把这处场景拍成全景概念图，看得清整个空间与场地布局"
+ },
+ {
+  "tag": "huafang_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第7镜_西湖湖面画舫.jpg",
+  "text": "按这张图把场景画成鸟瞰平面布局，镜头在正上方垂直向下"
+ }
+]

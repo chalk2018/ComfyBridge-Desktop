@@ -14,6 +14,15 @@ const UI = {
   sheetForm: { layout: 'A', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '', styleCustom: false },
   sheetOpen: false,                              // 「看完整提示词」面板是否展开
   sheetPreview: null,                            // 最近一次服务端组装结果
+  // 1.03 场景/道具设定图表单：模式在 UI.mode 里，版式/参考图槽位/风格都在这里
+  extForm: { kind: 'scene', layout: 'N', ink: 'color', nochar: 'yes', ref: 'none', grade: '默认',
+    text: '', style: '', styleText: '', styleCustom: false, lineStyle: '', refSlots: {} },
+  extOpen: false,
+  extPreview: null,
+  // 1.03 宫格分镜故事板：只有图生图，版式/画法/档位 + 逐格提示词
+  boardForm: { layout: 'G4', ink: 'color', lineStyle: '', grade: '', sel: 0, cells: [] },
+  boardOpen: false,
+  boardPreview: null,
   comboSel: '',                                  // 管理台档位表当前选中的组合（C.color.lock 这种）
   comboDetail: null,                             // 该组合的档位参数生效核对结果
   gradeForm: null,                               // 新建/编辑档位的表单草稿
@@ -178,7 +187,7 @@ function loadDraft() {
   const d = ((S.ui.drafts || {})[draftKey()] || {});
   UI.params = { grade: d.grade || '默认' };
   UI.refs = Array.isArray(d.refs) ? d.refs.map(id => ({ id, kind: 'image' })) : [];
-  UI.mode = (d.mode === 'i2i' || d.mode === 't2i') ? d.mode : 't2i';
+  UI.mode = (d.mode === 'i2i' || d.mode === 't2i' || d.mode === 'expand') ? d.mode : 't2i';
   UI.prompt = d.prompt || '';
   // 角色设定图：表单和「提示词面板」也一起恢复，切走再切回来不用重填。
   // 只在设定图能力下恢复——别的能力的草稿里没有 sheet 字段，
@@ -188,6 +197,18 @@ function loadDraft() {
     UI.sheetOpen = !!d.sheetOpen;
     UI.sheetPreview = null;
   }
+  if (isExtSheetCap(currentCap())) {
+    if (d.ext && typeof d.ext === 'object') UI.extForm = { ...UI.extForm, ...d.ext };
+    UI.extOpen = !!d.extOpen;
+    UI.extPreview = null;
+    extForm();
+  }
+  if (isBoardCap(currentCap())) {
+    if (d.board && typeof d.board === 'object') UI.boardForm = { ...UI.boardForm, ...d.board };
+    UI.boardOpen = !!d.boardOpen;
+    UI.boardPreview = null;
+    boardForm();
+  }
 }
 function currentDraftText() {
   const out = { prompt: serializeEditor(), refs: UI.refs.map(r => r.id),
@@ -195,6 +216,14 @@ function currentDraftText() {
   if (isSheetCap(currentCap())) {
     out.sheet = { ...UI.sheetForm };
     out.sheetOpen = !!UI.sheetOpen;
+  }
+  if (isExtSheetCap(currentCap())) {
+    out.ext = { ...UI.extForm, refSlots: { ...(UI.extForm.refSlots || {}) } };
+    out.extOpen = !!UI.extOpen;
+  }
+  if (isBoardCap(currentCap())) {
+    out.board = { ...boardForm(), cells: [...boardForm().cells] };
+    out.boardOpen = !!UI.boardOpen;
   }
   return out;
 }
@@ -520,10 +549,584 @@ function bindSheetComposer() {
   if (pv) pv.onclick = async () => {
     UI.sheetOpen = !UI.sheetOpen;
     saveDraft();
-    if (UI.sheetOpen) await refreshSheetPreview();
+    // 先重绘一次：面板立刻以「正在组装提示词…」出现，不用等服务端返回才有反馈；
+    // 组装完再刷一次内容（服务端忙时这一下可能要一两秒）。
     refreshComposer();
+    if (UI.sheetOpen) { await refreshSheetPreview(); refreshComposer(); }
   };
   bindSheetPreviewButtons();
+}
+
+/* ============================================================ 1.03 场景 / 道具设定图
+   两条新能力和角色设定图共用「结构化表单 → 服务端拼提示词」思路，但完全走
+   /api/ext/* 与 prompts/scene_sheet.json、prompts/prop_sheet.json，不碰 1.02 的 sheet.* 路径。 */
+const EXT_MODE_NAME = { t2i: '文生图', i2i: '图生图', expand: '扩图', color: '彩色', line: '线稿' };
+function isExtSheetCap(cap) { return !!cap && (cap.id === 'sheet.scene' || cap.id === 'sheet.prop'); }
+function extKindOf(cap) { return cap && cap.extKind ? cap.extKind : (cap && cap.id === 'sheet.scene' ? 'scene' : cap && cap.id === 'sheet.prop' ? 'prop' : ''); }
+function extLib(kind) { return ((S && S.extLibs) || {})[kind] || {}; }
+function extLayouts(kind, mode) {
+  // 版式 = 母版的一部分：只列当前模式自己的版式。
+  // 场景文生图/图生图各 5 个、扩图 3 个（推镜/拉镜/转镜头，短长与角度是子选项）。
+  const list = extLib(kind).layouts || [];
+  if (kind === 'prop') return list;
+  const m = mode || UI.mode || 't2i';
+  return list.filter(l => String(l.mode || '').split(',').includes(m));
+}
+function extSubs(kind, layoutId) {
+  const lay = (extLib(kind).layouts || []).find(l => l.id === layoutId) || null;
+  return (lay && lay.subs) || [];
+}
+function extBlockedSlots(kind, layoutId) {
+  const map = extLib(kind).blockedSlots || {};
+  return map[layoutId] || [];
+}
+function extStyles(kind) { return (extLib(kind).styles || []).map(s => s.name); }
+function extLineStyles(kind) { return extLib(kind).line_styles || []; }
+function extLayoutOf(kind, id) { return extLayouts(kind, UI.mode).find(l => l.id === id) || null; }
+function extCombos(kind) { return ((S && S.extCombos) || {})[kind] || []; }
+function extForm() {
+  const cap = currentCap(), kind = extKindOf(cap) || (UI.extForm && UI.extForm.kind) || 'scene';
+  const f = UI.extForm = UI.extForm || {};
+  if (f.kind && f.kind !== kind) f.refSlots = {};   // 场景/道具槽位语义不同，别把上一能力的图带过去
+  f.kind = kind;
+  const defs = kind === 'scene'
+    ? { layout: 'N', sub: '', ink: 'color', nochar: 'yes', ref: 'none', grade: '默认', text: '',
+        style: '', styleText: '', styleCustom: false, lineStyle: '', refSlots: {} }
+    : { layout: 'MV', sub: '', ink: 'color', nochar: 'yes', ref: 'lock', grade: '默认', text: '',
+        style: '', styleText: '', styleCustom: false, lineStyle: '', refSlots: {} };
+  Object.keys(defs).forEach(k => { if (f[k] === undefined || f[k] === null) f[k] = defs[k]; });
+  if (!f.refSlots || typeof f.refSlots !== 'object') f.refSlots = {};
+  const layouts = extLayouts(kind, UI.mode);
+  if (!layouts.some(l => l.id === f.layout)) f.layout = (layouts[0] || {}).id || '';
+  // 子选项（扩图的短/长、左右转角度）跟着版式走，换版式就落到它的第一个子选项
+  const subs = extSubs(kind, f.layout);
+  if (subs.length && !subs.some(s => s.id === f.sub)) f.sub = subs[0].id;
+  if (!subs.length) f.sub = '';
+  if (!f.lineStyle) f.lineStyle = (extLineStyles(kind)[0] || {}).id || '';
+  const styles = extStyles(kind);
+  if (!f.style && !f.styleCustom && styles.length) f.style = styles[0];
+  // 图生图（场景/道具）只能自定义，切过去时不要留着预设下拉的假象
+  if (UI.mode === 'i2i' && kind === 'scene') f.styleCustom = true;
+  if (kind === 'prop') {
+    if (UI.mode === 'i2i' && f.ref === 'none') f.ref = 'lock';
+    if (UI.mode === 't2i' && f.ref === 'lock') f.ref = 'none';
+  }
+  // 版式自带限制：全景图生图不收全景图，鸟瞰图生图不收鸟瞰图。
+  // 换成被禁版式时把槽位里那张图一起摘掉，否则会带着隐藏槽位去提交。
+  if (kind === 'scene' && UI.mode !== 't2i') {
+    extBlockedSlots(kind, f.layout).forEach(slot => {
+      const rid = f.refSlots[slot];
+      if (!rid) return;
+      delete f.refSlots[slot];
+      UI.refs = UI.refs.filter(r => r.id !== rid);
+    });
+  }
+  return f;
+}
+function extLayout() { const f = extForm(); return extLayoutOf(f.kind, f.layout) || extLayouts(f.kind)[0] || null; }
+function extCombo() {
+  const f = extForm();
+  let cid;
+  if (f.kind === 'scene') cid = UI.mode === 'expand' ? `${f.layout}.expand.-.-` : `${f.layout}.${UI.mode}.${f.ink}.${f.nochar}`;
+  else cid = `${f.layout}.${UI.mode}.${f.ink}.${f.ref}`;
+  return extCombos(f.kind).find(c => c.id === cid) || null;
+}
+function extGrades() { return ((extCombo() || {}).grades) || []; }
+function extGrade() {
+  const f = extForm(), grades = extGrades();
+  if (!grades.length) return null;
+  if (!grades.some(g => g.name === f.grade)) f.grade = grades[0].name;
+  return grades.find(g => g.name === f.grade) || grades[0];
+}
+function extStyleValue() {
+  const f = extForm();
+  if (UI.mode === 'expand') return '';
+  const custom = String(f.styleText || '').trim();
+  if (f.styleCustom && custom) return custom;
+  if (f.styleCustom && UI.mode === 'i2i') return '';
+  return f.style || (extStyles(f.kind)[0] || '');
+}
+function extPayload() {
+  const f = extForm();
+  return {
+    kind: f.kind, mode: UI.mode, layout: f.layout, sub: f.sub || '', text: String(f.text || '').trim(),
+    ink: f.ink, nochar: f.nochar, ref: f.ref, refSlots: { ...(f.refSlots || {}) },
+    style: extStyleValue(), styleCustom: !!f.styleCustom, styleText: String(f.styleText || ''),
+    lineStyle: (f.ink === 'line' && UI.mode !== 'expand') ? (f.lineStyle || null) : null,
+    grade: (extGrade() || {}).name || '默认',
+    refs: UI.refs.map(r => r.id),
+  };
+}
+function extSlotDisabled(mode, layout, slot) {
+  if (mode === 't2i') return true;
+  return extBlockedSlots('scene', layout).includes(slot);
+}
+function extCanSend(cap) {
+  const f = extForm(), kind = extKindOf(cap), text = String(f.text || '').trim();
+  if (kind === 'scene') {
+    if (UI.mode === 't2i') return !!text;
+    if (UI.mode === 'i2i') return !!text && UI.refs.length > 0;
+    return !!(f.refSlots.ref && UI.refs.some(r => r.id === f.refSlots.ref));
+  }
+  if (UI.mode === 't2i') return !!text;
+  return UI.refs.length > 0;
+}
+function extPreviewHTML() {
+  const p = UI.extPreview;
+  if (!p) return '<div class="pvhead">正在组装提示词…</div>';
+  if (p.error) return `<div class="pvhead bad">✕ ${esc(p.error)}</div>`;
+  return `<div class="pvhead"><b>${esc(p.grade || '')}</b>
+      <span class="tiny muted">${esc(p.size || '')} · ${esc(p.wf || '')} · 共 ${String((p.prompt || '').length)} 字</span></div>
+    <pre>${esc(p.prompt || '')}</pre>`;
+}
+async function refreshExtPreview() {
+  const res = await api('/api/ext/preview', { body: extPayload() });
+  UI.extPreview = res.ok ? (res.data || {}) : { error: res.reason || '组装失败' };
+  const box = $('#extPv');
+  if (box) { box.innerHTML = extPreviewHTML(); bindExtPreviewButtons(); }
+  else refreshComposer();
+}
+function bindExtPreviewButtons() {
+  const cp = $('#extCopy');
+  if (cp) cp.onclick = async () => {
+    const text = (UI.extPreview && UI.extPreview.prompt) || '';
+    try { await navigator.clipboard.writeText(text); toast('整条提示词已复制'); }
+    catch (e) { toast('复制失败，手动选中复制一下'); }
+  };
+}
+function extLayoutBarHTML(f) {
+  const layouts = extLayouts(f.kind, UI.mode);
+  const btn = l => `<button class="segb ${l.id === f.layout ? 'on' : ''}" data-ext-layout="${esc(l.id)}" title="${esc(l.summary || '')}">${esc(l.name)}<i class="segx">${esc(l.ratio || '')}</i></button>`;
+  const subs = extSubs(f.kind, f.layout);
+  const subRow = subs.length ? `<div class="sheetbar"><span class="slb">子选项</span>
+      <div class="seg ext-seg" role="group" aria-label="子选项">${subs.map(s => `<button class="segb ${s.id === f.sub ? 'on' : ''}" data-ext-sub="${esc(s.id)}" title="${esc(s.summary || '')}">${esc(s.name)}</button>`).join('')}</div>
+      <span class="tiny muted">子选项只换提示词里的机位句，母版与档位不变</span></div>` : '';
+  const blocked = extBlockedSlots(f.kind, f.layout);
+  const blockedName = blocked.map(s => (s === 'pano' ? '全景图' : s === 'bird' ? '鸟瞰布局图' : s)).join('、');
+  return `<div class="sheetbar"><span class="slb">版式</span>
+    <div class="seg ext-seg" role="group" aria-label="版式">${layouts.map(btn).join('')}</div>
+    <span class="tiny muted">${blocked.length ? `本版式不接收${esc(blockedName)}槽位` : `整图 ${esc((extLayout() || {}).ratio || '16:9')}`}</span></div>${subRow}`;
+}
+function extSlotHTML(slot) {
+  const f = extForm(), spec = (extLib('scene').refSlots || []).find(x => x.id === slot) || { id: slot, name: slot };
+  const disabled = extSlotDisabled(UI.mode, f.layout, slot);
+  const rid = f.refSlots[slot], ref = UI.refs.find(r => r.id === rid);
+  const hint = slot === 'ref' ? (UI.mode === 'expand' ? '完整基准参考 · 扩图必传' : '完整基准参考，提示词里可自行引用')
+    : slot === 'pano' ? '完整基准参考 · 按全景画面的场景生成'
+      : '只取物品相对位置 · 不照搬文字、符号、边框与像素';
+  return `<div class="ext-slot ${disabled ? 'disabled' : ''} ${ref ? 'on' : ''}" data-ext-slot="${esc(slot)}">
+    <div class="slot-t"><b>${esc(spec.name)}</b><span class="tiny muted">${disabled ? '此版式不可用' : (ref ? '已上传' : '可留空')}</span></div>
+    ${ref ? `<img src="${refUrl(ref.id)}" alt="${esc(spec.name)}">
+      <div class="slot-acts"><button class="btn ghost sm" data-ext-slot-upload="${esc(slot)}">替换</button>
+      <button class="btn ghost sm" data-ext-slot-rm="${esc(slot)}">移除</button></div>`
+      : `<button class="btn ghost sm" data-ext-slot-upload="${esc(slot)}" ${disabled ? 'disabled' : ''}>＋ 上传</button>`}
+    <div class="tiny muted">${esc(hint)}</div>
+    <input type="file" accept="image/*" style="display:none" data-ext-slot-file="${esc(slot)}"></div>`;
+}
+function viewExtSheetComposer(cap) {
+  const kind = extKindOf(cap), lib = extLib(kind), f = extForm();
+  if (!(lib.layouts || []).length) {
+    return `<div class="composer"><div class="composer-inner"><div class="inputbox" style="border-color:var(--line);box-shadow:none;background:#fafbfe">
+      <div class="tiny muted" style="padding:18px 4px;text-align:center;line-height:1.9">提示词库读不到（prompts/${kind === 'scene' ? 'scene_sheet.json' : 'prop_sheet.json'}）。<br>
+      去管理台 →「档位表 → ${esc(cap.name)}」点「✎ 设定图模板」看一眼。</div></div></div></div>`;
+  }
+  const grade = extGrade(), grades = extGrades(), layout = extLayout();
+  const isExpand = UI.mode === 'expand', styles = extStyles(kind), lineStyles = extLineStyles(kind);
+  const i2i = UI.mode === 'i2i', canSend = extCanSend(cap);
+  const curStyle = (!f.styleCustom && styles.includes(f.style)) ? f.style : '';
+  const custom = !!f.styleCustom;
+  const modeBar = `<div class="parambar">
+    <div class="modepick" role="group" aria-label="生成方式">
+      <button class="${UI.mode === 't2i' ? 'on' : ''}" data-mode="t2i"><span class="dotg"></span>文生图</button>
+      <button class="${i2i ? 'on' : ''}" data-mode="i2i"><span class="dotb"></span>图生图</button>
+      ${kind === 'scene' ? `<button class="${isExpand ? 'on' : ''}" data-mode="expand"><span class="dota"></span>扩图</button>` : ''}
+    </div><span class="modedis">${isExpand ? '以参考图为基准，重拍推近 / 拉远 / 转镜头后的同一场景' : i2i ? '按参考图重画设定图' : '纯文字描述直接出设定图'}</span>
+    <span class="scope-hint"></span></div>`;
+  const refRow = kind === 'scene' && UI.mode !== 't2i'
+    ? `<div class="sheetbar"><span class="slb">参考图</span><span class="tiny muted">${UI.mode === 'expand' ? '参考图必传；全景 / 鸟瞰 / 草图只作位置参考' : '至少一张；全景 / 鸟瞰 / 草图按相对位置理解'}</span></div>
+       <div class="ext-slots">${['ref', 'pano', 'bird', 'sketch'].filter(s => !extSlotDisabled(UI.mode, f.layout, s)).map(extSlotHTML).join('')}</div>` : '';
+  const propRefRow = kind === 'prop' && i2i
+    ? `<div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
+       <div class="sheetbar"><span class="slb">参考</span>
+        <div class="seg" role="group" aria-label="参考方式">
+          <button class="segb ${f.ref === 'none' ? 'on' : ''}" data-ext-ref="none">无参考图</button>
+          <button class="segb ${f.ref === 'lock' ? 'on' : ''}" data-ext-ref="lock">锁定同道具</button>
+        </div><span class="tiny muted">${f.ref === 'lock' ? '图 1 是同一件道具：造型、材质、配色不变' : '只按文字重新画，不锁定参考道具'}</span></div>` : '';
+  const inkRow = !isExpand ? `<div class="sheetbar"><span class="slb">画法</span>
+      <div class="seg" role="group" aria-label="画法">
+        <button class="segb ${f.ink === 'line' ? '' : 'on'}" data-ext-ink="color">彩色</button>
+        <button class="segb ${f.ink === 'line' ? 'on' : ''}" data-ext-ink="line">线稿</button></div>
+      ${f.ink === 'line' ? `<select class="input segsel" id="extLine" title="线稿风格句">
+        ${lineStyles.map(s => `<option value="${esc(s.id)}" ${s.id === f.lineStyle ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>`
+        : '<span class="tiny muted">彩色：风格行用下面的「风格」</span>'}</div>` : '';
+  const nocharRow = kind === 'scene' && !isExpand ? `<div class="sheetbar"><span class="slb">禁角色</span>
+      <div class="seg" role="group" aria-label="禁止场景中出现角色">
+        <button class="segb ${f.nochar === 'yes' ? 'on' : ''}" data-ext-nochar="yes">是</button>
+        <button class="segb ${f.nochar === 'no' ? 'on' : ''}" data-ext-nochar="no">否</button></div>
+      <span class="tiny muted">${f.nochar === 'yes' ? '提示词会重点强调画面里没有任何人物' : '不在提示词里强调，由你自己的描述控制是否出现人物'}</span></div>` : '';
+  const styleRow = !isExpand ? `<div class="sheetbar"><span class="slb">风格</span>
+      <select class="input segsel" id="extStyle" style="min-width:148px" title="${i2i ? '只能自定义；也可以不输入' : '12 类预设 + 自定义'}">
+        ${styles.map(n => `<option value="${esc(n)}" ${n === curStyle ? 'selected' : ''} ${i2i ? 'disabled' : ''}>${esc(n)}</option>`).join('')}
+        <option value="" ${custom || i2i ? 'selected' : ''}>自定义…</option></select>
+      <input class="input segtext" id="extStyleText" placeholder="画种 + 材质笔触 + 色调 + 光线，可留空"
+        value="${esc(f.styleText)}" ${custom || i2i ? '' : 'style="display:none"'}>
+      <span class="tiny muted">${i2i ? '图生图：预设已禁用，只剩自定义（可留空）' : custom ? '自定义：留空则回退到当前预设' : '预设：决定「风格」那一行'}</span></div>` : '';
+  return `<div class="composer ext"><div class="composer-inner">
+    ${modeBar}
+    <div class="inputbox sheetbox" id="inputbox">
+      <div class="sheetbody">
+      ${extLayoutBarHTML(f)}
+      ${inkRow}
+      ${nocharRow}
+      ${refRow}
+      ${propRefRow}
+      <textarea class="sheetchar" id="extText" rows="3" placeholder="${isExpand ? '扩图描述（可留空）：例如保持原场景布局，左侧再露出半扇窗' : kind === 'scene' ? '场景描述：环境、方位、道具位置、光线与氛围' : '道具描述：写清道具本体即可；不写视角就默认正面/侧面/背面三个斜向下 30° 视角（圆球、圆罐这类对称道具只画一个）'}">${esc(f.text)}</textarea>
+      <div class="sheetbar"><span class="slb">档位</span>
+        <div class="seg ext-seg" role="group" aria-label="档位">
+          ${grades.length ? grades.map(g => `<button class="segb ${grade && g.name === grade.name ? 'on' : ''}" data-ext-grade="${esc(g.name)}" title="${esc(g.note || '')} · 出图 ${esc(g.size || '')}">${esc(g.name)}</button>`).join('')
+            : '<span class="tiny muted">这个组合还没有档位</span>'}</div>
+        <span class="tiny muted">${grade ? `${esc(grade.locked ? '默认就是这个组合的完整配方' : '与默认同提示词、同参考，只改参数')} · 出图 ${esc(grade.size || '')}` : ''}</span></div>
+      ${styleRow}
+      ${isExpand ? '<div class="tiny muted" style="padding:0 2px;line-height:1.7">扩图完全基于参考图：不支持画法、风格和禁角色开关。</div>' : ''}
+      ${UI.extOpen ? `<div class="pvbox" id="extPv">${extPreviewHTML()}</div>` : ''}
+      </div>
+      <div class="foot">
+        ${kind === 'prop' && i2i ? '<button class="btn ghost sm" id="addRef">＋ 上传</button>' : ''}
+        ${kind === 'scene' && UI.mode !== 't2i' ? '<span class="tiny muted ext-foot-hint">在上方四个槽位里上传参考图</span>' : ''}
+        <button class="btn ghost sm" id="extPvBtn">${UI.extOpen ? '收起提示词' : '看完整提示词'}</button>
+        ${UI.extOpen ? '<button class="btn ghost sm" id="extCopy">复制</button>' : ''}
+        <span class="tiny muted" id="emptyHint" style="${canSend ? 'display:none' : ''}">${UI.mode === 'expand' ? '先在「参考图」槽位上传一张' : i2i ? '写点描述并上传参考图' : '写点描述再发送'}</span>
+        <span style="flex:1"></span><span class="tiny muted kbdhint">Ctrl/⌘ + Enter</span>
+        <button class="sendbtn" id="sendBtn" title="发送" ${canSend ? '' : 'disabled'}>↑</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+
+function extPasteInto(e, ch, fromFallback = false) {
+  const dt = e.clipboardData || window.clipboardData;
+  if (!dt) return;
+  const images = clipboardImages(e);
+  if (images.length) {
+    e.preventDefault();
+    const f = extForm();
+    const order = UI.mode === 'expand' ? ['ref', 'pano', 'bird', 'sketch'] : ['ref', 'pano', 'bird', 'sketch'];
+    const slot = order.find(s => !extSlotDisabled(UI.mode, f.layout, s) && !f.refSlots[s]) || 'ref';
+    uploadFilesToSlot(images, slot);
+    return;
+  }
+  const tgt = e.target || {};
+  if (tgt.id === 'extStyleText' || (tgt.tagName === 'INPUT' && tgt.closest && tgt.closest('.sheetbox'))) return;
+  const text = dt.getData('text/plain') || '';
+  if (!text || !ch) return;
+  e.preventDefault();
+  const start = ch.selectionStart == null ? ch.value.length : ch.selectionStart;
+  const end = ch.selectionEnd == null ? start : ch.selectionEnd;
+  ch.setRangeText(text, start, end, 'end');
+  UI.extForm.text = ch.value;
+  const btn = $('#sendBtn'); if (btn) btn.disabled = !extCanSend(currentCap());
+  const hint = $('#emptyHint'); if (hint) hint.style.display = extCanSend(currentCap()) ? 'none' : '';
+  const box = $('#inputbox'); if (box) box.classList.remove('err');
+  if (fromFallback) ch.focus();
+  scheduleDraft();
+}
+if (!window._extPasteFallbackBound) {
+  window._extPasteFallbackBound = true;
+  document.addEventListener('paste', e => {
+    if (UI.route !== 'studio') return;
+    const ch = $('#extText'); if (!ch) return;
+    const ae = document.activeElement;
+    if (ae && (ae.id || ae.isContentEditable)) return;
+    extPasteInto(e, ch, true);
+  });
+}
+
+async function uploadFilesToSlot(files, slot) {
+  const cap = currentCap(), list = files.filter(f => f && (f.type || '').startsWith('image/'));
+  if (!list.length) { toast('只支持常见图片格式'); return; }
+  if (extSlotDisabled(UI.mode, extForm().layout, slot)) { toast('这个版式不能用该参考图槽位'); return; }
+  const f = extForm(), maxRefs = cap.maxRefs || 4;
+  const slots = ['ref', 'pano', 'bird', 'sketch'];
+  for (const raw of list) {
+    if (UI.refs.length >= maxRefs) { toast(`最多上传 ${maxRefs} 张参考图`); break; }
+    const file = normalizeImageFile(raw);
+    const form = new FormData(); form.append('file', file, file.name);
+    const res = await api('/api/uploads', { form });
+    if (!res.ok) { toast(res.reason || '上传没成功'); continue; }
+    const item = { id: res.data.id, kind: 'image', name: res.data.name };
+    const old = f.refSlots[slot];
+    if (old) {
+      const at = UI.refs.findIndex(r => r.id === old);
+      if (at >= 0) UI.refs[at] = item; else UI.refs.push(item);
+    } else {
+      UI.refs.push(item);
+    }
+    f.refSlots[slot] = item.id;
+    const next = slots.find(s => !extSlotDisabled(UI.mode, f.layout, s) && !f.refSlots[s]);
+    if (!next) break;
+    slot = next;
+  }
+  UI.extPreview = null; saveDraft(); refreshComposer();
+}
+
+function bindExtSheetComposer() {
+  const cap = currentCap();
+  if (!isExtSheetCap(cap)) return;
+  const f = extForm();
+  const after = async (rerender = true) => {
+    UI.extPreview = null; saveDraft();
+    if (UI.extOpen) await refreshExtPreview();
+    else if (rerender) refreshComposer();
+  };
+  $$('[data-ext-layout]').forEach(el => el.onclick = () => {
+    f.layout = el.dataset.extLayout;
+    const subs = extSubs(f.kind, f.layout);
+    f.sub = subs.length ? subs[0].id : '';   // 换版式回到它的第一个子选项
+    after();
+  });
+  $$('[data-ext-sub]').forEach(el => el.onclick = () => { f.sub = el.dataset.extSub; after(); });
+  $$('[data-ext-grade]').forEach(el => el.onclick = () => { f.grade = el.dataset.extGrade; after(); });
+  $$('[data-ext-ink]').forEach(el => el.onclick = () => { f.ink = el.dataset.extInk === 'line' ? 'line' : 'color'; after(); });
+  $$('[data-ext-nochar]').forEach(el => el.onclick = () => { f.nochar = el.dataset.extNochar === 'no' ? 'no' : 'yes'; after(); });
+  $$('[data-ext-ref]').forEach(el => el.onclick = () => { f.ref = el.dataset.extRef === 'none' ? 'none' : 'lock'; after(); });
+  const ln = $('#extLine'); if (ln) ln.onchange = () => { f.lineStyle = ln.value; after(); };
+  $$('[data-ext-slot-upload]').forEach(el => el.onclick = () => {
+    const input = $(`[data-ext-slot-file="${el.dataset.extSlotUpload}"]`);
+    if (input) input.click();
+  });
+  $$('[data-ext-slot-file]').forEach(el => el.onchange = () => {
+    uploadFilesToSlot([...el.files || []], el.dataset.extSlotFile);
+    el.value = '';
+  });
+  $$('[data-ext-slot-rm]').forEach(el => el.onclick = () => {
+    const slot = el.dataset.extSlotRm, rid = f.refSlots[slot];
+    delete f.refSlots[slot];
+    if (rid) UI.refs = UI.refs.filter(r => r.id !== rid);
+    after();
+  });
+  const ch = $('#extText');
+  if (ch) {
+    ch.oninput = () => {
+      UI.extForm.text = ch.value;
+      const ok = extCanSend(currentCap());
+      const btn = $('#sendBtn'); if (btn) btn.disabled = !ok;
+      const hint = $('#emptyHint'); if (hint) hint.style.display = ok ? 'none' : '';
+      const box = $('#inputbox'); if (box) box.classList.remove('err');
+      scheduleDraft();
+    };
+    ch.onkeydown = e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSend(); } };
+    ch.onpaste = e => extPasteInto(e, ch);
+  }
+  const sbox = $('#inputbox');
+  if (sbox) sbox.onpaste = e => {
+    if (e.target && e.target.id === 'extText') return;
+    extPasteInto(e, ch);
+  };
+  const st = $('#extStyle');
+  if (st) st.onchange = () => {
+    f.styleCustom = !st.value;
+    if (st.value) f.style = st.value;
+    f.styleText = '';
+    after();
+  };
+  const stx = $('#extStyleText');
+  if (stx) stx.oninput = () => { UI.extForm.styleText = stx.value; scheduleDraft(); };
+  const pv = $('#extPvBtn');
+  if (pv) pv.onclick = async () => {
+    UI.extOpen = !UI.extOpen;
+    saveDraft();
+    if (UI.extOpen) await refreshExtPreview();
+    refreshComposer();
+  };
+  bindExtPreviewButtons();
+}
+
+/* ------------------------------------------------------------ 宫格分镜故事板（1.03）
+ * 与角色 / 场景 / 道具设定图完全独立：只走 /api/board/*，不碰既有表单路径。
+ */
+function isBoardCap(cap) { return !!cap && cap.id === 'board.story'; }
+function boardLib() { return (S && S.boardLib) || {}; }
+function boardCombos() { return (S && S.boardCombos) || []; }
+function boardForm() {
+  const f = UI.boardForm = UI.boardForm || { layout: 'G4', ink: 'color', lineStyle: '', grade: '', sel: 0, cells: [] };
+  const layouts = boardLib().layouts || [];
+  if (!layouts.some(l => l.id === f.layout)) f.layout = (layouts[0] || {}).id || 'G4';
+  if (f.ink !== 'line') f.ink = 'color';
+  const n = Number((layouts.find(l => l.id === f.layout) || {}).cells || 4);
+  // 注意：只有当格子数变化时才重建数组，否则每次调用都会换成一个新数组，
+  // 导致 boardForm().cells[i] = x 这样的写入落在临时数组上、草稿永远存不住。
+  if (!Array.isArray(f.cells) || f.cells.length !== n) {
+    const old = Array.isArray(f.cells) ? f.cells : [];
+    f.cells = Array.from({ length: n }, (_, i) => String(old[i] || '').slice(0, 1200));
+  }
+  f.sel = Math.max(0, Math.min(n - 1, Number(f.sel) || 0));
+  UI.mode = 'i2i';                       // 这个能力只有图生图，但允许 0 张参考图
+  return f;
+}
+function boardLayout() {
+  const f = boardForm();
+  return (boardLib().layouts || []).find(l => l.id === f.layout) || {};
+}
+function boardCombo() {
+  const f = boardForm();
+  return boardCombos().find(c => c.id === `${f.layout}.${f.ink}`) || null;
+}
+function boardGrades() {
+  const c = boardCombo();
+  return ((c && c.grades) || []);
+}
+function boardGrade() {
+  const f = boardForm(), grades = boardGrades();
+  if (!grades.some(g => g.name === f.grade)) f.grade = ((grades[0] || {}).name || '默认');
+  return grades.find(g => g.name === f.grade) || null;
+}
+function boardPayload() {
+  const f = boardForm();
+  return { layout: f.layout, cells: f.cells.map(x => String(x || '')), ink: f.ink,
+    lineStyle: f.ink === 'line' ? (f.lineStyle || '') : null,
+    grade: boardGrade() ? boardGrade().name : '默认',
+    refs: UI.refs.map(r => r.id) };
+}
+function boardCanSend() {
+  const f = boardForm();
+  return f.cells.some(x => String(x || '').trim()) && !!boardCombo();
+}
+function boardPreviewHTML() {
+  const p = UI.boardPreview;
+  if (!p) return '<div class="pvhead">正在组装提示词…</div>';
+  if (p.error) return `<div class="pvhead bad">✕ ${esc(p.error)}</div>`;
+  return `<div class="pvhead"><b>${esc(p.grade || '')}</b>
+      <span class="tiny muted">${esc(p.size || '')} · ${esc(p.wf || '')} · 共 ${String((p.prompt || '').length)} 字</span></div>
+    <pre>${esc(p.prompt || '')}</pre>`;
+}
+async function refreshBoardPreview() {
+  const res = await api('/api/board/preview', { body: boardPayload() });
+  UI.boardPreview = res.ok ? (res.data || {}) : { error: res.reason || '组装失败' };
+  const box = $('#boardPv');
+  if (box) { box.innerHTML = boardPreviewHTML(); bindBoardPreviewButtons(); }
+  else refreshComposer();
+}
+function bindBoardPreviewButtons() {
+  const cp = $('#boardCopy');
+  if (cp) cp.onclick = async () => {
+    const text = (UI.boardPreview && UI.boardPreview.prompt) || '';
+    try { await navigator.clipboard.writeText(text); toast('整条提示词已复制'); }
+    catch (e) { toast('复制失败，手动选中复制一下'); }
+  };
+}
+function viewBoardComposer(cap) {
+  const lib = boardLib(), f = boardForm(), lay = boardLayout();
+  if (!(lib.layouts || []).length) {
+    return `<div class="composer"><div class="composer-inner"><div class="inputbox" style="border-color:var(--line);box-shadow:none;background:#fafbfe">
+      <div class="tiny muted" style="padding:18px 4px;text-align:center;line-height:1.9">提示词库读不到（prompts/board_story.json）。<br>
+      重启服务或去管理台检查「档位表 → ${esc(cap.name)}」。</div></div></div></div>`;
+  }
+  const grades = boardGrades(), grade = boardGrade();
+  const lineStyles = lib.line_styles || [];
+  const n = Number(lay.cells || 4), cols = Number(lay.cols || 2);
+  const cellsHTML = Array.from({ length: n }, (_, i) => {
+    const pos = cols === 2 ? ['左上', '右上', '左下', '右下'][i] : `第${Math.floor(i / cols) + 1}行第${i % cols + 1}列`;
+    return `<button class="board-cell ${f.sel === i ? 'on' : ''} ${String(f.cells[i] || '').trim() ? '' : 'blank'}" data-board-sel="${i}"
+      title="第 ${i + 1} 格 · ${pos}">${i + 1}<small>${pos}</small></button>`;
+  }).join('');
+  const canSend = boardCanSend();
+  return `<div class="composer"><div class="composer-inner">
+    <div class="parambar"><span class="modedis">图生图 · 0~${cap.maxRefs || 6} 张参考图都可以生成</span>
+      <span class="scope-hint"></span></div>
+    <div class="inputbox sheetbox" id="inputbox">
+      <div class="sheetbody">
+      <div class="sheetbar"><span class="slb">版式</span>
+        <div class="seg" role="group" aria-label="宫格版式">
+          ${(lib.layouts || []).map(l => `<button class="segb ${l.id === f.layout ? 'on' : ''}" data-board-layout="${esc(l.id)}"
+            title="${esc(l.name)} 出图 ${esc(l.size || '')}">${esc(l.name)}<i class="segx">${esc(l.ratio || '')}</i></button>`).join('')}
+        </div><span class="tiny muted">出图 ${esc(lay.size || '')} · 每小格 16:9</span></div>
+      <div class="sheetbar"><span class="slb">画法</span>
+        <div class="seg" role="group" aria-label="画法">
+          <button class="segb ${f.ink === 'color' ? 'on' : ''}" data-board-ink="color">彩色</button>
+          <button class="segb ${f.ink === 'line' ? 'on' : ''}" data-board-ink="line">线稿</button></div>
+        ${f.ink === 'line' ? `<select class="input segsel" id="boardLine" title="线稿风格句">
+          ${lineStyles.map(s => `<option value="${esc(s.id)}" ${s.id === f.lineStyle ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>`
+          : '<span class="tiny muted">彩色：统一电影质感</span>'}</div>
+      <div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
+      <div class="sheetbar"><span class="slb">参考图</span><span class="tiny muted">最多 ${cap.maxRefs || 6} 张，可不传；在格描述里写「图 1」即锁定该图角色</span></div>
+      <div class="board-wrap">
+        <div class="board-grid cols${cols}" role="group" aria-label="选择宫格">${cellsHTML}</div>
+        <div class="board-side">
+          <div class="board-tip"><b>第 ${f.sel + 1} 格</b><span>· 输入这一格的构图描述；留空的格子在成图里保持纯白（不画空框，所以整行/整列都留空时，那块就是一片白底）</span></div>
+          <textarea class="board-text" id="boardCellInput" rows="6" data-board-cell="${f.sel}"
+            placeholder="例如：清晨的站台，短发女孩回头看向镜头，中景">${esc(f.cells[f.sel] || '')}</textarea>
+        </div>
+      </div>
+      <div class="sheetbar"><span class="slb">档位</span>
+        <div class="seg" role="group" aria-label="档位">
+          ${grades.length ? grades.map(g => `<button class="segb ${grade && g.name === grade.name ? 'on' : ''}" data-board-grade="${esc(g.name)}"
+            title="${esc(g.note || '')} · 出图 ${esc(g.size || '')}">${esc(g.name)}</button>`).join('')
+            : '<span class="tiny muted">这个组合还没有档位</span>'}</div>
+        <span class="tiny muted">${grade ? `${esc(grade.locked ? '默认就是这个组合的完整配方' : '同提示词、同参考，只改参数')} · 出图 ${esc(grade.size || '')}` : ''}</span></div>
+      ${UI.boardOpen ? `<div class="pvbox" id="boardPv">${boardPreviewHTML()}</div>` : ''}
+      </div>
+      <div class="foot">
+        <button class="btn ghost sm" id="addRef">＋ 上传参考图</button>
+        <button class="btn ghost sm" id="boardPvBtn">${UI.boardOpen ? '收起提示词' : '看完整提示词'}</button>
+        ${UI.boardOpen ? '<button class="btn ghost sm" id="boardCopy">复制</button>' : ''}
+        <span class="tiny muted" id="emptyHint" style="${canSend ? 'display:none' : ''}">至少写一格的画面描述</span>
+        <span style="flex:1"></span><span class="tiny muted kbdhint">Ctrl/⌘ + Enter</span>
+        <button class="sendbtn" id="sendBtn" title="发送" ${canSend ? '' : 'disabled'}>↑</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+function bindBoardComposer() {
+  const f = boardForm();
+  $$('[data-board-layout]').forEach(el => el.onclick = () => {
+    const old = boardForm();
+    UI.boardForm = { ...old, layout: el.dataset.boardLayout, sel: 0, cells: [] };
+    UI.boardOpen = false; UI.boardPreview = null;
+    saveDraft(); refreshComposer();
+  });
+  $$('[data-board-ink]').forEach(el => el.onclick = () => {
+    const cur = boardForm();
+    UI.boardForm = { ...cur, ink: el.dataset.boardInk, lineStyle: cur.lineStyle || '' };
+    UI.boardOpen = false; UI.boardPreview = null;
+    saveDraft(); refreshComposer();
+  });
+  const ls = $('#boardLine');
+  if (ls) ls.onchange = () => { boardForm().lineStyle = ls.value; UI.boardPreview = null; saveDraft(); };
+  $$('[data-board-sel]').forEach(el => el.onclick = () => {
+    const input = $('#boardCellInput');
+    if (input) boardForm().cells[boardForm().sel] = input.value;
+    boardForm().sel = Number(el.dataset.boardSel) || 0;
+    saveDraft(); refreshComposer();
+    const next = $('#boardCellInput'); if (next) next.focus();
+  });
+  const cell = $('#boardCellInput');
+  if (cell) {
+    cell.oninput = () => { boardForm().cells[boardForm().sel] = cell.value; scheduleDraft(); refreshBoardSendState(); };
+    cell.onkeydown = e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSend(); } };
+    cell.onpaste = e => {
+      const images = clipboardImages(e);
+      if (images.length) { e.preventDefault(); uploadFiles(images); }
+    };
+  }
+  $$('[data-board-grade]').forEach(el => el.onclick = () => {
+    boardForm().grade = el.dataset.boardGrade; UI.boardPreview = null;
+    saveDraft(); refreshComposer();
+  });
+  const pv = $('#boardPvBtn');
+  if (pv) pv.onclick = async () => {
+    UI.boardOpen = !UI.boardOpen; saveDraft();
+    refreshComposer();                     // 面板先出现（显示「正在组装提示词…」）
+    if (UI.boardOpen) { await refreshBoardPreview(); refreshComposer(); }
+  };
+  // 面板从草稿里恢复成展开态时没人去取提示词，会一直停在「正在组装提示词…」
+  if (UI.boardOpen && !UI.boardPreview) setTimeout(() => refreshBoardPreview(), 0);
+  bindBoardPreviewButtons();
+}
+function refreshBoardSendState() {
+  const btn = $('#sendBtn'), hint = $('#emptyHint'), f = boardForm();
+  const filled = f.cells.some(x => String(x || '').trim());
+  if (btn) btn.disabled = !filled;
+  if (hint) hint.style.display = filled ? 'none' : '';
 }
 
 /* ------------------------------------------------------------ 输入区 */
@@ -717,7 +1320,9 @@ function placeholderFor(cap) {
     'image.generate': '描述你想要的画面，例如：雨夜霓虹街道，赛博朋克，湿地面反光',
     'image.reference': '描述想要的画风，并上传参考图',
     'sheet.character': '角色描述：年龄身份 + 脸型五官 + 发型发色 + 服装分件 + 2~3 个标志物',
-    'board.9': '一句话说清故事，例如：小机器人找猫，9 格分镜',
+    'sheet.scene': '场景描述：环境、方位、道具位置、光线与氛围',
+    'sheet.prop': '道具描述：写清道具本体即可；不写视角就默认正面/侧面/背面三个斜向下 30° 视角，圆球圆罐这类对称道具只画一个',
+    'board.story': '每格写一句镜头画面；留空的格在成图里保持纯白',
     'audio.tts': '把要读的文字粘进来',
     'audio.music': '描述想要什么音乐，例如：低沉的钢琴配雨声',
   };
@@ -733,8 +1338,22 @@ function samplePrompts(cap) {
       '三十岁独臂刀客，断眉，左臂旧铁皮义肢，灰麻短打束腰布带，背后一把无鞘长刀',
       '赛博机械维修师，紫色短发，护目镜推在额头上，黄色工装背心，机械右手，胸口编号 K-07',
     ],
+    'sheet.scene': [
+      '雨夜旧码头，木栈桥向画面深处延伸，左侧仓库右侧灯塔，地面有积水反光',
+      '山间书院庭院，正北是主殿，东侧竹林，西侧石阶与水渠，清晨薄雾',
+      '废弃地铁站站台，中央立柱，左侧售票机，右侧长椅，顶部灯带忽明忽暗',
+    ],
+    'sheet.prop': [
+      '油纸伞：撑开的样子、合起来的样子',
+      '茶壶：正面、侧面、壶底',
+      '铜香炉',
+    ],
+    'board.story': [
+      '清晨站台，短发女孩回头看向镜头，中景',
+      '同一女孩在旧书店里踮脚取书，近景',
+      '雨夜巷口，女孩撑红伞走向灯光，全景',
+    ],
     'video.firstlast': ['从白天到黑夜的延时摄影', '镜头从远推近，人物回头'],
-    'board.9': ['小机器人找猫的 9 格分镜', '雨夜追凶，冷色调 9 格分镜'],
     'audio.music': ['低沉的钢琴配雨声，慢速', '轻快的电子乐'],
   };
   return m[id] || ['描述你想生成的内容'];
@@ -779,7 +1398,8 @@ function render() {
   if (!UI.wizardSeen && UI.route === 'studio' && !(S.jobs || []).length) renderWizard();
   if (UI.route === 'admin' && UI.adminPage === 'diag') autoDiag();
   // 组合页有自己的「生效」核对（按组合 id 拉 /api/sheet/combos），旧版按工作流档位查，别混用
-  if (UI.route === 'admin' && UI.adminPage === 'grades' && !isSheetCap(currentCap())) showGradeEffective();
+  if (UI.route === 'admin' && UI.adminPage === 'grades' && !isSheetCap(currentCap())
+      && !isExtSheetCap(currentCap()) && !isBoardCap(currentCap())) showGradeEffective();
   _lastSignature = stateSignature();
 }
 
@@ -1015,6 +1635,10 @@ function viewComposer() {
       <div class="tiny muted" style="padding:18px 4px;text-align:center">这个能力还没配好档位，暂时不能发送。</div></div></div></div>`;
   // 角色设定图有自己的表单（版式 / 画法 / 参考方式 / 角色行 / 风格）
   if (isSheetCap(cap)) return viewSheetComposer(cap);
+  // 1.03 场景 / 道具设定图：结构不同，单独表单，但仍复用输入区骨架
+  if (isExtSheetCap(cap)) return viewExtSheetComposer(cap);
+  // 1.03 宫格分镜故事板：固定图生图 + 逐格提示词，独立表单
+  if (isBoardCap(cap)) return viewBoardComposer(cap);
   const grades = currentGrades(cap), curGrade = grades.find(g => g.name === UI.params.grade) || grades[0] || null;
   const i2i = UI.mode === 'i2i';
   const empty = !(UI.prompt || '').trim();
@@ -1173,22 +1797,36 @@ function scrollChatBottom() {
 
 /* ------------------------------------------------------------ 创作台交互 */
 function setMode(m) {
-  // 文生图 / 图生图显式切换：模式决定走哪个子工作流，档位菜单跟着切到对应配置
-  if (!['t2i', 'i2i'].includes(m) || UI.mode === m) return;
+  // 文生图 / 图生图 / 扩图显式切换：模式决定走哪条子工作流与哪套版式
+  const cap = currentCap();
+  const canExpand = isExtSheetCap(cap) && extKindOf(cap) === 'scene';
+  if (!(m === 't2i' || m === 'i2i' || (m === 'expand' && canExpand)) || UI.mode === m) return;
   UI.mode = m;
-  if (m === 't2i') UI.refs = [];                                   // 文生图不传图，清掉已上传参考
+  if (m === 't2i') { UI.refs = []; }                               // 文生图不传图，清掉已上传参考
   // 需求 #7：图生图只允许自定义风格；切过去就强制选中「自定义…」
-  if (m === 'i2i' && isSheetCap(currentCap())) { UI.sheetForm = UI.sheetForm || {}; UI.sheetForm.styleCustom = true; }
-  const g = currentGrades(currentCap());                            // 档位落到当前工作流的第一档（若当前档位不属于它）
+  if (m === 'i2i' && isSheetCap(cap)) { UI.sheetForm = UI.sheetForm || {}; UI.sheetForm.styleCustom = true; }
+  if (isExtSheetCap(cap)) {
+    const f = extForm();
+    f.layout = '';                                                  // 版式按新模式重新选第一项
+    f.grade = '默认';
+    if (m === 'expand') { f.ink = 'color'; f.nochar = 'yes'; f.ref = 'none'; f.styleCustom = false; }
+    else if (m === 'i2i') { f.styleCustom = true; if (extKindOf(cap) === 'prop') f.ref = 'lock'; }
+    else { f.styleCustom = false; if (extKindOf(cap) === 'prop') f.ref = 'none'; }
+    extForm();
+  }
+  const g = currentGrades(cap);                                     // 档位落到当前工作流的第一档（若当前档位不属于它）
   if (g.length && !g.find(x => x.name === UI.params.grade)) UI.params.grade = g[0].name;
   saveDraft(); refreshComposer();
-  toast(m === 'i2i' ? '已切到「图生图」：可上传参考图' : '已切到「文生图」：纯文字生成');
+  toast(m === 'expand' ? '已切到「扩图」：参考图必传，提示词可留空' : m === 'i2i' ? '已切到「图生图」：可上传参考图' : '已切到「文生图」：纯文字生成');
 }
 function bindStudio() {
   $$('[data-cap]').forEach(el => el.onclick = () => {
     const target = (S.capabilities || []).find(x => x.id === el.dataset.cap);
     if (!target || !capUsable(target) || !target.enabled) { toast('这个能力还没配置，等下个版本开放'); return; }
     UI._userSwitched = true;
+    // 参考图是按能力/上下文理解的：切能力先清掉上一张卡的图，再恢复目标能力自己的草稿。
+    // 否则从场景设定图切到道具设定图时会带着场景的 4 张图，直接撞上 maxRefs=1。
+    UI.refs = [];
     UI.capId = el.dataset.cap; loadDraft();
     UI.navOpen = false;                   // 手机上选完能力把抽屉收起来
     saveDraft(); render(); window.scrollTo({ top: 0 });
@@ -1198,6 +1836,16 @@ function bindStudio() {
       UI.sheetForm.character = el.dataset.sample;
       const sc = $('#sheetChar'); if (sc) { sc.value = UI.sheetForm.character; sc.focus(); }
       saveDraft(); refreshComposer(); return;
+    }
+    if (isExtSheetCap(currentCap())) {        // 1.03 示例填到场景/道具描述框
+      UI.extForm.text = el.dataset.sample;
+      const et = $('#extText'); if (et) { et.value = UI.extForm.text; et.focus(); }
+      UI.extPreview = null; saveDraft(); refreshComposer(); return;
+    }
+    if (isBoardCap(currentCap())) {           // 故事板示例填到当前选中的格子
+      const f = boardForm(); f.cells[f.sel] = el.dataset.sample;
+      const bc = $('#boardCellInput'); if (bc) { bc.value = f.cells[f.sel]; bc.focus(); }
+      UI.boardPreview = null; saveDraft(); refreshComposer(); return;
     }
     const ed = $('#promptInput'); if (!ed) return;
     UI.prompt = el.dataset.sample; ed.innerHTML = editorInnerHTML(UI.prompt);
@@ -1236,6 +1884,11 @@ function bindStudio() {
     // 只把这个图从输入框里摘掉，不删服务器上的副本：
     // 「基于上一条」要按本地副本把图片带回来，删了文件就再也引不过来了
     UI.refs = UI.refs.filter(r => r.id !== el.dataset.rmref);
+    if (isExtSheetCap(currentCap())) {
+      const slots = (UI.extForm.refSlots || {});
+      Object.keys(slots).forEach(k => { if (slots[k] === el.dataset.rmref) delete slots[k]; });
+      UI.extPreview = null;
+    }
     UI.prompt = serializeEditor();          // 参考图变少，chip 序号要重算；别让 refreshComposer 用旧 prompt 重建
     saveDraft(); refreshComposer();
   });
@@ -1249,6 +1902,21 @@ function bindStudio() {
       if (!UI.sheetForm.refChips.includes(el.dataset.refat)) UI.sheetForm.refChips.push(el.dataset.refat);
       refreshComposer();
       toast('已引用到输入框，生成时按「参考」方式使用');
+      return;
+    }
+    if (isBoardCap(currentCap())) {
+      const f = boardForm(), idx = UI.refs.findIndex(r => r.id === el.dataset.refat) + 1;
+      const token = `图 ${idx}`;
+      const input = $('#boardCellInput');
+      if (input) {
+        const cur = input.value, p = input.selectionStart ?? cur.length;
+        f.cells[f.sel] = cur.slice(0, p) + token + cur.slice(input.selectionEnd ?? p);
+        input.value = f.cells[f.sel];
+        input.focus();
+        try { input.setSelectionRange(p + token.length, p + token.length); } catch (_) {}
+      } else f.cells[f.sel] = String(f.cells[f.sel] || '') + token;
+      UI.boardPreview = null; saveDraft();
+      toast(`已在第 ${f.sel + 1} 格写入「${token}」`);
       return;
     }
     insertRefChip(el.dataset.refat);
@@ -1281,13 +1949,34 @@ function bindStudio() {
     UI.refs = refs;
     UI.mode = refs.length ? 'i2i' : 't2i';          // 图没带回来就退回文生图，免得卡在「图生图没有参考图」发不出去
     if (j.sheet) {
-      // 设定图：把整台表单（版式/画法/参考方式/档位/角色行/风格含自定义句）带回来
-      UI.sheetForm = { ...UI.sheetForm, ...j.sheet };
-      // 老任务可能没记档位，按它当时用的那一档回填
-      if (!UI.sheetForm.grade) UI.sheetForm.grade = (j.runs[0] || {}).grade || '默认';
-      // 参考图重新登记后 id 变了：把新 refs 全部设为「已引用」，缩略图 chip 才能带回来
-      UI.sheetForm.refChips = refs.map(r => r.id);
-      UI.sheetPreview = null;
+      if ((j.sheet || {}).kind === 'board') {
+        const old = j.sheet;
+        UI.mode = 'i2i';
+        UI.boardForm = { ...UI.boardForm, layout: old.layout || 'G4', ink: old.ink || 'color',
+          lineStyle: old.lineStyle || '', grade: old.grade || (j.runs[0] || {}).grade || '默认',
+          cells: [...(old.cells || [])], sel: 0 };
+        UI.boardOpen = false; UI.boardPreview = null; boardForm();
+      } else if ((j.sheet || {}).kind === 'scene' || (j.sheet || {}).kind === 'prop') {
+        // 1.03 场景/道具：整台表单带回来，槽位 id 按新旧参考图顺序重映射
+        const old = j.sheet || {}, slots = {};
+        const oldOrder = [...new Set(Object.values(old.refSlots || {}))];
+        Object.entries(old.refSlots || {}).forEach(([slot, oldId]) => {
+          const at = oldOrder.indexOf(oldId);
+          if (refs[at]) slots[slot] = refs[at].id;
+        });
+        UI.mode = old.mode || UI.mode;
+        UI.extForm = { ...UI.extForm, ...old, refSlots: slots,
+                       grade: old.grade || (j.runs[0] || {}).grade || '默认' };
+        extForm(); UI.extPreview = null;
+      } else {
+        // 设定图：把整台表单（版式/画法/参考方式/档位/角色行/风格含自定义句）带回来
+        UI.sheetForm = { ...UI.sheetForm, ...j.sheet };
+        // 老任务可能没记档位，按它当时用的那一档回填
+        if (!UI.sheetForm.grade) UI.sheetForm.grade = (j.runs[0] || {}).grade || '默认';
+        // 参考图重新登记后 id 变了：把新 refs 全部设为「已引用」，缩略图 chip 才能带回来
+        UI.sheetForm.refChips = refs.map(r => r.id);
+        UI.sheetPreview = null;
+      }
     } else {
       UI.prompt = j.prompt || '';
     }
@@ -1319,6 +2008,8 @@ function bindStudio() {
   $$('[data-zoom]').forEach(el => el.onclick = () => openZoom(el.dataset.zoom));
   bindDrawer();
   bindSheetComposer();
+  bindExtSheetComposer();
+  if (isBoardCap(currentCap())) bindBoardComposer();
   // 设定图卡片：正文 800 字，卡片只显示摘要，「看完整提示词」点开看原文
   $$('[data-seefull]').forEach(el => el.onclick = e => {
     e.stopPropagation();
@@ -1342,7 +2033,7 @@ function bindStudio() {
    页面每秒会按状态签名局部重绘，漏掉哪一个，那个框就会出现「刚打/刚粘的字或焦点消失」。 */
 function snapshotComposerFocus() {
   const ae = document.activeElement;
-  const snap = { prompt: false, sheet: null, style: null };
+  const snap = { prompt: false, sheet: null, style: null, ext: null, extStyle: null, boardCell: null };
   if (ae && ae.id === 'promptInput') { UI.prompt = serializeEditor(); snap.prompt = true; }
   if (ae && ae.id === 'sheetChar') {
     UI.sheetForm.character = ae.value;
@@ -1351,6 +2042,19 @@ function snapshotComposerFocus() {
   if (ae && ae.id === 'sheetStyleText') {
     UI.sheetForm.styleText = ae.value;
     snap.style = { start: ae.selectionStart, end: ae.selectionEnd };
+  }
+  if (ae && ae.id === 'extText') {
+    UI.extForm.text = ae.value;
+    snap.ext = { start: ae.selectionStart, end: ae.selectionEnd };
+  }
+  if (ae && ae.id === 'extStyleText') {
+    UI.extForm.styleText = ae.value;
+    snap.extStyle = { start: ae.selectionStart, end: ae.selectionEnd };
+  }
+  if (ae && ae.id === 'boardCellInput') {
+    const f = boardForm();
+    f.cells[f.sel] = ae.value;
+    snap.boardCell = { sel: f.sel, start: ae.selectionStart, end: ae.selectionEnd };
   }
   return snap;
 }
@@ -1368,6 +2072,27 @@ function restoreComposerFocus(snap) {
       s2.focus();
       const n = (s2.value || '').length;
       try { s2.setSelectionRange(Math.min(snap.style.start ?? n, n), Math.min(snap.style.end ?? n, n)); } catch (_) {}
+    }
+  }
+  if (snap.ext) {
+    const e2 = $('#extText'); if (e2) {
+      e2.focus();
+      const n = (e2.value || '').length;
+      try { e2.setSelectionRange(Math.min(snap.ext.start ?? n, n), Math.min(snap.ext.end ?? n, n)); } catch (_) {}
+    }
+  }
+  if (snap.extStyle) {
+    const s3 = $('#extStyleText'); if (s3) {
+      s3.focus();
+      const n = (s3.value || '').length;
+      try { s3.setSelectionRange(Math.min(snap.extStyle.start ?? n, n), Math.min(snap.extStyle.end ?? n, n)); } catch (_) {}
+    }
+  }
+  if (snap.boardCell) {
+    const b = $('#boardCellInput'); if (b) {
+      b.focus();
+      const n = (b.value || '').length;
+      try { b.setSelectionRange(Math.min(snap.boardCell.start ?? n, n), Math.min(snap.boardCell.end ?? n, n)); } catch (_) {}
     }
   }
 }
@@ -1394,7 +2119,7 @@ function bindDropZone() {
   });
 }
 async function uploadFiles(files) {
-  if (UI.mode !== 'i2i') { toast('文生图模式不带参考图，先切到「图生图」再上传'); return; }  // 需求 #1：文生图不传图
+  if (UI.mode !== 'i2i' && !isBoardCap(currentCap())) { toast('文生图模式不带参考图，先切到「图生图」再上传'); return; }  // 需求 #1：文生图不传图
   const cap = currentCap(), maxRefs = cap.maxRefs || 3;
   const list = files.filter(f => f && (f.type || '').startsWith('image/'));
   if (!list.length) { toast('只支持常见图片格式（png / jpg / webp / gif / bmp）'); return; }
@@ -1419,6 +2144,12 @@ async function submitAction(path, body, successMsg) {
       UI.sheetForm.character = ''; UI.sheetPreview = null;
       UI.sheetForm.styleCustom = true; UI.sheetForm.styleText = ''; UI.sheetForm.refChips = [];  // 需求 #6：生成后回到默认自定义风格
       const sc = $('#sheetChar'); if (sc) sc.value = '';
+    } else if (isExtSheetCap(currentCap())) {
+      UI.extForm.text = ''; UI.extForm.refSlots = {}; UI.extPreview = null;
+      const et = $('#extText'); if (et) et.value = '';
+    } else if (isBoardCap(currentCap())) {
+      boardForm().cells = boardForm().cells.map(() => ''); UI.boardPreview = null;
+      const bc = $('#boardCellInput'); if (bc) bc.value = '';
     }
     // 需求 #3：不再自动把模式切回文生图、档位切回默认。用户选了什么就保持什么，除非他自己切换。
   }
@@ -1429,6 +2160,8 @@ async function submitAction(path, body, successMsg) {
 async function doSend() {
   const cap = currentCap();
   if (isSheetCap(cap)) { await doSendSheet(cap); return; }
+  if (isExtSheetCap(cap)) { await doSendExtSheet(cap); return; }
+  if (isBoardCap(cap)) { await doSendBoard(cap); return; }
   const prompt = serializeEditor().trim();
   if (!prompt) { $('#inputbox').classList.add('err'); toast('写点描述再发送'); return; }
   // 模式 → 显式子工作流；图生图必须带参考图，否则直接拦下（后端虽会兜底，前端先挡更友好）
@@ -1471,6 +2204,44 @@ async function doSendSheet(cap) {
   const sent = await submitAction('/api/tasks', body, '');
   if (sent) toast(`已提交「${(sheetCombo() || {}).name || ''}」· ${grade.name}`);
 }
+
+async function doSendExtSheet(cap) {
+  const f = extForm(), kind = extKindOf(cap), box = $('#inputbox');
+  if (!extCanSend(cap)) {
+    if (box) box.classList.add('err');
+    toast(kind === 'scene' && UI.mode === 'expand' ? '扩图必须先在「参考图」槽位上传一张'
+      : UI.mode === 't2i' ? '先写点描述再发送' : '写点描述并上传至少一张参考图');
+    return;
+  }
+  const combo = extCombo(), grade = extGrade();
+  if (!combo) { toast('这个版式还没有对应的组合'); return; }
+  if (!grade) { toast('这个组合还没有档位'); return; }
+  const body = {
+    capId: cap.id, prompt: String(f.text || '').trim(), grade: grade.name, wf: combo.wf,
+    refs: UI.refs.map(r => r.id), ext: extPayload(),
+  };
+  const sent = await submitAction('/api/tasks', body, '');
+  if (sent) toast(`已提交「${combo.name || ''}」· ${grade.name}`);
+}
+async function doSendBoard(cap) {
+  const f = boardForm(), box = $('#inputbox');
+  if (!boardCanSend()) {
+    if (box) box.classList.add('err');
+    toast('至少写一格的画面描述再发送');
+    const bc = $('#boardCellInput'); if (bc) bc.focus();
+    return;
+  }
+  const combo = boardCombo(), grade = boardGrade();
+  if (!combo) { toast('这个版式还没有对应的组合'); return; }
+  if (!grade) { toast('这个组合还没有档位'); return; }
+  const body = {
+    capId: cap.id, grade: grade.name, wf: combo.wf,
+    prompt: f.cells.filter(x => String(x || '').trim()).join('\n'),
+    refs: UI.refs.map(r => r.id), board: boardPayload(),
+  };
+  const sent = await submitAction('/api/tasks', body, '');
+  if (sent) toast(`已提交「${combo.name || ''}」· ${grade.name}`);
+}
 function openQueueModal(jobId) {
   const j = (S.jobs || []).find(x => x.id === jobId); if (!j) return;
   const cap = (S.capabilities || []).find(c => c.id === j.cap);
@@ -1478,7 +2249,11 @@ function openQueueModal(jobId) {
   /* 设定图：档位属于「这张卡所属的组合」，不是工作流。跨组合的档位一律不列——
      只有同组合的档位才保证提示词/参考/工作流完全一样，只换参数。 */
   const cid = (j.sheet || {}).combo || '';
-  const combo = cid ? sheetCombos().find(c => c.id === cid) : null;
+  const capKind = cap && cap.extKind;
+  // 故事板的档位属于「版式×画法」组合，和设定图一样不能跨组合拿
+  const comboPool = capKind ? (((S && S.extCombos) || {})[capKind] || [])
+    : (cap && cap.id === 'board.story' ? boardCombos() : sheetCombos());
+  const combo = cid ? comboPool.find(c => c.id === cid) : null;
   const wf = (cap && (cap.workflows || []).find(w => w.name === base.wf)) || (cap && cap.workflows && cap.workflows[0]) || {};
   const grades = combo ? (combo.grades || []) : (wf.grades || []);
   if (!grades.length) { toast(cid ? '这个组合还没有档位' : '这个工作流还没有档位'); return; }
@@ -1575,8 +2350,8 @@ function viewAdmin() {
 }
 function adminPage(cap) {
   if (UI.adminPage === 'caps') return pageCaps();
-  // 设定图的档位挂在「组合」上，不是工作流上，所以档位表页要换一套界面
-  if (UI.adminPage === 'grades') return isSheetCap(cap) ? pageComboGrades(cap) : pageGrades(cap);
+  // 设定图 / 故事板的档位挂在「组合」上，不是工作流上，所以档位表页要换一套界面
+  if (UI.adminPage === 'grades') return (isSheetCap(cap) || isExtSheetCap(cap) || isBoardCap(cap)) ? pageComboGrades(cap) : pageGrades(cap);
   if (UI.adminPage === 'sheet') return pageSheet();
   if (UI.adminPage === 'service') return pageService();
   return pageDiag();
@@ -1665,7 +2440,26 @@ const COMBO_FIXED_FIELD = 'aspect_ratio';
 // ④ 表单里给参数输入框固定 id（gfMegapixels…），测试和「保存」都按它取 DOM
 const COMBO_FIELD_ID = { megapixels: 'Megapixels', multiple: 'Multiple', cfg: 'Cfg', sigmas: 'Sigmas' };
 
-function comboById(cid) { return (S.sheetCombos || []).find(c => c.id === cid) || null; }
+function comboSourceList() {
+  // 档位表按「当前能力」取组合：1.02 角色设定图走 S.sheetCombos，1.03 走 S.extCombos[kind]。
+  // 这样 pageComboGrades / bindComboGrades 一套逻辑三种能力共用，不必复制 280 行。
+  const cap = currentCap();
+  if (isBoardCap(cap)) return S && S.boardCombos || (cap && cap.combos) || [];
+  if (isExtSheetCap(cap)) return (((S && S.extCombos) || {})[extKindOf(cap)] || (cap && cap.combos) || []);
+  return (S && S.sheetCombos) || [];
+}
+function comboModeOf(c) { return c && c.mode ? c.mode : t2iFor((c || {}).ref); }
+function comboGroupKey(c) {
+  // 角色组合没有 mode 字段，只能按 layout + 参考方式推；1.03 组合自带 group/mode，直接用。
+  return c && c.group && c.mode ? c.group : `${c.layout}.${comboModeOf(c)}`;
+}
+function representativeCombo(combos, layout, mode) {
+  const pool = combos.filter(c => c.layout === layout && comboModeOf(c) === mode);
+  return pool.find(c => c.ink === 'color' && c.nochar === 'yes' && c.ref === 'none')
+    || pool.find(c => c.ink === 'color')
+    || pool[0] || null;
+}
+function comboById(cid) { return comboSourceList().find(c => c.id === cid) || null; }
 function comboFields(cid) { const c = comboById(cid); return (c && c.fields) || []; }
 // 宽高比跟着版式走，档位里不出现（真要改画幅就换版式，这才是「组合」的语义）
 function comboSettable(cid) { return comboFields(cid).filter(f => String(f.field) !== COMBO_FIXED_FIELD); }
@@ -1710,15 +2504,23 @@ function comboDraft(cid) {
   return UI.gradeForm;
 }
 async function loadComboDetail(cid) {
-  const res = await api('/api/sheet/combos');
+  const cap = currentCap();
+  const path = isBoardCap(cap) ? '/api/board/combos'
+    : isExtSheetCap(cap) ? `/api/ext/${cap.id}/combos` : '/api/sheet/combos';
+  const res = await api(path);
   if (!res.ok) return;
   const item = ((res.data && res.data.combos) || []).find(c => c.id === cid);
   UI.comboDetail = { cid, rows: (item && item.grades) || [] };
   render();
 }
 async function saveComboGrades(cid, rows) {
-  const res = await api('/api/sheet/combos/' + encodeURIComponent(cid) + '/grades',
-                        { method: 'PUT', body: { grades: rows } });
+  const cap = currentCap();
+  const path = isBoardCap(cap)
+    ? `/api/board/combos/${encodeURIComponent(cid)}/grades`
+    : isExtSheetCap(cap)
+      ? `/api/ext/${cap.id}/combos/${encodeURIComponent(cid)}/grades`
+      : '/api/sheet/combos/' + encodeURIComponent(cid) + '/grades';
+  const res = await api(path, { method: 'PUT', body: { grades: rows } });
   if (!res.ok) { toastBlocked('没保存', res.reason || ''); return false; }
   UI.comboDetail = null;
   await pull();
@@ -1740,31 +2542,37 @@ function comboEffHTML(row, isDef) {
 /* 档位表顶部条：只按「子功能 × 版式」6 组切档位。
    画法/参考只改提示词、不改参数节点，所以档位按组共享——创作台里那 18 种选择照旧。 */
 function comboPickBar(combos, combo) {
+  const mode = comboModeOf(combo);
+  const modes = [...new Set(combos.map(comboModeOf))].sort((a, b) => {
+    const order = { t2i: 0, i2i: 1, expand: 2 };
+    return (order[a] ?? 9) - (order[b] ?? 9);
+  });
   const layouts = [];
-  combos.forEach(c => {
+  combos.filter(c => comboModeOf(c) === mode).forEach(c => {
     if (!layouts.some(l => l.id === c.layout)) layouts.push({ id: c.layout, name: c.layoutName, ratio: c.ratio });
   });
-  const t2i = combo.ref === 'none';
-  const groups = [...new Set(combos.map(c => `${c.layout}.${t2iFor(c.ref)}`))].length;
+  const groups = [...new Set(combos.map(comboGroupKey))].length;
+  const board = isBoardCap(currentCap());
   return `<div class="panel" style="margin:0 0 12px;padding:4px 14px">
-    <div class="sheetbar"><span class="slb">子功能</span>
-      <div class="seg" role="group" aria-label="子功能">
-        <button class="segb ${t2i ? 'on' : ''}" data-combo-mode="t2i">文生图</button>
-        <button class="segb ${t2i ? '' : 'on'}" data-combo-mode="i2i">图生图</button>
+    <div class="sheetbar"><span class="slb">${board ? '画法' : '子功能'}</span>
+      <div class="seg" role="group" aria-label="${board ? '画法' : '子功能'}">
+        ${modes.map(m => `<button class="segb ${mode === m ? 'on' : ''}" data-combo-mode="${esc(m)}">${esc(EXT_MODE_NAME[m] || m)}</button>`).join('')}
       </div>
-      <span class="tiny muted">共 ${groups} 组档位（每条配方自带一个「默认」档）· 画法与参考只改提示词，见创作台</span></div>
+      <span class="tiny muted">共 ${groups} 组档位（每条配方自带一个「默认」档）·${board
+        ? '画法只改提示词，版式决定画幅'
+        : ' 画法、禁角色、扩图的短长与转角都只改提示词，在创作台选'}</span></div>
     <div class="sheetbar"><span class="slb">版式</span>
-      <div class="seg" role="group" aria-label="版式">
+      <div class="seg admin-seg" role="group" aria-label="版式">
         ${layouts.map(l => `<button class="segb ${combo.layout === l.id ? 'on' : ''}" data-combo-layout="${esc(l.id)}"
           title="${esc(l.name)} 出图 ${esc(combo.size || '')}">${esc(l.name)}<i class="segx">${esc(l.ratio || '')}</i></button>`).join('')}
       </div>
       <span class="tiny muted">版式决定画幅：${esc(combo.ratio)} ${esc(combo.size)}</span></div>
     <div class="sheetbar"><span class="slb">当前</span>
-      <b style="font-size:12.5px">${esc(combo.layoutName)} · ${t2i ? '文生图' : '图生图'}</b>
+      <b style="font-size:12.5px">${esc(combo.layoutName)} · ${esc(EXT_MODE_NAME[mode] || mode)}</b>
       <span class="tag">${esc(combo.wf)}</span><span class="tag">${esc(combo.ratio)} ${esc(combo.size)}</span>
       <span style="flex:1"></span>
       <button class="btn sm ghost" data-combo-refresh>↻ 重读档位</button>
-      <button class="btn sm ghost" data-sheet-template>✎ 设定图模板</button>
+      ${isBoardCap(currentCap()) ? '' : '<button class="btn sm ghost" data-sheet-template>✎ 设定图模板</button>'}
       <button class="btn sm" data-combo-studio>去创作台试这个组合</button></div>
   </div>`;
 }
@@ -1777,7 +2585,7 @@ function pageComboGrades(cap) {
     return `<div class="spread" style="margin-bottom:6px"><div><h2>档位表</h2><div class="sub">${esc(cap.em)} ${esc(cap.name)}</div></div>
       <button class="btn sm" data-page="caps">← 返回列表</button></div>
       <div class="panel"><div class="empty" style="padding:36px 24px"><div style="font-size:15px;font-weight:650">组合还没生成</div>
-        <div class="tiny muted" style="line-height:1.95;max-width:520px;margin:0 auto">提示词库（prompts/character_sheet.json）读不到时会这样，去「设定图模板」看一眼。</div></div></div>`;
+        <div class="tiny muted" style="line-height:1.95;max-width:520px;margin:0 auto">提示词库读不到时会这样，点上方「✎ 设定图模板」看一眼。</div></div></div>`;
   }
   if (!combos.some(c => c.id === UI.comboSel)) UI.comboSel = combos[0].id;
   const cid = UI.comboSel;
@@ -1806,8 +2614,9 @@ function pageComboGrades(cap) {
 
     <div class="glayout" style="display:grid;grid-template-columns:296px minmax(0,1fr);gap:14px;align-items:start">
       <div class="panel" style="margin:0;position:sticky;top:12px"><h3>① 工作流文件</h3>
-        <div class="wffile"><span class="wfname mono">${esc(wfLib(wfName).path || wfName)}</span><span class="wfauto">自动读取</span></div>
-        <div class="tiny muted" style="margin:8px 0 14px;line-height:1.7">只读，不对它做任何改动。这个组合固定用这条工作流。</div>
+        <div class="wffile"><span class="wfname mono">${esc(wfName)}</span><span class="wfauto">自动读取</span></div>
+        <div class="tiny muted" style="margin:8px 0 14px;line-height:1.7">文件：<span class="mono">${esc(wfLib(wfName).path || '—')}</span><br>
+          只读，不对它做任何改动。这个组合固定用这条母版工作流；三个设定图能力共用同一条母版，差异全部在提示词里。</div>
         <h3 style="flex-wrap:wrap">② 参数节点 <span class="tag">${setNodes.length} 个</span></h3>
         <div class="tiny muted" style="margin:-2px 0 8px;line-height:1.7">勾上哪些节点，右边 ④ 就出现哪些参数。</div>
         <div class="node-list">${setNodes.length ? setNodes.map(id => {
@@ -1919,37 +2728,63 @@ function bindComboGrades() {
     // 首次进这个组合：拉一次参数生效核对，拉到后自己重绘（不会再触发第二次）
     setTimeout(() => { loadComboDetail(cid); }, 0);
   }
-  // ---- 档位组切换：只按「子功能 × 版式」6 组走。
-  // 画法/参考不出现在这张表里（只改提示词、不影响档位参数），固定用该组的代表组合
-  // （color + none/lock）——这样 comboById / 渲染逻辑一个字都不用改。 ----
+  // ---- 档位组切换：只按「子功能 × 版式」切；画法/禁角色只改提示词，不进档位表 ----
   const go = (patch) => {
     const c = comboById(UI.comboSel) || combo;
-    const next = { layout: c.layout, ref: c.ref, ...patch };
-    UI.comboSel = `${next.layout}.color.${next.ref === 'none' ? 'none' : 'lock'}`;
-    UI.gOpen = 0;
+    const all = comboSourceList();
+    const mode = patch.mode || comboModeOf(c);
+    let layout = patch.layout || c.layout;
+    let next = representativeCombo(all, layout, mode);
+    // 切模式时版式可能不属于新模式（文生图 N → 扩图没有 N），落到该模式的第一个版式
+    if (!next) {
+      const first = all.find(x => comboModeOf(x) === mode);
+      if (!first) return;
+      layout = first.layout;
+      next = representativeCombo(all, layout, mode);
+    }
+    UI.comboSel = next.id;
+    UI.gOpen = 0; UI.comboDetail = null;
     render();
   };
-  $$('[data-combo-mode]').forEach(el => el.onclick = () => {
-    const t2i = el.dataset.comboMode === 't2i';
-    go({ ref: t2i ? 'none' : 'lock' });
-  });
+  $$('[data-combo-mode]').forEach(el => el.onclick = () => go({ mode: el.dataset.comboMode }));
   $$('[data-combo-layout]').forEach(el => el.onclick = () => go({ layout: el.dataset.comboLayout }));
   $$('[data-combo-refresh]').forEach(el => el.onclick = async () => {
     await pull(); UI.comboDetail = null; render(); toast('已重读档位');
   });
-  // 第16条：设定图模板是角色设定图的子功能，从档位表里以模态框打开
-  $$('[data-sheet-template]').forEach(el => el.onclick = () => openSheetTemplateModal());
+  // 设定图模板：角色 / 场景 / 道具各有自己的库，从档位表里以模态框打开
+  $$('[data-sheet-template]').forEach(el => el.onclick = () => {
+    const cap = currentCap();
+    if (isExtSheetCap(cap)) openExtTemplateModal(cap);
+    else openSheetTemplateModal();
+  });
   $$('[data-combo-studio]').forEach(el => el.onclick = async () => {
-    // 把当前组合带到创作台：版式/画法/参考方式一次填好，档位停在母版
-    const c = comboById(UI.comboSel) || combo;
-    UI.capId = 'sheet.character';
-    UI.mode = c.ref === 'none' ? 't2i' : 'i2i';
-    UI.sheetForm = { ...UI.sheetForm, layout: c.layout, ink: c.ink,
-                     ref: c.ref === 'none' ? 'lock' : c.ref, grade: '默认' };
-    UI.sheetOpen = false; UI.sheetPreview = null;
+    // 把当前组合带到创作台：版式/模式/画法一次填好，档位停在母版
+    const c = comboById(UI.comboSel) || combo, cap = currentCap(), mode = comboModeOf(c);
+    UI.capId = cap.id;
+    if (isBoardCap(cap)) {
+      const f = boardForm();
+      Object.assign(f, { layout: c.layout, ink: c.ink || 'color', grade: '默认', sel: 0,
+                         cells: f.cells.map(() => '') });
+      UI.mode = 'i2i'; UI.boardOpen = false; UI.boardPreview = null; boardForm();
+    } else if (isExtSheetCap(cap)) {
+      const f = extForm();
+      Object.assign(f, { kind: extKindOf(cap), layout: c.layout, ink: c.ink || 'color',
+        nochar: c.nochar || 'yes', ref: c.ref || 'none', grade: '默认' });
+      UI.mode = mode;
+      if (mode === 'expand') { f.ink = 'color'; f.nochar = 'yes'; f.ref = 'none'; f.styleCustom = false; }
+      else if (mode === 'i2i') { f.styleCustom = true; if (f.kind === 'prop') f.ref = 'lock'; }
+      else if (f.kind === 'prop') f.ref = 'none';
+      extForm(); UI.extOpen = false; UI.extPreview = null;
+    } else {
+      UI.mode = mode;
+      UI.sheetForm = { ...UI.sheetForm, layout: c.layout, ink: c.ink,
+                       ref: c.ref === 'none' ? 'lock' : c.ref, grade: '默认' };
+      UI.sheetOpen = false; UI.sheetPreview = null;
+    }
     UI.route = 'studio';
+    UI._userSwitched = true; UI._draftCap = UI.capId;
     UI._navPending = true;
-    await saveDraft({ route: 'studio', capId: 'sheet.character' });
+    await saveDraft({ route: 'studio', capId: UI.capId });
     UI._navPending = false;
     render();
   });
@@ -2314,6 +3149,120 @@ function openSheetTemplateModal() {
   bindSheetLib();
 }
 
+/* 1.03 设定图模板：场景 / 道具各有独立提示词库，但界面继续沿用角色模板的
+   「版式卡片 + 只读通用块 + 只读线稿句 + 可编辑风格预设」结构。 */
+function pageExtSheet(cap, inModal = false) {
+  const kind = extKindOf(cap), lib = extLib(kind), layouts = lib.layouts || [];
+  if (!layouts.length) {
+    return `<h2>设定图模板</h2><div class="sub">${esc(cap.name)}</div>
+      <div class="panel"><div class="brokenbox">读不到提示词库（prompts/${kind === 'scene' ? 'scene_sheet.json' : 'prop_sheet.json'}）。</div></div>
+      <button class="btn primary" data-extlib-reload>↻ 重读提示词库</button>`;
+  }
+  const blocks = lib.blocks || {}, lines = lib.line_styles || [], styles = lib.styles || [];
+  const modes = lib.modes || [], hints = lib.variable_hints || {};
+  const comboCount = combosForKind(kind).length;
+  return `<div class="spread" style="margin-bottom:6px">
+      <div><h2>${esc(cap.name)} · 设定图模板</h2>
+        <div class="sub">${esc(lib.name || cap.name)} · 只需改「风格预设」；通用块与线稿风格句只读 · 数据文件 ${esc(lib.file || '')}</div></div>
+      <div class="row">${inModal ? '' : '<button class="btn sm" data-page="grades">← 返回档位表</button>'}</div></div>
+    <div class="panel"><h3>模式与组合 <span class="tag">${modes.length} 个模式 · ${comboCount} 个组合</span></h3>
+      <div class="tiny muted" style="line-height:1.85">${modes.map(m => `<span class="chip on" style="margin-right:6px">${esc(m.name)}</span>`).join('')}
+        <br>版式决定画幅：所有版式整图 16:9；档位只改像素 / 倍数 / CFG / sigma，提示词由组合决定。</div></div>
+    <div class="panel"><h3>版式模板 <span class="tag">${layouts.length} 个</span></h3>
+      <div class="sheet-cards">${layouts.map(l => `<div class="lcard"><b>${esc(l.name)}</b>
+        <div class="lmeta"><span class="chip on">${esc(l.ratio || '16:9')}</span><span class="tiny muted">${esc(l.size || '1536 × 864')}</span></div>
+        <div class="tiny muted" style="margin:7px 0 9px;line-height:1.75">${esc(l.summary || '')}</div>
+        ${(l.subs || []).length ? `<div class="tiny muted" style="margin:-4px 0 9px;line-height:1.75">子选项（只改提示词）：${(l.subs || []).map(s => esc(s.name)).join(' / ')}</div>` : ''}
+        <div class="row"><button class="btn sm" data-ext-preview="${esc(l.id)}">预览整条提示词</button>
+          <button class="btn sm ghost" data-ext-use="${esc(l.id)}">填入创作台</button></div></div>`).join('')}</div>
+      ${hints.scene || hints.sceneGood ? `<div class="tiny muted" style="margin-top:10px;line-height:1.8">写法参考：${esc(hints.scene || '')}<br>
+        <span style="color:#8a3a25">好例子：${esc(hints.sceneGood || '')}</span></div>` : ''}</div>
+    <div class="panel"><h3>通用块 <span class="tag gray">只读</span></h3>
+      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">${esc(lib.note || '')}</div>
+      ${Object.entries(blocks).map(([key, b]) => {
+        const text = typeof b === 'string' ? b : (b.text || '');
+        const name = typeof b === 'string' ? key : (b.name || key);
+        const hint = typeof b === 'string' ? '' : (b.hint || '');
+        return `<div class="sheet-block"><div class="bh">${esc(name)}<span class="mono">${esc(key)}</span></div>
+          <textarea data-blk="${esc(key)}" spellcheck="false" rows="3" readonly>${esc(text)}</textarea>
+          ${hint ? `<div class="tiny muted" style="margin-top:4px">${esc(hint)}</div>` : ''}</div>`;
+      }).join('')}</div>
+    <div class="panel"><h3>线稿风格句 <span class="tag gray">只读 · ${lines.length} 条</span></h3>
+      ${lines.map(s => `<div class="sheet-block"><div class="bh">${esc(s.name)}<span class="mono">${esc(s.id)}</span></div>
+        <textarea data-ls="${esc(s.id)}" spellcheck="false" rows="3" readonly>${esc(s.text)}</textarea></div>`).join('')}</div>
+    <div class="panel"><h3>风格预设 <span class="tag">${styles.length} 类</span></h3>
+      <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.8">这是唯一可编辑的部分。场景/道具库里的同名预设会覆盖角色库，避免人物向词污染画面。</div>
+      <div id="styleRows">${styles.map(s => `<div class="style-row" data-strow="1"><input class="input sname" data-stn value="${esc(s.name)}">
+        <input class="input" data-stt value="${esc(s.text)}">
+        <button class="btn sm ghost stdel" data-stdel title="删除这个预设">✕</button></div>`).join('')}</div>
+      <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-stadd>＋ 新增预设</button>
+        <span style="flex:1"></span><button class="btn sm" data-extlib-reload>↻ 重读提示词库</button>
+        <button class="btn primary sm" data-extlib-save>保存</button></div></div>`;
+}
+function combosForKind(kind) { return (((S && S.extCombos) || {})[kind]) || []; }
+function bindExtSheetLib(cap) {
+  const kind = extKindOf(cap);
+  $$('[data-extlib-save]').forEach(el => el.onclick = async () => {
+    const styles = $$('[data-strow]').map(row => ({
+      name: String(((row.querySelector('[data-stn]') || {}).value || '')).trim(),
+      text: String(((row.querySelector('[data-stt]') || {}).value || '')).trim(),
+    })).filter(s => s.name && s.text);
+    const res = await api(`/api/ext/${cap.id}/library`, { method: 'PUT', body: { styles } });
+    if (!res.ok) { toastBlocked('提示词库没保存', res.reason || ''); return; }
+    await pull(); render(); toast('设定图模板已保存，创作台立刻生效');
+  });
+  $$('[data-extlib-reload]').forEach(el => el.onclick = async () => { await pull(); render(); toast('已重读提示词库'); });
+  $$('[data-ext-preview]').forEach(el => el.onclick = async () => {
+    const layoutId = el.dataset.extPreview, layout = (extLib(kind).layouts || []).find(l => l.id === layoutId) || {};
+    const mode = String(layout.mode || '').split(',')[0] || 't2i';
+    const hints = extLib(kind).variable_hints || {}, styles = extLib(kind).styles || [];
+    const sample = kind === 'scene' ? (hints.sceneGood || '雨夜旧码头，左侧仓库右侧灯塔') : '雨伞：展开正面、顶部、伞底、合上';
+    const refs = mode === 't2i' ? [] : ['preview'];
+    const sub = (layout.subs && layout.subs[0] && layout.subs[0].id) || '';
+    const body = { kind, mode, layout: layoutId, sub, text: sample, ink: 'color', nochar: 'yes', ref: 'lock',
+      refSlots: mode === 't2i' ? {} : { ref: 'preview' }, refs,
+      style: mode === 't2i' ? (styles[0] || {}).name || '' : '', styleCustom: mode !== 't2i', styleText: '', grade: '默认' };
+    const res = await api('/api/ext/preview', { body });
+    const text = res.ok ? (res.data.prompt || '') : '';
+    openModal(`<div class="m-head"><h3>${esc(layout.name || layoutId)} · 整条提示词</h3><button class="btn ghost sm" data-close>✕</button></div>
+      <div class="m-body">${res.ok ? `<div class="tiny muted" style="margin-bottom:8px">${esc(res.data.size || '')} · ${esc(res.data.wf || '')} · 共 ${String(text.length)} 字</div>
+        <pre class="promptfull">${esc(text)}</pre>` : `<div class="brokenbox">组装失败：${esc(res.reason || '')}</div>`}</div>
+      <div class="m-foot"><span style="flex:1"></span><button class="btn sm" data-close>关闭</button>
+        ${res.ok ? '<button class="btn sm primary" id="copyExtLibPrompt">复制</button>' : ''}</div>`);
+    const cp = $('#copyExtLibPrompt'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(text); toast('已复制'); } catch (_) { toast('复制失败'); } };
+  });
+  $$('[data-ext-use]').forEach(el => el.onclick = async () => {
+    const layoutId = el.dataset.extUse, layout = (extLib(kind).layouts || []).find(l => l.id === layoutId) || {};
+    UI.capId = cap.id; UI.mode = String(layout.mode || '').split(',')[0] || 't2i';
+    const f = extForm(); f.kind = kind; f.layout = layoutId; f.grade = '默认';
+    if (UI.mode === 'expand') { f.ink = 'color'; f.nochar = 'yes'; f.ref = 'none'; }
+    extForm(); UI.extOpen = false; UI.extPreview = null;
+    UI.route = 'studio'; UI._userSwitched = true; UI._draftCap = cap.id;
+    closeModal(); UI._navPending = true;
+    await saveDraft({ route: 'studio', capId: cap.id });
+    UI._navPending = false; render(); toast('已按这个版式切到创作台');
+  });
+  $$('[data-stadd]').forEach(el => el.onclick = () => {
+    const box = $('#styleRows'); if (!box) return;
+    const row = document.createElement('div');
+    row.className = 'style-row'; row.dataset.strow = '1';
+    row.innerHTML = `<input class="input sname" data-stn placeholder="风格名" value="">
+      <input class="input" data-stt placeholder="画种 + 材质笔触 + 色调 + 光线" value="">
+      <button class="btn sm ghost stdel" data-stdel title="删除这个预设">✕</button>`;
+    box.appendChild(row); row.querySelector('[data-stn]').focus();
+  });
+  $$('[data-stdel]').forEach(el => el.onclick = () => { const row = el.closest('[data-strow]'); if (row) row.remove(); });
+}
+function openExtTemplateModal(cap) {
+  openModal(`<div class="m-head"><h3>${esc(cap.name)} · 设定图模板</h3><button class="btn ghost sm" data-close>✕</button></div>
+    <div class="m-body" style="padding:14px 18px">${pageExtSheet(cap, true)}</div>
+    <div class="m-foot"><span class="tiny muted" style="flex:1">这是 ${esc(cap.name)} 的独立提示词库</span>
+      <button class="btn sm" data-close>关闭</button></div>`, true);
+  const m = $('.modal:last-child') || $('.modal');
+  if (m) m.classList.add('sheetlib-modal');
+  bindExtSheetLib(cap);
+}
+
 async function openSheetPreviewModal(layoutId) {
   // 管理台预览用文档里的示例角色 + 第一类画风，肉眼确认拼出来的顺序对不对
   const lib = sheetLib(), hints = lib.variable_hints || {};
@@ -2463,7 +3412,7 @@ function bindAdmin() {
   // 它的 data-gdel / data-gedit / data-gval 选择器会连带命中组合页上同名属性的按钮，
   // 把删除、编辑处理器覆盖成旧逻辑（点下去走的是另一套 API，表现就是点了没反应）。
   // 所以这里必须直接 return，不能让旧绑定跑下去。
-  if (UI.adminPage === 'grades' && isSheetCap(currentCap())) { bindComboGrades(); return; }
+  if (UI.adminPage === 'grades' && (isSheetCap(currentCap()) || isExtSheetCap(currentCap()) || isBoardCap(currentCap()))) { bindComboGrades(); return; }
   const wf = wfForEditing;
   // 事件必须绑到真正的 checkbox：label 没有 checked 属性，绑在 label 上会永远读到 undefined，
   // 表现就是「点了没反应」。

@@ -294,14 +294,24 @@ def section_studio(cdp: CDP) -> None:
            "t.dispatchEvent(new Event('input',{bubbles:true}));return true;})()")
     cdp.pause(600)
     check("B15 填了角色描述后可以发送", cdp.js("!document.querySelector('#sendBtn').disabled"))
-    check("B16 草稿同步到服务端（版式/画法/角色行）", (lambda d: d.get("layout") == "B" and d.get("ink") == "line"
-                                                    and SAMPLE_CHAR[:8] in str(d.get("character")))(
-        api("/api/state")["ui"]["drafts"].get("sheet.character", {}).get("sheet", {})),
-        str(api("/api/state")["ui"]["drafts"].get("sheet.character", {}).get("sheet", {}))[:90])
+    # 草稿是防抖写入的，机器忙时 600ms 不一定够：等到写进去（或超时）再断言
+    draft: dict[str, Any] = {}
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        draft = api("/api/state")["ui"]["drafts"].get("sheet.character", {}).get("sheet", {})
+        if (draft.get("layout") == "B" and draft.get("ink") == "line"
+                and SAMPLE_CHAR[:8] in str(draft.get("character"))):
+            break
+        time.sleep(0.4)
+    check("B16 草稿同步到服务端（版式/画法/角色行）",
+          draft.get("layout") == "B" and draft.get("ink") == "line"
+          and SAMPLE_CHAR[:8] in str(draft.get("character")),
+          str(draft)[:90])
 
     # 看完整提示词
     click(cdp, "#sheetPvBtn")
-    cdp.pause(1200)
+    # 面板先占位、内容等服务端组装回来：机器忙时一两秒才到，等元素而不是固定 sleep
+    cdp.wait("!!document.querySelector('#sheetPv pre')", 20)
     check("B17 「看完整提示词」展开预览", cdp.js("!!document.querySelector('#sheetPv pre')"))
     preview_text = cdp.js("(()=>{const p=document.querySelector('#sheetPv pre');return p?p.textContent:'';})()") or ""
     check("B18 预览里是线稿四宫格的完整提示词",
@@ -458,9 +468,9 @@ def section_admin(cdp: CDP) -> None:
           str(cdp.js("""(()=>{const ids=[...document.querySelectorAll('[data-sheet-use]')].map(e=>e.dataset.sheetUse||'');
             return ids.length+' / '+ids.filter(x=>x.endsWith('|none')).length;})()""")))
 
-    # 预览：服务端组装整条提示词
+    # 预览：服务端组装整条提示词（等元素出现，别用固定 sleep：冷启动那次要两秒多）
     click(cdp, '[data-sheet-preview="B"]')
-    cdp.pause(1500)
+    cdp.wait("!!document.querySelector('.promptfull')", 12)
     check("E8 预览弹窗打开了整条提示词", cdp.js("!!document.querySelector('.promptfull')"))
     text = cdp.js("(()=>{const p=document.querySelector('.promptfull');return p?p.textContent:'';})()") or ""
     check("E9 预览内容确实是四宫格整条稿", "9:16 竖版" in text and "分格要求" in text and "角色：" in text,
@@ -495,9 +505,9 @@ def section_admin(cdp: CDP) -> None:
     bad = api("/api/sheet/library", "PUT", {"blocks": {"U1": {"name": "x", "text": "  "}}})
     check("E13 空通用块被拦下", bad.get("ok") is False, str(bad.get("reason"))[:60])
 
-    # 从管理台把组合填进创作台
+    # 从管理台把组合填进创作台（先写草稿再跳转，地址栏要等一次写入回来）
     click(cdp, '[data-sheet-use="B|line|none"]')
-    cdp.pause(1600)
+    cdp.wait("location.hash.includes('studio')", 20)
     check("E14 「填入」跳到创作台且带上了版式/画法", cdp.js(
         "location.hash.includes('studio') && UI.capId==='sheet.character' && "
         "UI.sheetForm.layout==='B' && UI.sheetForm.ink==='line'"),

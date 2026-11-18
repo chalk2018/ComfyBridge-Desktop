@@ -688,6 +688,7 @@ audio{width:100%;height:34px}
 .modepick button:not(.on):hover{color:var(--ink)}
 .modepick button .dotg{width:6px;height:6px;border-radius:50%;background:var(--green);flex:0 0 auto}
 .modepick button .dotb{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+.modepick button .dota{width:6px;height:6px;border-radius:50%;background:#a06bff;flex:0 0 auto}
 .modedis{font-size:11.5px;color:var(--ink4);padding:4px 2px}
 
 /* ② 内容可编辑的提示词编辑器（支持行内图片引用 chip）
@@ -837,7 +838,7 @@ audio{width:100%;height:34px}
   /* 输入框最高占半屏。滚动只发生在中间那块内容区（.sheetbody），底部工具栏永远露在外面——
      角色设定图那一版有 5 行分段按钮 + 描述 + 风格，不限高会把聊天区整个吃掉。 */
   .composer .inputbox{max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column}
-  .composer .inputbox .sheetbody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  .composer .inputbox .sheetbody{flex:1 1 auto;min-height:0;min-width:0;overflow-y:auto;overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch}
   .composer .inputbox .foot{flex:0 0 auto}
   .composer .inputbox .sheetbody::-webkit-scrollbar{width:4px}
@@ -1046,9 +1047,90 @@ audio{width:100%;height:34px}
   .style-row .sname{width:100%}
   .sheet-cards{grid-template-columns:1fr}
 }
+/* 1.03 场景设定图四个参考图槽位 */
+.ext-slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 10px}
+.ext-slot{min-width:0;border:1px dashed var(--line);border-radius:10px;padding:8px;background:#fcfdff}
+.ext-slot.on{border-style:solid;border-color:#8fb0ff;background:#f7faff}
+.ext-slot.disabled{opacity:.48;background:#f5f6f8}
+.ext-slot .slot-t{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:6px}
+.ext-slot .slot-t b{font-size:11.5px;color:var(--ink2)}
+.ext-slot img{width:100%;height:62px;object-fit:contain;border-radius:7px;background:#eef1f6;display:block;margin-bottom:6px}
+.ext-slot .slot-acts{display:flex;gap:4px;margin-bottom:6px}
+.ext-slot .slot-acts .btn{padding:3px 7px;height:auto;font-size:10.5px}
+.ext-slot>.btn{width:100%;height:28px;font-size:11px;margin-bottom:5px}
+.ext-slot .tiny{font-size:10px;line-height:1.5;display:block}
+@media (max-width:820px){.ext-slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 1.03 宫格分镜故事板：左侧小宫格单选 + 右侧单个提示词输入框 */
+.board-wrap{display:grid;grid-template-columns:190px minmax(0,1fr);gap:12px;align-items:stretch;margin:8px 0 10px}
+.board-grid{display:grid;gap:6px;align-content:start;background:#f8faff;border:1px solid var(--line);border-radius:10px;padding:8px}
+.board-grid.cols2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.board-grid.cols3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.board-cell{height:46px;padding:0 4px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink2);
+  font-size:12px;font-weight:650;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.board-cell small{font-size:9px;font-weight:400;color:#8b95a5}
+.board-cell:hover{border-color:#8fb0ff;background:#f7faff}
+.board-cell.on{border-color:#2f6bff;background:#2f6bff;color:#fff;box-shadow:0 2px 8px #2f6bff33}
+.board-cell.on small{color:#d9e6ff}
+.board-cell.blank:not(.on){border-style:dashed;background:#fcfdff}
+.board-side{min-width:0;display:flex;flex-direction:column;gap:6px}
+.board-side .board-tip{display:flex;align-items:center;gap:6px;font-size:11px;color:#667085}
+.board-text{width:100%;min-height:150px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:10px 11px;
+  font:inherit;font-size:12.5px;line-height:1.7;color:var(--ink);background:#fff;outline:none}
+.board-text:focus{border-color:#2f6bff;box-shadow:0 0 0 3px #2f6bff14}
+.board-text::placeholder{color:#a8b0bc}
+@media (max-width:820px){
+  .board-wrap{grid-template-columns:1fr}
+  .board-grid{padding:6px}
+  .board-cell{height:40px}
+  .board-text{min-height:110px}
+}
 /* 组合档位表已改为与「图片生成」档位表同构（pageComboGrades）：
    复用 .glayout / .node-list / .node-editors / .addbar / .glist / .grow / .effbox
    与顶部 .sheetbar/.seg 分段按钮，不再需要单独的 .combo-* / .gtable 样式。 */
+
+/* ---------- 1.03 场景 / 道具设定图：版式与子选项 ---------- */
+/* 版式最多 5 个、子选项最多 4 个。窄屏上折行会把输入区顶得很高，
+   所以这两行改成「一行横滑」，手指左右划就能看到最后一个。 */
+.ext-seg{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;max-width:100%;min-width:0;flex:0 1 auto}
+/* 窄屏那条 `.sheetbar>.seg{flex-wrap:wrap}` 的优先级更高，这里显式盖回来 */
+.sheetbar>.seg.ext-seg{flex-wrap:nowrap}
+.ext-seg::-webkit-scrollbar{display:none}
+.ext-seg .segb{flex:0 0 auto}
+@media (max-width:820px){
+  /* 这两个能力的表单比角色设定图长（模式 + 版式 + 子选项 + 4 个槽位 + 档位 + 风格），
+     50dvh 只剩一条缝，改成最高 74dvh，中间照旧内部滚动、底部工具栏不动。 */
+  .composer.ext{max-height:min(74dvh,680px)}
+  /* 版式行改成横滑以后，它的 min-content 会把整条 inputbox 撑宽（溢出 20px、右边按钮被切）。
+     逐层把 min-width 放开，宽度就由容器说了算，横滑只发生在 .seg 内部。 */
+  .composer.ext .composer-inner{width:100%;margin:0;min-width:0}
+  .composer.ext .inputbox,.composer.ext .sheetbar{min-width:0}
+  .composer.ext .sheetbody{padding-bottom:2px}
+  .composer.ext .sheetbar{padding:4px 2px;min-height:30px;gap:6px}
+  /* 版式全是 16:9，窄屏上每个按钮里再带一遍「16:9」会把 5 个版式挤到横滑；
+     去掉这枚小字，5 个版式一行放得下。 */
+  .composer.ext .ext-seg .segx{display:none}
+  .composer.ext .ext-seg .segb{padding:0 8px}
+  .composer.ext .sheetbar>.tiny.muted{display:none}      /* 行尾说明在窄屏上只会挤掉按钮 */
+  .ext-slots{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:6px 0 8px}
+  .ext-slot{padding:7px 8px;border-radius:9px;min-height:0}
+  .ext-slot .slot-t{margin-bottom:4px;gap:4px}
+  .ext-slot .slot-t b{font-size:11px}
+  .ext-slot img{height:52px;margin-bottom:5px}
+  .ext-slot .tiny{display:none}                          /* 槽位长说明收进桌面端 */
+  .ext-slot>.btn{height:26px;font-size:11px;margin-bottom:0}
+  /* 手指点得准一点：分段按钮与槽位按钮在窄屏上抬到 30px 高 */
+  .composer.ext .ext-seg .segb{min-height:30px}
+  .ext-slot>.btn{height:30px}
+  .ext-foot-hint{display:none}
+  .composer.ext .foot{flex-wrap:wrap;row-gap:6px}
+  .composer.ext .sheetchar{min-height:56px}
+  /* 档位表的版式行：手机上把「16:9」小字去掉、改成一行横滑，避免最后一个版式被挤到第二行 */
+  .admin-seg{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;min-width:0}
+  .admin-seg::-webkit-scrollbar{display:none}
+  .admin-seg .segb{flex:0 0 auto}
+  .admin-seg .segx{display:none}
+}
 </style>
 </head>
 <body>

@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 import time
@@ -134,20 +136,35 @@ def wait_idle(cdp: CDP, timeout: float = 150.0) -> bool:
     return False
 
 
+def _fresh_profile_and_port() -> tuple[Path, int]:
+    """每次跑测试都用一份全新的浏览器配置 + 独立调试端口。
+
+    为什么：固定 profile 时，上一轮没退干净的 Edge 会让新进程直接复用它，
+    连上的还是那条早已失效的旧页面（报错形如「Cannot find default execution
+    context」）。配置目录里塞了磁盘缓存，顺便也就没有旧 app.js 的问题了。
+    """
+    port = 9223 + (os.getpid() % 60)
+    profile = PROFILE.parent / f"{PROFILE.name}-{port}"
+    shutil.rmtree(profile, ignore_errors=True)
+    profile.mkdir(parents=True, exist_ok=True)
+    return profile, port
+
+
 def start_browser() -> tuple[subprocess.Popen, CDP]:
     """启动带调试端口的 Edge 并连上页面 target。"""
-    PROFILE.mkdir(parents=True, exist_ok=True)
+    profile, port = _fresh_profile_and_port()
     proc = subprocess.Popen([
         EDGE, "--headless=new", "--disable-gpu", "--no-sandbox",
         "--disable-extensions", "--no-first-run", "--disable-background-networking",
-        "--remote-allow-origins=*", f"--remote-debugging-port={CDP_PORT}",
-        f"--user-data-dir={PROFILE}", "--window-size=1440,900", BASE + "/",
+        "--disk-cache-size=1", "--media-cache-size=1",
+        "--remote-allow-origins=*", f"--remote-debugging-port={port}",
+        f"--user-data-dir={profile}", "--window-size=1440,900", BASE + "/",
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     deadline = time.time() + 30
     targets: list[dict[str, Any]] = []
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{CDP_PORT}/json/list", timeout=2) as resp:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2) as resp:
                 targets = json.loads(resp.read().decode())
             page = next((t for t in targets if t.get("type") == "page" and "8190" in t.get("url", "")), None)
             if page:
@@ -155,6 +172,10 @@ def start_browser() -> tuple[subprocess.Popen, CDP]:
                 cdp.call("Runtime.enable")
                 cdp.call("Page.enable")
                 cdp.call("Log.enable")
+                # 前端脚本刚改过时，Edge 的磁盘缓存会拿旧 app.js 跑（表现像「改了没生效」），
+                # 测试一律绕过缓存并强刷一次。
+                cdp.call("Network.enable")
+                cdp.call("Network.setCacheDisabled", {"cacheDisabled": True})
                 return proc, cdp
         except Exception:  # noqa: BLE001
             pass

@@ -345,12 +345,16 @@ class WorkflowRegistry:
         prefix: str,
         params: dict[str, Any] | None = None,
         tag: str | None = None,
+        placeholder: str | None = None,
     ) -> dict[str, Any]:
         """把用户描述、参考图、种子、文件名前缀填进工作流，得到可提交的 prompt。
 
         Args:
             params: 参数覆盖（角色设定图的组合档位用）；不给就按档位名查 config。
             tag: 与 `load()` 一致的缓存键，保证「同一组合同一档」每次都读到同一份拷贝。
+            placeholder: 0 张参考图时塞给 LoadImage 的占位图文件名。参考生图这类
+                工作流必须有一张图输入，「一格参考图都没传」时节点会带着工作流里
+                那个早已不存在的默认文件名出发，ComfyUI 直接拒收整条任务。
         """
         if params is None:
             params = self.grade_params(wf_name, grade)
@@ -387,6 +391,10 @@ class WorkflowRegistry:
                 for target in slot["targets"]:
                     if target["node"] in api:
                         api[target["node"]]["inputs"][target["field"]] = [new_id, 0]
+        elif placeholder and root_loads and root_loads[0] in api:
+            # 0 张参考图：把 LoadImage 指到一张纯白占位图，否则它会带着工作流里
+            # 那个已经不存在的默认文件名出发，ComfyUI 拒收整条任务。
+            api[root_loads[0]]["inputs"]["image"] = placeholder
         return api
 
     def node_list(self, wf_name: str) -> list[dict[str, Any]]:
@@ -459,6 +467,14 @@ class WorkflowRegistry:
                 # 放在能力里而不是顶层：管理台的档位表本来就是「按能力」进去的。
                 from . import combos as sheet_combos
                 item["combos"] = sheet_combos.view()
+            elif cap.get("id") in ("sheet.scene", "sheet.prop"):
+                from . import extsheets as ext_sheets
+                _kind = ext_sheets.SCENE if cap.get("id") == "sheet.scene" else ext_sheets.PROP
+                item["combos"] = ext_sheets.view(_kind)
+                item["extKind"] = _kind
+            elif cap.get("id") == "board.story":
+                from . import boardlib as story_boards
+                item["combos"] = story_boards.view()
             caps.append(item)
         return caps
 

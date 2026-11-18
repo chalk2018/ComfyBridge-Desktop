@@ -1,0 +1,70 @@
+{
+ "view": "390x844",
+ "home": {
+  "vw": 390,
+  "scrollW": 390,
+  "clientW": 390,
+  "overflowX": 0,
+  "overflow": [],
+  "btn": {
+   "w": 71,
+   "h": 28,
+   "right": 84
+  },
+  "textAreaW": 0
+ },
+ "02_prop": {
+  "vw": 390,
+  "scrollW": 390,
+  "clientW": 390,
+  "overflowX": 0,
+  "overflow": [],
+  "btn": {
+   "w": 71,
+   "h": 28,
+   "right": 84
+  },
+  "textAreaW": 348,
+  "opened": true
+ },
+ "02_prop_alt": {
+  "vw": 390,
+  "scrollW": 390,
+  "clientW": 390,
+  "overflowX": 0,
+  "overflow": [],
+  "btn": {
+   "w": 71,
+   "h": 28,
+   "right": 84
+  },
+  "textAreaW": 348
+ },
+ "03_scene": {
+  "vw": 390,
+  "scrollW": 390,
+  "clientW": 390,
+  "overflowX": 0,
+  "overflow": [],
+  "btn": {
+   "w": 71,
+   "h": 28,
+   "right": 84
+  },
+  "textAreaW": 348,
+  "opened": true
+ },
+ "03_scene_alt": {
+  "vw": 390,
+  "scrollW": 390,
+  "clientW": 390,
+  "overflowX": 0,
+  "overflow": [],
+  "btn": {
+   "w": 71,
+   "h": 28,
+   "right": 84
+  },
+  "textAreaW": 348
+ }
+}

@@ -1,0 +1,74 @@
+[
+ {
+  "tag": "eye_TURN_L45",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "L45",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_TURN_L75",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "L75",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_TURN_R45",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "R45",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_TURN_R75",
+  "layout": "TURN",
+  "mode": "expand",
+  "sub": "R75",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_PUSH_S",
+  "layout": "PUSH",
+  "mode": "expand",
+  "sub": "S",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_PUSH_L",
+  "layout": "PUSH",
+  "mode": "expand",
+  "sub": "L",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_PULL_S",
+  "layout": "PULL",
+  "mode": "expand",
+  "sub": "S",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ },
+ {
+  "tag": "eye_PULL_L",
+  "layout": "PULL",
+  "mode": "expand",
+  "sub": "L",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": ""
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "tag": "base_P",
+  "layout": "P",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": "这是一间宋代书房，需要从斜上方俯视整个房间的全景"
+ },
+ {
+  "tag": "base_B",
+  "layout": "B",
+  "mode": "i2i",
+  "slot": "ref",
+  "ref": "D:/workspace/AI短剧相关/抖音+AI学习/AI短剧练习1/苏轼分镜素材图片/第2镜_眉山苏家书房.jpg",
+  "text": "这是一间宋代书房，需要正上方垂直向下的鸟瞰布局"
+ }
+]

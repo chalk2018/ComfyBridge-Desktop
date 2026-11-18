@@ -1,8 +1,8 @@
-version: 1.02
+version: 1.03
 service:
   comfy: http://127.0.0.1:8188
   port: 8190
-  bindLan: false
+  bindLan: true
   comfyOutputDir: D:/ComfyUI-0.37.1/ComfyUI/output
   archiveDir: D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput
   wfDir: ./workflows
@@ -76,42 +76,51 @@ capabilities:
   name: 场景设定图
   em: 🏞
   group: 设定图
-  enabled: false
-  desc: 场景概念设定
-  maxRefs: 0
-  workflows: []
+  enabled: true
+  desc: 场景概念设定，文生图/图生图/扩图，支持布局图识别与推拉转镜头
+  maxRefs: 4
+  requiredRef: false
+  rules:
+  - when: 模式 = 文生图
+    wf: 设定图-文生图
+  - when: 模式 = 图生图/扩图
+    wf: 设定图-参考生图
+  fallback: auto
+  workflows:
+  - 设定图-文生图
+  - 设定图-参考生图
 - id: sheet.prop
   name: 道具设定图
   em: 🗡
   group: 设定图
-  enabled: false
-  desc: 道具概念设定
-  maxRefs: 0
-  workflows: []
-- id: board.4
-  name: 4 宫格故事板
+  enabled: true
+  desc: 道具概念设定，多视图/单视图，支持参考图与线稿
+  maxRefs: 1
+  requiredRef: false
+  rules:
+  - when: 图片 = 0
+    wf: 设定图-文生图
+  - when: 图片 ≥ 1
+    wf: 设定图-参考生图
+  fallback: auto
+  workflows:
+  - 设定图-文生图
+  - 设定图-参考生图
+- id: board.story
+  name: 宫格分镜故事板
   em: ▦
   group: 故事板
-  enabled: false
-  desc: 4 格分镜故事板
-  maxRefs: 0
-  workflows: []
-- id: board.6
-  name: 6 格故事板
-  em: ▦
-  group: 故事板
-  enabled: false
-  desc: 6 格分镜故事板
-  maxRefs: 0
-  workflows: []
-- id: board.9
-  name: 9 宫格故事板
-  em: ▦
-  group: 故事板
-  enabled: false
-  desc: 9 格分镜故事板
-  maxRefs: 0
-  workflows: []
+  enabled: true
+  desc: 逐格描述镜头画面，一次生成四/六/九宫格分镜故事板
+  maxRefs: 6
+  requiredRef: false
+  rules:
+  - when: 图片 = 0/1~6
+    wf: 故事板-参考生图
+  fallback: auto
+  workflows:
+  - 故事板-参考生图
+  - 故事板-参考生图-宽幅6格
 - id: video.generate
   name: 视频生成
   em: 🎬
@@ -256,6 +265,42 @@ workflows:
     - node: '459_502'
       field: sigmas
     grades: []
+  故事板-参考生图:
+    file: workflows/故事板-参考生图-qwen2.1turbo.json
+    bridge: workflows/故事板-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  故事板-参考生图-宽幅6格:
+    file: workflows/故事板-参考生图-宽幅6格.json
+    bridge: workflows/故事板-参考生图-宽幅6格.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_456'
+      field: width
+    - node: '459_456'
+      field: height
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
 sheetGrades:
   A.t2i:
   - name: 快速
@@ -331,6 +376,49 @@ sheetGrades:
         megapixels: 2.0
         multiple: 20
   C.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+extGrades:
+  scene: {}
+  prop: {}
+boardGrades:
+  G4:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  G6:
+  - name: 快速
+    note: 6 格宽幅草稿 1920×720
+    params:
+      '459_456':
+        width: 1920
+        height: 720
+  - name: 精细
+    note: 6 格宽幅高清 2560×960
+    params:
+      '459_456':
+        width: 2560
+        height: 960
+  G9:
   - name: 快速
     note: ''
     params:

@@ -1,0 +1,64 @@
+[
+  {
+    "tag": "b3_g4_line_noborder_v2",
+    "layout": "G4",
+    "ink": "line",
+    "line_style": "W3",
+    "cells": [
+      "旧火车站台，一个戴鸭舌帽、背帆布包的少年望着铁轨，全景",
+      "同一少年低头看手里的车票，近景",
+      "",
+      ""
+    ]
+  },
+  {
+    "tag": "b3_g9_line_ref_v2",
+    "layout": "G9",
+    "ink": "line",
+    "line_style": "W3",
+    "refs": ["_dev/prompt_lab/out/board_char_ref__LAB_board_char_ref_00001.png"],
+    "cells": [
+      "图 1 的女孩背对镜头站在图书馆门口，推门前停顿，全景",
+      "图 1 的女孩走进阅览室，中景",
+      "图 1 的女孩在书架间抽出一本书，近景",
+      "",
+      "图 1 的女孩在长桌边坐下翻开书，中景",
+      "图 1 的女孩低头在本子上做笔记，手部与笔记特写",
+      "图 1 的女孩抬头看向窗外，中近景",
+      "",
+      "图 1 的女孩合上书站起身，窗外夕阳，中景"
+    ]
+  },
+  {
+    "tag": "b3_g4_ref_no_mention_v2",
+    "layout": "G4",
+    "ink": "color",
+    "refs": ["_dev/prompt_lab/out/board_char_ref__LAB_board_char_ref_00001.png"],
+    "cells": [
+      "冬日的旧书店，戴圆框眼镜的店主在整理书架上方的书，中景",
+      "一个穿黄色雨衣的小男孩趴在窗台看雨，近景",
+      "柜台上的黑猫蜷在暖灯下打盹，特写",
+      "书店门口的铜风铃被风吹响，门半掩，全景"
+    ]
+  },
+  {
+    "tag": "b3_g4_6refs_v2",
+    "layout": "G4",
+    "ink": "color",
+    "timeout": 600,
+    "refs": [
+      "_dev/prompt_lab/out/board_char_ref__LAB_board_char_ref_00001.png",
+      "_dev/prompt_lab/out/board_prop_ref__LAB_board_prop_ref_00001.png",
+      "_dev/prompt_lab/refs/scene_ref_room.png",
+      "_dev/prompt_lab/refs/scene_panorama.png",
+      "_dev/prompt_lab/refs/floorplan_color.png",
+      "_dev/prompt_lab/refs/floorplan_sketch.png"
+    ],
+    "cells": [
+      "图 1 的女孩站在图 3 的房间里，手里拿图 2 的朱红油纸伞，中景",
+      "图 1 的女孩站在窗边看向窗外城市，中近景",
+      "按图 5 的彩色布局中沙发与桌子的相对位置，图 1 的女孩坐在桌前，中景",
+      "按图 6 草图里的门窗方位，图 1 的女孩撑着图 2 的红伞走出门，全景"
+    ]
+  }
+]

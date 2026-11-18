@@ -11,3 +11,8 @@ data/*
 !data/*/
 data/*/**
 !data/*/.gitkeep
+
+# 调试出图产物（体积大，且运行时不依赖；refs 参考图保留）
+_dev/prompt_lab/out/
+_dev/prompt_lab/board/out/
+_dev/*.log

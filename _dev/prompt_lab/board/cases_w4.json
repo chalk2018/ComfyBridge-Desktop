@@ -1,0 +1,17 @@
+[
+  {
+    "tag": "b4_g4_layoutref_v4",
+    "layout": "G4",
+    "ink": "color",
+    "refs": [
+      "_dev/prompt_lab/out/board_char_ref__LAB_board_char_ref_00001.png",
+      "_dev/prompt_lab/refs/floorplan_sketch.png"
+    ],
+    "cells": [
+      "图 1 的女孩站在真实的中式茶室里，左侧是格栅窗，中景",
+      "图 1 的女孩看向窗外的庭院，中近景",
+      "按图 2 草图里的门窗与家具相对方位，图 1 的女孩坐在真实的木桌前，中景",
+      "图 1 的女孩从茶室木门走出，门外是真实街道，全景"
+    ]
+  }
+]

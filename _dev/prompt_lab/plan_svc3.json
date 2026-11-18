@@ -1,0 +1,12 @@
+[
+ {"tag": "g01_ricecooker", "layout": "MV", "mode": "t2i",
+  "text": "美的牌白色电饭煲，圆桶形锅身，顶部一圈银色锅盖，正面一块黑色显示屏"},
+ {"tag": "g02_drone", "layout": "MV", "mode": "t2i",
+  "text": "四轴航拍无人机：白色机身、四个折叠机臂、机臂末端各一副黑色螺旋桨"},
+ {"tag": "g03_keyboard", "layout": "MV", "mode": "t2i",
+  "text": "87 键机械键盘：深灰色键帽、青绿字刻、左上角一枚金属旋钮"},
+ {"tag": "g04_hydrant", "layout": "MV", "mode": "t2i",
+  "text": "室外铸铁消防栓：通体大红、两个出水口、顶部五角螺母盖"},
+ {"tag": "g05_helmet", "layout": "MV", "mode": "t2i",
+  "text": "全盔式摩托车头盔：黑色哑光外壳、透明面罩、顶部一道导流脊"}
+]
