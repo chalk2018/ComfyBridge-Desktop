@@ -105,11 +105,21 @@ class ConfigManager:
             if not target.is_relative_to(ROOT):
                 raise ConfigError(f"{key} 必须位于应用目录内")
 
-    def ensure_dirs(self) -> None:
-        """创建应用需要的目录（只在本项目目录和成果目录内）。"""
-        for key in ("wfDir", "copyDir", "uploadDir", "taskDir"):
-            self.resolve(getattr(self.service, key)).mkdir(parents=True, exist_ok=True)
-        self.resolve(self.service.archiveDir).mkdir(parents=True, exist_ok=True)
+    def ensure_dirs(self, service: ServiceSettings | None = None) -> None:
+        """创建应用需要的目录（只在本项目目录和成果目录内）。
+
+        建目录失败（比如盘符不存在）统一转成 ConfigError：启动时页面仍能起来，
+        用红条提示后在管理台里改路径，而不是进程直接退出。
+        """
+        service = service or self.service
+        targets = [self.resolve(getattr(service, key))
+                   for key in ("wfDir", "copyDir", "uploadDir", "taskDir")]
+        targets.append(self.resolve(service.archiveDir))
+        for target in targets:
+            try:
+                target.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                raise ConfigError(f"无法创建目录 {target}：{exc}") from exc
 
     def save_service(self, patch: dict[str, Any]) -> None:
         """管理台保存服务设置：校验 → 写回 → 内存立即生效。"""
@@ -120,26 +130,28 @@ class ConfigManager:
                     merged[key] = value
             candidate = ServiceSettings(**merged)
             self._validate_paths(candidate)
+            # 先建目录再落盘：路径不可用时只报错，不把坏配置写进 config.yaml
+            self.ensure_dirs(candidate)
             self.raw["service"] = candidate.model_dump()
             CONFIG_PATH.write_text(
                 yaml.safe_dump(self.raw, allow_unicode=True, sort_keys=False, width=120),
                 encoding="utf-8",
             )
             self.service = candidate
-            self.ensure_dirs()
 
     def replace(self, raw: dict[str, Any]) -> None:
         """用一份完整配置替换当前配置（能力启停、复制、删除、档位改动后写回）。"""
         with self._lock:
-            ServiceSettings(**raw["service"])
-            self._validate_paths(ServiceSettings(**raw["service"]))
+            candidate = ServiceSettings(**raw["service"])
+            self._validate_paths(candidate)
+            # 先建目录再落盘：路径不可用时只报错，不把坏配置写进 config.yaml
+            self.ensure_dirs(candidate)
             CONFIG_PATH.write_text(
                 yaml.safe_dump(raw, allow_unicode=True, sort_keys=False, width=120),
                 encoding="utf-8",
             )
             self.raw = raw
-            self.service = ServiceSettings(**raw["service"])
-            self.ensure_dirs()
+            self.service = candidate
 
     def capability(self, cap_id: str) -> dict[str, Any] | None:
         """按 id 找能力定义。"""
