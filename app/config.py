@@ -83,10 +83,16 @@ class ConfigManager:
                 service = ServiceSettings(**raw["service"])
             except Exception as exc:  # noqa: BLE001
                 raise ConfigError(f"config.yaml 的 service 段有问题：{exc}") from exc
+            service = self._derive_archive(service)
             self._validate_paths(service)
             self.raw = raw
             self.service = service
             self.ensure_dirs()
+
+    def _derive_archive(self, service: ServiceSettings) -> ServiceSettings:
+        """成果目录固定为 <ComfyUI 输出目录>/ComfyBridgeOutput，不单独配置。"""
+        service.archiveDir = str(Path(service.comfyOutputDir) / "ComfyBridgeOutput")
+        return service
 
     def _validate_paths(self, service: ServiceSettings) -> None:
         """成果目录必须在 ComfyUI output 内；其余写入目录必须在项目目录内。"""
@@ -104,6 +110,10 @@ class ConfigManager:
             target = self.resolve(getattr(service, key))
             if not target.is_relative_to(ROOT):
                 raise ConfigError(f"{key} 必须位于应用目录内")
+        # 输出目录不存在时不会崩，但成品拷不出来；这里提前说清楚，页面红条能直接改
+        out = Path(service.comfyOutputDir).resolve()
+        if not out.is_dir():
+            raise ConfigError(f"ComfyUI 输出目录不存在或不是文件夹：{out}")
 
     def ensure_dirs(self, service: ServiceSettings | None = None) -> None:
         """创建应用需要的目录（只在本项目目录和成果目录内）。
@@ -128,6 +138,8 @@ class ConfigManager:
             for key, value in patch.items():
                 if key in ServiceSettings.model_fields:
                     merged[key] = value
+            # 成果目录固定由输出目录推导，不接受单独配置
+            merged["archiveDir"] = str(Path(str(merged["comfyOutputDir"])) / "ComfyBridgeOutput")
             candidate = ServiceSettings(**merged)
             self._validate_paths(candidate)
             # 先建目录再落盘：路径不可用时只报错，不把坏配置写进 config.yaml
@@ -142,7 +154,8 @@ class ConfigManager:
     def replace(self, raw: dict[str, Any]) -> None:
         """用一份完整配置替换当前配置（能力启停、复制、删除、档位改动后写回）。"""
         with self._lock:
-            candidate = ServiceSettings(**raw["service"])
+            candidate = self._derive_archive(ServiceSettings(**raw["service"]))
+            raw = {**raw, "service": candidate.model_dump()}
             self._validate_paths(candidate)
             # 先建目录再落盘：路径不可用时只报错，不把坏配置写进 config.yaml
             self.ensure_dirs(candidate)

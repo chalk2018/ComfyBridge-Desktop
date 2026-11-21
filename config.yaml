@@ -3,8 +3,8 @@ service:
   comfy: http://127.0.0.1:8188
   port: 8190
   bindLan: true
-  comfyOutputDir: D:/ComfyUI-0.37.1/ComfyUI/output
-  archiveDir: D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput
+  comfyOutputDir: D:\ComfyUI-0.37.1\ComfyUI\output
+  archiveDir: D:\ComfyUI-0.37.1\ComfyUI\output\ComfyBridgeOutput
   wfDir: ./workflows
   copyDir: ./workflows/ComfyBridge
   uploadDir: ./data/uploads

@@ -4119,10 +4119,13 @@ function pageService() {
       <div class="field"><label class="row" style="gap:10px"><span class="switch ${s.bindLan ? 'on' : ''}" data-sw="bindLan"></span>允许本机以外访问（手机/局域网）</label></div>
     </div>
     <div class="panel"><h3>成品存放</h3>
+      <div class="field"><label>ComfyUI 输出目录</label>
+        <div class="row"><input class="input mono" value="${esc(s.comfyOutputDir)}" data-s="comfyOutputDir" id="outDirInput">
+          <button class="btn sm" id="pickOutput">添加目录</button></div>
+        <div class="hint">ComfyUI 的 output 目录。点「添加目录」选文件夹即可，成果目录自动放在它的 ComfyBridgeOutput 子目录里。</div></div>
       <div class="field"><label>成果目录</label>
-        <div class="row"><input class="input mono" value="${esc(s.archiveDir)}" data-s="archiveDir">
-          <button class="btn sm" id="openArchive">打开成果目录</button></div>
-        <div class="hint">默认在 ComfyUI 的 output 下；可以指定任意有写权限的目录，生成成功后成品按能力名归拢进去。</div></div>
+        <div class="row"><span class="mono muted" style="flex:1;word-break:break-all;font-size:12px">${esc(s.archiveDir)}</span></div>
+        <div class="hint">固定是输出目录下的 ComfyBridgeOutput，自动生成，不用填。</div></div>
       <div class="field"><label>成品会这样放</label><div class="path-tree mono">
         <div><span class="d">output/</span></div><div>&nbsp;├─ <span class="d">ComfyBridgeOutput/</span></div>
         <div>&nbsp;│&nbsp;&nbsp; ├─ <span class="d">图片生成/</span></div><div>&nbsp;├─ <span class="muted">（原有的其他文件）</span></div>
@@ -4500,10 +4503,15 @@ function bindAdmin() {
     await pull(); render();
   });
   $$('[data-discard]').forEach(el => el.onclick = () => { render(); toast('已恢复上次保存的样子'); });
-  const oa = $('#openArchive');
-  if (oa) oa.onclick = async () => {
-    const res = await api('/api/open-folder', { body: { path: S.service.archiveDir } });
-    if (!res.ok) toast(res.reason || '打不开这个目录');
+  const op = $('#pickOutput');
+  if (op) op.onclick = async () => {
+    op.disabled = true;
+    const res = await api('/api/pick-folder', { body: { title: '选择 ComfyUI 的 output 目录', initial: S.service.comfyOutputDir } });
+    op.disabled = false;
+    if (!res.ok) { if (res.reason !== '已取消选择') toast(res.reason || '没选到目录'); return; }
+    const i = $('#outDirInput');
+    if (i) { i.value = res.data; i.dispatchEvent(new Event('input')); }
+    toast('已填入，记得点「保存并生效」');
   };
   // ---- 设定图模板页：保存 / 预览 / 填入创作台 / 预设增删（整页与模态框共用）----
   bindSheetLib();

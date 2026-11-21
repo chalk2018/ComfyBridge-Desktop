@@ -49,6 +49,84 @@
 
 其余能力（参考风格生图等）仍为「未配置（下个版本开放）」，未配工作流前不出现可点的入口。
 
+## 在另一台电脑上搭建（clone → 能跑）
+
+仓库里只有源码，**不含 `.venv`、`.cache`，`data` 里也不带历史任务和上传图**。所以别人拉下来后要先建环境，再启动。
+
+### 1. 前置条件
+
+| 项 | 要求 | 说明 |
+| --- | --- | --- |
+| 系统 | Windows 10 / 11 | 启动脚本是 `.bat`；目录选择框依赖 PowerShell |
+| Python | 3.12.x（3.10 以上可用） | 安装时勾选 `Add python.exe to PATH` |
+| ComfyUI | 已装好并能启动 | 默认 `http://127.0.0.1:8188`；工作流用到的模型、自定义节点必须已装在本机，否则任务会报节点/模型缺失 |
+| ffmpeg（可选） | `ffprobe` 在 PATH 里 | 用来读音频/视频成品时长；没有也能跑，只是时长显示不全 |
+
+### 2. 获取代码
+
+```powershell
+git clone https://github.com/chalk2018/ComfyBridge-Desktop.git
+cd ComfyBridge-Desktop
+```
+
+没有 git 的话，在网页上 `Code → Download ZIP`，解压后进入目录。
+
+### 3. 建虚拟环境并装依赖（只需一次）
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+- 虚拟环境目录名必须是 `.venv` —— `启动服务.bat` 里固定调用 `.venv\Scripts\python.exe`
+- 国内网络慢可以加镜像：`-i https://pypi.tuna.tsinghua.edu.cn/simple`
+- 依赖很少（fastapi / uvicorn / httpx / pyyaml / python-multipart / websocket-client / pillow），几分钟装完
+
+### 4. 启动
+
+双击 `启动服务.bat`（或 `start.bat`，两者等价），然后浏览器打开 <http://127.0.0.1:8190>。
+
+命令行等价：
+
+```powershell
+.\.venv\Scripts\python.exe run.py
+```
+
+关掉控制台窗口就等于停止服务。启动前会做端口预检，端口被占用时会直接给中文提示。
+
+### 5. 首次必做配置（只改一处）
+
+页面 → 管理台 → 服务设置 → 成品存放：
+
+1. 点「ComfyUI 输出目录」右边的 **添加目录**，在弹出的窗口里选中你本机 ComfyUI 的 `output` 文件夹（例如 `D:\ComfyUI\output`）
+2. 点「保存并生效」
+
+成果目录会自动等于 `<输出目录>/ComfyBridgeOutput`，不用填也不用手动建，保存时自动创建。
+
+如果 ComfyUI 不在 `127.0.0.1:8188`，在同一页把「ComfyUI 地址」改成实际地址。
+
+> 不配也能启动，但顶部会一直显示红条「ComfyUI 输出目录不存在或不是文件夹」，而且出图后成品拷不进成果目录。
+
+### 6. 关于 data / .cache（为什么一开始是空的）
+
+- `data/uploads`、`data/tasks`、`data/trash` 在启动时自动创建为**空目录**；历史任务、上传图、成品路径都不会跟着仓库走
+- 首次打开时任务列表、历史记录、上传区都是空的，这是正常的，从零开始用即可
+- `.cache`（临时文件、日志、按档位生成的工作流拷贝）同样自动生成，不入库
+- 所有写入都限制在应用文件夹内：`启动服务.bat` 会把 `TEMP` / `TMP` 指到 `.cache\tmp`
+
+### 7. 常见问题
+
+| 现象 | 原因 / 处理 |
+| --- | --- |
+| 双击窗口一闪就没 / 提示找不到 python.exe | 没建 `.venv`，回到第 3 步 |
+| 控制台报 `[Errno 10048]` 或提示端口被占用 | 已经有一个 ComfyBridge 窗口开着，先关掉；或到管理台改端口 |
+| 顶部红条「ComfyUI 输出目录不存在」 | 用「添加目录」重新选 output 目录，再保存并生效 |
+| 创作台提示未连接 ComfyUI | 先把 ComfyUI 启动起来（默认 8188） |
+| 页面还是旧界面 | `Ctrl + F5` 强刷，浏览器缓存了 `app.js` |
+| 点「添加目录」没反应 | 服务必须在你自己的桌面会话里启动（双击 bat）；用计划任务/服务方式拉起的进程弹不出窗口 |
+| pip 安装很慢或超时 | 加 `-i https://pypi.tuna.tsinghua.edu.cn/simple` |
+
 ## 运行（双击启动）
 
 前提：本机 ComfyUI 已启动（默认 `http://127.0.0.1:8188`），且已加载 Qwen Image 2.1 Turbo 的两个工作流所需模型。
@@ -64,19 +142,13 @@
 命令行方式（等价）：
 
 ```powershell
-cd D:\workspace\WorkBuddyProject\ComfyBridge-Desktop
+cd <应用所在目录>
 .\.venv\Scripts\python.exe run.py
 ```
 
 允许手机/局域网访问：管理台 → 服务设置 → 打开「允许本机以外访问」，保存后重启应用（监听地址改动需要重启）。
 
-依赖已经装在应用文件夹内的 `.venv`；换机器时：
-
-```powershell
-cd D:\workspace\WorkBuddyProject\ComfyBridge-Desktop
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --no-cache-dir -r requirements.txt
-```
+换机器 / 别人 clone 后怎么从零装好，见上一节「在另一台电脑上搭建」。
 
 ## 十四个真实工作流
 

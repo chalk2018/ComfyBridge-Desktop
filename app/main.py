@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
+import subprocess
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -191,6 +193,34 @@ class GradeOrderRequest(BaseModel):
 class FolderRequest(BaseModel):
     path: str = ""
     select: bool = True      # True = 在资源管理器里选中这个文件，而不是只打开目录
+
+
+class FolderPickRequest(BaseModel):
+    title: str = "选择目录"
+    initial: str = ""        # 打开时定位到的初始目录
+
+
+# 资源管理器风格的目录选择框（在服务器本机弹出，路径通过 stdout 返回）
+_PICK_FOLDER_PS = r"""
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.FormBorderStyle = 'None'
+$owner.Opacity = 0
+$owner.Show()
+$d = New-Object System.Windows.Forms.FolderBrowserDialog
+$d.Description = $env:CB_PICK_TITLE
+$d.ShowNewFolderButton = $true
+if ($env:CB_PICK_INITIAL -and (Test-Path -LiteralPath $env:CB_PICK_INITIAL)) {
+  $d.SelectedPath = $env:CB_PICK_INITIAL
+}
+$r = $d.ShowDialog($owner)
+$owner.Close()
+if ($r -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }
+"""
 
 
 class BatchRequest(BaseModel):
@@ -849,6 +879,28 @@ async def api_batch_download(body: BatchRequest) -> Response:
 async def api_open_folder(body: FolderRequest) -> dict[str, Any]:
     accepted, reason, info = service.open_folder(body.path, body.select)
     return ok(info) if accepted else blocked(reason)
+
+
+@app.post("/api/pick-folder")
+def api_pick_folder(body: FolderPickRequest) -> dict[str, Any]:
+    """弹资源管理器的目录选择框，返回用户选中的文件夹路径。"""
+    if os.name != "nt":
+        return blocked("当前系统不支持目录选择框")
+    env = dict(os.environ)
+    env["CB_PICK_TITLE"] = body.title
+    env["CB_PICK_INITIAL"] = body.initial or ""
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-STA", "-Command", _PICK_FOLDER_PS],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=env, timeout=900,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return blocked(f"打开目录选择框失败：{exc}")
+    picked = (proc.stdout or "").strip()
+    if not picked:
+        return blocked("已取消选择")
+    return ok(picked)
 
 
 @app.post("/api/history/delete")
