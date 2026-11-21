@@ -1,0 +1,221 @@
+{
+  "rows": [
+    {
+      "size": "1440x1060",
+      "page": "studio-image",
+      "sw": 1440,
+      "cw": 1440,
+      "bodySW": 1440,
+      "bodyCW": 1440,
+      "overflow": false
+    },
+    {
+      "size": "1440x1060",
+      "page": "studio-video",
+      "sw": 1440,
+      "cw": 1440,
+      "bodySW": 1440,
+      "bodyCW": 1440,
+      "overflow": false
+    },
+    {
+      "size": "1440x1060",
+      "page": "studio-audio",
+      "sw": 1440,
+      "cw": 1440,
+      "bodySW": 1440,
+      "bodyCW": 1440,
+      "overflow": false
+    },
+    {
+      "size": "1440x1060",
+      "page": "admin-grades",
+      "sw": 1440,
+      "cw": 1440,
+      "bodySW": 1440,
+      "bodyCW": 1440,
+      "overflow": false
+    },
+    {
+      "size": "1440x1060",
+      "page": "admin-audio",
+      "sw": 1440,
+      "cw": 1440,
+      "bodySW": 1440,
+      "bodyCW": 1440,
+      "overflow": false
+    },
+    {
+      "size": "1440x1060",
+      "page": "canvas",
+      "sw": 1440,
+      "cw": 1440,
+      "bodySW": 1440,
+      "bodyCW": 1440,
+      "overflow": false
+    },
+    {
+      "size": "1024x900",
+      "page": "studio-image",
+      "sw": 1024,
+      "cw": 1024,
+      "bodySW": 1024,
+      "bodyCW": 1024,
+      "overflow": false
+    },
+    {
+      "size": "1024x900",
+      "page": "studio-video",
+      "sw": 1024,
+      "cw": 1024,
+      "bodySW": 1024,
+      "bodyCW": 1024,
+      "overflow": false
+    },
+    {
+      "size": "1024x900",
+      "page": "studio-audio",
+      "sw": 1024,
+      "cw": 1024,
+      "bodySW": 1024,
+      "bodyCW": 1024,
+      "overflow": false
+    },
+    {
+      "size": "1024x900",
+      "page": "admin-grades",
+      "sw": 1024,
+      "cw": 1024,
+      "bodySW": 1024,
+      "bodyCW": 1024,
+      "overflow": false
+    },
+    {
+      "size": "1024x900",
+      "page": "admin-audio",
+      "sw": 1024,
+      "cw": 1024,
+      "bodySW": 1024,
+      "bodyCW": 1024,
+      "overflow": false
+    },
+    {
+      "size": "1024x900",
+      "page": "canvas",
+      "sw": 1024,
+      "cw": 1024,
+      "bodySW": 1024,
+      "bodyCW": 1024,
+      "overflow": false
+    },
+    {
+      "size": "820x900",
+      "page": "studio-image",
+      "sw": 820,
+      "cw": 820,
+      "bodySW": 820,
+      "bodyCW": 820,
+      "overflow": false
+    },
+    {
+      "size": "820x900",
+      "page": "studio-video",
+      "sw": 820,
+      "cw": 820,
+      "bodySW": 820,
+      "bodyCW": 820,
+      "overflow": false
+    },
+    {
+      "size": "820x900",
+      "page": "studio-audio",
+      "sw": 820,
+      "cw": 820,
+      "bodySW": 820,
+      "bodyCW": 820,
+      "overflow": false
+    },
+    {
+      "size": "820x900",
+      "page": "admin-grades",
+      "sw": 820,
+      "cw": 820,
+      "bodySW": 820,
+      "bodyCW": 820,
+      "overflow": false
+    },
+    {
+      "size": "820x900",
+      "page": "admin-audio",
+      "sw": 820,
+      "cw": 820,
+      "bodySW": 820,
+      "bodyCW": 820,
+      "overflow": false
+    },
+    {
+      "size": "820x900",
+      "page": "canvas",
+      "sw": 820,
+      "cw": 820,
+      "bodySW": 820,
+      "bodyCW": 820,
+      "overflow": false
+    },
+    {
+      "size": "390x780",
+      "page": "studio-image",
+      "sw": 390,
+      "cw": 390,
+      "bodySW": 390,
+      "bodyCW": 390,
+      "overflow": false
+    },
+    {
+      "size": "390x780",
+      "page": "studio-video",
+      "sw": 390,
+      "cw": 390,
+      "bodySW": 390,
+      "bodyCW": 390,
+      "overflow": false
+    },
+    {
+      "size": "390x780",
+      "page": "studio-audio",
+      "sw": 390,
+      "cw": 390,
+      "bodySW": 390,
+      "bodyCW": 390,
+      "overflow": false
+    },
+    {
+      "size": "390x780",
+      "page": "admin-grades",
+      "sw": 390,
+      "cw": 390,
+      "bodySW": 390,
+      "bodyCW": 390,
+      "overflow": false
+    },
+    {
+      "size": "390x780",
+      "page": "admin-audio",
+      "sw": 390,
+      "cw": 390,
+      "bodySW": 390,
+      "bodyCW": 390,
+      "overflow": false
+    },
+    {
+      "size": "390x780",
+      "page": "canvas",
+      "sw": 390,
+      "cw": 390,
+      "bodySW": 390,
+      "bodyCW": 390,
+      "overflow": false
+    }
+  ],
+  "errors": []
+}

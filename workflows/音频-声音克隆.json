@@ -1,0 +1,38 @@
+{
+ "1": {
+  "class_type": "LoadAudio",
+  "inputs": {
+   "audio": "_cb_blank.wav"
+  }
+ },
+ "2": {
+  "class_type": "SparkTTSClone",
+  "inputs": {
+   "text": "",
+   "cloned_speaker": "婷婷",
+   "temperature": 0.8,
+   "top_k": 50,
+   "top_p": 0.95,
+   "max_new_tokens": 3000,
+   "do_sample": true,
+   "unload_model": true,
+   "seed": 0,
+   "custom_clone_audio": [
+    "1",
+    0
+   ]
+  }
+ },
+ "3": {
+  "class_type": "SaveAudioAdvanced",
+  "inputs": {
+   "audio": [
+    "2",
+    0
+   ],
+   "filename_prefix": "ComfyBridge/clone",
+   "format": "mp3",
+   "format.quality": "V0"
+  }
+ }
+}

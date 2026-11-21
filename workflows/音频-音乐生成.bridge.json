@@ -1,0 +1,33 @@
+{
+ "prompt_targets": [
+  {
+   "node": "4",
+   "field": "caption"
+  }
+ ],
+ "seed_targets": [
+  {
+   "node": "4",
+   "field": "seed"
+  },
+  {
+   "node": "7",
+   "field": "seed"
+  }
+ ],
+ "ref_slots": [],
+ "output_nodes": [
+  "9"
+ ],
+ "root_load_images": [],
+ "media": "audio",
+ "lyrics_target": {
+  "node": "4",
+  "field": "lyrics"
+ },
+ "duration_target": {
+  "node": "4",
+  "field": "max_duration"
+ },
+ "class_types": {}
+}

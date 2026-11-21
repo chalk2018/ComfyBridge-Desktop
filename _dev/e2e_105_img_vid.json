@@ -1,0 +1,276 @@
+[
+  {
+    "name": "视频模式 7 个（4 可用 + 3 禁用）",
+    "ok": true,
+    "detail": "[('文生视频', True), ('首尾帧生视频', True), ('参考生视频', True), ('故事板生视频', True), ('角色替换', False), ('动作迁移', False), ('白膜生视频', False)]"
+  },
+  {
+    "name": "音频能力合并为 audio.generate",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "文生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · fl2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 'wf': '视频生成-文生视频-h3'}]"
+  },
+  {
+    "name": "首尾帧生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · fl2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 'wf': '视频生成-首尾帧生视频-h3'}]"
+  },
+  {
+    "name": "参考生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · ref2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', 'wf': '视频生成-参考生视频-h3'}]"
+  },
+  {
+    "name": "故事板生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · ref2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', 'wf': '视频生成-故事板生视频-h3'}]"
+  },
+  {
+    "name": "t2v/4步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "fl2v/4步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "ref2v/4步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "board/4步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "t2v/8步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "fl2v/8步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "ref2v/8步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "board/8步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "t2v/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "fl2v/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "ref2v/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "board/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "全部 bridge 注入节点存在",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "视频生成-文生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "视频生成-首尾帧生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "视频生成-参考生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "视频生成-故事板生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "图片·通用风格预设生效",
+    "ok": true,
+    "job": "job_5989",
+    "secs": 10.5,
+    "state": "done",
+    "size": "1024×1024",
+    "duration": null,
+    "seed": 3282493599331018699,
+    "workflow": "文生图",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\图片生成\\ComfyBridge_job_5989_5991_00001.png",
+        "kind": "image",
+        "size": "1024x1024",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "图片·通用线稿 G1",
+    "ok": true,
+    "job": "job_5992",
+    "secs": 10.4,
+    "state": "done",
+    "size": "1024×1024",
+    "duration": null,
+    "seed": 4443974779242784505,
+    "workflow": "文生图",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\图片生成\\ComfyBridge_job_5992_5994_00001.png",
+        "kind": "image",
+        "size": "1024x1024",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "图片·参考生图（画布图片节点同源）",
+    "ok": true,
+    "job": "job_5995",
+    "secs": 119.9,
+    "state": "done",
+    "size": "2560×1920",
+    "duration": null,
+    "seed": 2814813125934194484,
+    "workflow": "参考生图",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\图片生成\\ComfyBridge_job_5995_5997_00001.png",
+        "kind": "image",
+        "size": "2560x1920",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "视频·文生视频·时长 4.23 秒",
+    "ok": true,
+    "job": "job_5998",
+    "secs": 115.7,
+    "state": "done",
+    "size": "864×480",
+    "duration": 4.46,
+    "seed": 366534588557755635,
+    "workflow": "视频生成-文生视频-h3",
+    "grade": "默认",
+    "prompt": "",
+    "video": {
+      "mode": "t2v",
+      "ratio": "16:9",
+      "res": "480P",
+      "steps": 8,
+      "length": 124,
+      "duration": 4.23
+    },
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\视频生成\\ComfyBridge_job_5998_6000_00001_.mp4",
+        "kind": "video",
+        "size": "864x480",
+        "duration": 4.458333333333333
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "视频·首尾帧（8 步 fl2v LoRA）",
+    "ok": true,
+    "job": "job_6001",
+    "secs": 189.8,
+    "state": "done",
+    "size": "864×480",
+    "duration": 5.88,
+    "seed": 1256292339103036994,
+    "workflow": "视频生成-首尾帧生视频-h3",
+    "grade": "默认",
+    "prompt": "",
+    "video": {
+      "mode": "fl2v",
+      "ratio": "16:9",
+      "res": "480P",
+      "steps": 8,
+      "length": 124,
+      "duration": 5.2
+    },
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\视频生成\\ComfyBridge_job_6001_6003_00001_.mp4",
+        "kind": "video",
+        "size": "864x480",
+        "duration": 5.875
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "视频·参考生视频（画布视频节点同源）",
+    "ok": true,
+    "job": "job_6004",
+    "secs": 180.7,
+    "state": "done",
+    "size": "864×480",
+    "duration": 5.88,
+    "seed": 3682274821764174572,
+    "workflow": "视频生成-参考生视频-h3",
+    "grade": "默认",
+    "prompt": "",
+    "video": {
+      "mode": "ref2v",
+      "ratio": "16:9",
+      "res": "480P",
+      "steps": 8,
+      "length": 124,
+      "duration": 5.2
+    },
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\视频生成\\ComfyBridge_job_6004_6006_00001_.mp4",
+        "kind": "video",
+        "size": "864x480",
+        "duration": 5.875
+      }
+    ],
+    "err": null
+  }
+]

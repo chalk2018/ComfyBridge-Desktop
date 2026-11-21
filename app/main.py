@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -19,11 +21,22 @@ from .boardlib import BoardError
 from .promptlib import SheetError, library as sheet_library
 from .services import service
 from .state import state
+from . import audiolib, canvas, imagestylelib, videolib
 
 WEB_DIR = ROOT / "web"
 logger = logging.getLogger("comfybridge.api")
 ALLOWED_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+ALLOWED_VIDEO_EXT = {".mp4", ".webm", ".mov", ".mkv", ".m4v"}
+ALLOWED_AUDIO_EXT = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"}
+MAX_VIDEO_MB = 256
 SHEET_CAP = "sheet.character"
+
+MEDIA_TYPES = {
+    ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska", ".m4v": "video/mp4",
+    ".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac",
+    ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".aac": "audio/aac",
+}
 
 
 class SheetPayload(BaseModel):
@@ -71,6 +84,68 @@ class BoardPayload(BaseModel):
     refs: list[str] = Field(default_factory=list)  # 预览时还原参考图张数（决定图序号声明）
 
 
+class VideoPayload(BaseModel):
+    """视频生成的结构化输入：模式 + 三个档位参数 + 故事板规格。"""
+
+    mode: str = "t2v"                 # t2v / fl2v / ref2v / board
+    ratio: str = "16:9"
+    res: str = "768P"
+    steps: int = 8
+    length: int = 124                 # 帧数（旧草稿兼容；有时长秒数时以 duration 为准）
+    duration: float | None = None     # 需求6：秒（4~15），数值输入框为准，24fps 折算 length
+    grid: int = 4                     # 故事板宫格数：4 / 6 / 9
+    cells: list[str] = Field(default_factory=list)
+
+
+class AudioPayload(BaseModel):
+    """音频生成的结构化输入。"""
+
+    mode: str = "music"               # music / cover / tts / clone
+    lyrics: str = ""
+    duration: float | None = None
+
+
+class ImageStylePayload(BaseModel):
+    """图片生成的画法 / 风格：选项在页面上选，句子由服务端拼（口径只有一处）。"""
+
+    ink: str = "color"                # color / line
+    lineStyle: str | None = None      # 线稿风格句 id（W1~W4）
+    style: str = ""
+    styleCustom: bool = False
+    styleText: str = ""
+
+
+class ImagePreviewPayload(BaseModel):
+    prompt: str = ""
+    image: ImageStylePayload = Field(default_factory=ImageStylePayload)
+
+
+def compose_image_prompt(prompt: str, image: ImageStylePayload) -> str:
+    """图片生成的通用画法 / 风格句，提交与「看完整提示词」共用这一处，防止两边漂移。"""
+    bits: list[str] = []
+    try:
+        lib = imagestylelib.library.view()
+    except Exception:  # noqa: BLE001
+        lib = {"line_styles": [], "styles": []}
+    if image.ink == "line":
+        ls = next((s for s in lib.get("line_styles", []) if s.get("id") == image.lineStyle), None)
+        bits.append(ls["text"] if ls else "纯黑白线稿，只有黑色线条与纯白底色，不上色、不做灰调")
+    else:
+        if image.styleCustom:
+            st = (image.styleText or "").strip()
+        else:
+            st = imagestylelib.library.style_text(image.style)
+            if not st:
+                st = (image.style or "").strip()
+        if st:
+            bits.append(st)
+    if image.ink == "line":
+        # 线稿尾缀：放在用户提示词之后，压住用户提示词里的具体颜色词（如"蓝色工装"），防止上色泄漏
+        tail = "（线稿硬性要求：整张图为纯黑白单色线稿，所有物体一律不上色，画面中不存在任何彩色色块或彩色填充）"
+        return (f"画面风格：{'；'.join(bits)}。\n{prompt}" + tail) if bits else prompt + tail
+    return f"画面风格：{'；'.join(bits)}。\n{prompt}" if bits else prompt
+
+
 class TaskRequest(BaseModel):
     capId: str = "image.generate"
     prompt: str = ""
@@ -80,6 +155,10 @@ class TaskRequest(BaseModel):
     sheet: SheetPayload | None = None  # 角色设定图专用：结构化输入，服务端组装提示词
     ext: ExtSheetPayload | None = None  # 1.03 场景/道具设定图结构化输入
     board: BoardPayload | None = None   # 1.03 宫格分镜故事板结构化输入
+    video: VideoPayload | None = None   # 1.04 视频生成
+    audio: AudioPayload | None = None   # 1.04 音频生成
+    image: ImageStylePayload | None = None  # 1.04 图片生成的画法 / 风格
+    archiveFolder: str | None = None    # 画布传入：成品落到画布自己的目录
 
 
 class QueueRequest(BaseModel):
@@ -140,6 +219,14 @@ async def lifespan(_app: FastAPI):
     try:
         config.load()
         service.start()
+        # 素材索引补建：refs.json 丢了（或从旧版本升级）时按 uploads 里的文件名还原，
+        # 否则画布上的资产节点重启后整片 404
+        try:
+            added = state.refs.scan_dir(config.resolve(config.service.uploadDir))
+            if added:
+                print(f"[ComfyBridge] 补回 {added} 个素材索引")
+        except Exception:  # noqa: BLE001
+            pass
         state.last_error = ""
     except Exception as exc:  # noqa: BLE001
         state.last_error = str(exc)
@@ -153,6 +240,9 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="ComfyBridge", version="1.01", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+# 右栏任务累积多了以后 /api/state 会到几 MB，每秒轮询一次没有压缩会很卡（浏览器甚至会被拖死）
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+_STATE_CACHE: dict[str, Any] = {"at": 0.0, "body": None}
 
 
 @app.middleware("http")
@@ -164,6 +254,10 @@ async def _static_no_cache(request: Request, call_next):
     resp = await call_next(request)
     if request.url.path.startswith("/static/"):
         resp.headers["Cache-Control"] = "no-cache"
+    if request.method != "GET":
+        # 任何写操作（提交/删除/改配置）都让 /api/state 的 1.2 秒缓存立刻失效，
+        # 否则点完生成后前端下一次拉状态可能还是旧数据
+        _STATE_CACHE["body"] = None
     return resp
 
 
@@ -333,6 +427,11 @@ def _prepare_board(payload: BoardPayload, refs: list[str]) -> dict[str, Any]:
         names = "、".join(g["name"] for g in board.grades(cid))
         raise BoardError(f"「{info['name']}」没有档位「{grade_name}」（可选：{names}）")
     params = board.effective_params(cid, grade_name)
+    if payload.ink == "line":
+        # 线稿模式兜底：工作流默认 cfg=1，提示词没有引导力，夕阳/暖光格实测必然渗色
+        # （G4 第4格、G6 第4格、G9 第8格都复现）。提高 CFG 让黑白线稿约束真正生效。
+        # 两个故事板工作流的 CFGGuider 都是 459_507；只影响线稿组合，彩色档不受影响。
+        params.setdefault("459_507", {})["cfg"] = 3.5
     return {
         "prompt": prompt, "wf": info["wf"], "grade": grade_name,
         "params": params, "tag": board.tag(cid, grade_name), "size": grade["size"],
@@ -367,10 +466,17 @@ async def index() -> FileResponse:
 
 # ---------------------------------------------------------------- 状态与 UI
 @app.get("/api/state")
-async def api_state() -> dict[str, Any]:
+async def api_state() -> Response:
+    # 任务攒到上千条时整包有三四 MB，而前端每隔几秒就要拉一次；
+    # 这里缓存 1.2 秒内的同一份字节，多个页面同时轮询时不至于把 CPU 打满。
+    now = time.time()
+    if _STATE_CACHE["body"] is not None and now - _STATE_CACHE["at"] < 1.2:
+        return Response(content=_STATE_CACHE["body"], media_type="application/json")
     payload = service.state_payload()
     payload["configError"] = state.last_error
-    return payload
+    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    _STATE_CACHE.update(at=now, body=body)
+    return Response(content=body, media_type="application/json")
 
 
 @app.post("/api/ui")
@@ -380,24 +486,88 @@ async def api_ui(body: UIPatch) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------- 任务
-@app.post("/api/tasks")
-async def api_tasks(body: TaskRequest) -> dict[str, Any]:
-    """提交一次生成。
+def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tuple[bool, str, str]:
+    """把一次请求整理成任务：结构化输入 → 提示词 / 档位 / 工作流 / 参数。
 
-    角色设定图走结构化输入（sheet）：服务端按「组合」组装整条提示词并推导参数，
-    档位只提供参数覆盖；其它能力仍旧直接收 prompt 文本，行为不变。
+    创作台 /api/tasks 与画布 /api/canvas/tasks 共用这一段，
+    设定图、故事板、视频四模式、音频四功能的规则只有这一份，两边不会分叉。
+    返回 (是否受理, job_id, 拒收原因)。
     """
     prompt, grade, wf = body.prompt, body.grade, body.wf
     sheet_info: dict[str, Any] | None = None
     params: dict[str, Any] | None = None
     tag: str | None = None
     brief = ""
+    video_info: dict[str, Any] | None = None
+    audio_info: dict[str, Any] | None = None
+    if body.image is not None and body.capId == "image.generate":
+        # 需求2：画法 / 风格从「图片生成通用模板」取（主体无关），和角色设定图库分开。
+        prompt = compose_image_prompt(prompt, body.image)
+    if body.video is not None:
+        mode = body.video.mode if body.video.mode in videolib.MODE_IDS else "t2v"
+        info = videolib.MODE_IDS[mode]
+        if not info.get("enabled"):
+            return False, "", f"「{info['name']}」还没开放"
+        if mode != "board" and not body.prompt.strip():
+            return False, "", "写点描述再发送"
+        # 参考素材按类型点数：提示词里的 <Picture N> 必须和实际槽位对得上
+        kinds = [r.get("kind", "image") for r in service.resolve_refs(body.refs)]
+        images, videos, audios = kinds.count("image"), kinds.count("video"), kinds.count("audio")
+        if mode == "t2v" and (images or videos or audios):
+            return False, "", "文生视频不需要上传素材，换「参考生视频」再用参考"
+        if mode == "fl2v":
+            if not images:
+                return False, "", "首尾帧生视频至少要一张首帧图"
+            if images > 2:
+                return False, "", "首尾帧最多两张图：首帧 + 尾帧"
+            if videos or audios:
+                return False, "", "首尾帧生视频只收图片"
+        if mode == "board":
+            if not images:
+                return False, "", "故事板生视频要先上传一张故事板"
+            grid = body.video.grid if body.video.grid in (4, 6, 9) else 4
+            board_cells = [c for c in body.video.cells if str(c).strip()]
+            if len(board_cells) > grid:
+                return False, "", f"选了 {grid} 宫格，格子描述不能超过 {grid} 条"
+            video_info = {"mode": mode, "grid": grid, "cells": board_cells,
+                          "ratio": body.video.ratio, "res": body.video.res,
+                          "steps": body.video.steps, "length": body.video.length,
+                          "duration": body.video.duration}
+            prompt = videolib.compose(mode, body.prompt, images=images, videos=videos,
+                                      audios=audios, board={"grid": grid, "cells": board_cells})
+        else:
+            video_info = {"mode": mode, "ratio": body.video.ratio, "res": body.video.res,
+                          "steps": body.video.steps, "length": body.video.length,
+                          "duration": body.video.duration}
+            prompt = videolib.compose(mode, prompt, images=images, videos=videos, audios=audios)
+        wf = info["wf"]
+        brief = videolib.brief(mode, prompt, images, videos, audios,
+                               board={"grid": video_info.get("grid", 4),
+                                      "cells": video_info.get("cells", [])})
+    if body.audio is not None:
+        amode = body.audio.mode if body.audio.mode in audiolib.MODE_IDS else "music"
+        info = audiolib.MODE_IDS[amode]
+        if not info.get("enabled"):
+            return False, "", f"「{info['name']}」还没开放"
+        if not body.prompt.strip():
+            return False, "", "写点描述再发送"
+        kinds = [r.get("kind", "image") for r in service.resolve_refs(body.refs)]
+        audios = kinds.count("audio")
+        if info["needsAudio"] and not audios:
+            return False, "", f"「{info['name']}」要先上传一段参考音频"
+        if not info["needsAudio"] and audios:
+            return False, "", "这个功能不需要参考音频，换「参考生成音乐」或「声音克隆」"
+        audio_info = {"mode": amode, "lyrics": body.audio.lyrics,
+                      "duration": body.audio.duration}
+        prompt = audiolib.compose(amode, prompt)
+        wf = info["wf"]
+        brief = f"{info['name']} · {(body.prompt or '').strip()[:40]}"
     if body.sheet is not None and body.capId == SHEET_CAP:
         cap = config.capability(body.capId) or {}
         try:
             prepared = _prepare_sheet(body.sheet, cap, body.refs)
         except SheetError as exc:
-            return blocked(str(exc))
+            return False, "", (str(exc))
         prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
         sheet_info, brief = prepared["sheet"], prepared["brief"]
         params, tag = prepared["params"], prepared["tag"]
@@ -407,25 +577,34 @@ async def api_tasks(body: TaskRequest) -> dict[str, Any]:
             prepared = _prepare_ext(body.ext, body.refs)
         except Exception as exc:  # noqa: BLE001 - ExtSheetError 与其它异常都给人话
             reason = str(exc) if exc.__class__.__name__ == "ExtSheetError" else f"设定图参数有误：{exc}"
-            return blocked(reason)
+            return False, "", (reason)
         prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
         sheet_info, brief = prepared["ext"], prepared["brief"]
         params, tag = prepared["params"], prepared["tag"]
     if body.board is not None:
         if body.capId != "board.story":
-            return blocked("宫格分镜故事板的能力编号不对")
+            return False, "", "宫格分镜故事板的能力编号不对"
         try:
             prepared = _prepare_board(body.board, body.refs)
         except Exception as exc:  # noqa: BLE001 - 提示词库/参数错误都给人话
             reason = str(exc) if exc.__class__.__name__ == "BoardError" else f"分镜故事板参数有误：{exc}"
-            return blocked(reason)
+            return False, "", (reason)
         prompt, grade, wf = prepared["prompt"], prepared["grade"], prepared["wf"]
         sheet_info, brief = prepared["sheet"], prepared["brief"]
         params, tag = prepared["params"], prepared["tag"]
     accepted, job_id, reason = service.submit_normal(
         body.capId, prompt, grade, body.refs, wf=wf, sheet=sheet_info, brief=brief,
-        params=params, tag=tag)
+        params=params, tag=tag, video=video_info, audio=audio_info,
+        archive_folder=archive_folder)
+    return accepted, job_id, reason
+
+
+@app.post("/api/tasks")
+async def api_tasks(body: TaskRequest) -> dict[str, Any]:
+    """提交一次生成（规则见 submit_task_body，与画布节点同一套）。"""
+    accepted, job_id, reason = submit_task_body(body, body.archiveFolder)
     return ok({"job_id": job_id}) if accepted else blocked(reason)
+
 
 
 @app.post("/api/tasks/{job_id}/queue")
@@ -459,21 +638,38 @@ async def api_cancel(run_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------- 上传与文件
-async def _store_upload(file: UploadFile) -> dict[str, Any]:
-    """保存参考图到应用目录，并交给 ComfyUI 取得 input 文件名。"""
+async def _store_upload(file: UploadFile, want: str = "") -> dict[str, Any]:
+    """保存参考素材到应用目录，并交给 ComfyUI 取得 input 文件名。
+
+    want 是页面声明的素材类型（image / video / audio）：视频生成那里「首帧槽」
+    和「参考视频槽」是两个上传位，只靠扩展名有时分不清用户想放进哪个槽。
+    """
     suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in ALLOWED_IMAGE_EXT:
+    if suffix not in ALLOWED_IMAGE_EXT | ALLOWED_VIDEO_EXT | ALLOWED_AUDIO_EXT:
         # 剪贴板/网页里拿到的图常常没有扩展名（浏览器就叫它 image），
-        # 这时按 content-type 补一个，别把人挡在「只收常见图片格式」外面
+        # 这时按 content-type 补一个；猜不出来时保留原后缀，别把真实的 .mp3/.mp4 盖掉
         guess = (file.content_type or "").split("/")[-1].lower().split(";")[0]
         suffix = {"jpeg": ".jpg", "jpg": ".jpg", "pjpeg": ".jpg", "png": ".png",
                   "webp": ".webp", "bmp": ".bmp", "gif": ".gif",
-                  "tiff": ".tif", "x-tiff": ".tif"}.get(guess, "")
-    if suffix not in ALLOWED_IMAGE_EXT:
-        raise HTTPException(400, "只收常见图片格式（png / jpg / webp / gif / bmp）")
+                  "tiff": ".tif", "x-tiff": ".tif", "mp4": ".mp4", "webm": ".webm",
+                  "quicktime": ".mov", "x-matroska": ".mkv",
+                  "mpeg": ".mp3", "wav": ".wav", "x-wav": ".wav", "flac": ".flac",
+                  "ogg": ".ogg", "m4a": ".m4a", "aac": ".aac"}.get(guess, suffix)
+    if want == "audio" and suffix not in ALLOWED_AUDIO_EXT:
+        raise HTTPException(400, "这里只收音频（mp3 / wav / flac / ogg / m4a）")
+    if want == "video" and suffix not in ALLOWED_VIDEO_EXT:
+        raise HTTPException(400, "这里只收视频（mp4 / webm / mov / mkv）")
+    if suffix in ALLOWED_VIDEO_EXT:
+        kind, cap_mb = "video", MAX_VIDEO_MB
+    elif suffix in ALLOWED_AUDIO_EXT:
+        kind, cap_mb = "audio", config.service.uploadMaxMB
+    elif suffix in ALLOWED_IMAGE_EXT:
+        kind, cap_mb = "image", config.service.uploadMaxMB
+    else:
+        raise HTTPException(400, "只收图片、视频或音频文件")
     content = await file.read()
-    if len(content) > config.service.uploadMaxMB * 1024 * 1024:
-        raise HTTPException(400, f"单文件不能超过 {config.service.uploadMaxMB}MB")
+    if len(content) > cap_mb * 1024 * 1024:
+        raise HTTPException(400, f"单个{ {'image': '图片', 'video': '视频', 'audio': '音频'}[kind] }不能超过 {cap_mb}MB")
     cap = config.capability(state.ui.get("capId", "image.generate")) or {}
     max_refs = int(cap.get("maxRefs", 3) or 3)
     # 上限按「已启用能力里最大的参考图数」算，而不是只看当前能力：
@@ -505,16 +701,77 @@ async def _store_upload(file: UploadFile) -> dict[str, Any]:
     filename = f"{ref_id}{suffix}"
     path = config.resolve(config.service.uploadDir) / filename
     path.write_bytes(content)
-    comfy_name = service.comfy.upload_image(path, filename)
-    ref = {"id": ref_id, "kind": "image", "name": file.filename or filename,
+    comfy_name = service.comfy.upload_asset(path, filename)
+    ref = {"id": ref_id, "kind": kind, "name": file.filename or filename,
            "filename": filename, "path": str(path), "comfyName": comfy_name}
     state.refs.add(ref_id, ref)
-    return {"id": ref_id, "kind": "image", "name": ref["name"]}
+    return {"id": ref_id, "kind": kind, "name": ref["name"]}
+
+
+def _ref_from_run(run_id: str, index: int = 0) -> dict[str, Any] | None:
+    """把某次任务的成品登记成参考素材。
+
+    画布上「上游节点的产出」不该再绕一圈浏览器上传：这里直接取任务文件，
+    复用同一套上传目录和 ref 编号，于是 submit_normal 拿到的就是普通 refs，
+    不需要给画布单开一条素材通道。同一文件重复引用只登记一次。
+    """
+    info = service.file_for_run(run_id, index)
+    if not info:
+        return None
+    src = Path(info.get("path") or "")
+    if not src.is_file():
+        return None
+    for ref in state.refs.as_list():
+        if str(ref.get("path") or "") == str(src):
+            return ref
+    kind = str(info.get("kind") or "")
+    suffix = src.suffix.lower()
+    if kind not in ("image", "video", "audio"):
+        kind = ("video" if suffix in ALLOWED_VIDEO_EXT else
+                "audio" if suffix in ALLOWED_AUDIO_EXT else
+                "image" if suffix in ALLOWED_IMAGE_EXT else "")
+    if not kind:
+        return None
+    ref_id = state.next_id("ref")
+    filename = f"{ref_id}{suffix}"
+    dest = config.resolve(config.service.uploadDir) / filename
+    try:
+        shutil.copyfile(src, dest)
+    except OSError:
+        return None
+    comfy_name = service.comfy.upload_asset(dest, filename)
+    ref = {"id": ref_id, "kind": kind, "name": src.name,
+           "filename": filename, "path": str(dest), "comfyName": comfy_name}
+    state.refs.add(ref_id, ref)
+    return ref
+
+
+def _resolve_ext_slots(payload: ExtSheetPayload | None, refs: list[str]) -> ExtSheetPayload | None:
+    """画布场景节点的四个上传位：前端只知道「第几个输入」，不知道素材登记后的 ref id。
+
+    所以画布提交时把槽位写成 `#1` / `#2`（inputs 里的序号），在这里换成真正的 ref id
+    再交给 _prepare_ext —— 和创作台上传后直接给 ref id 的语义完全一致。
+    """
+    if payload is None or not payload.refSlots:
+        return payload
+    slots: dict[str, str] = {}
+    for slot, value in payload.refSlots.items():
+        token = str(value or "")
+        if token.startswith("#") and token[1:].isdigit():
+            index = int(token[1:]) - 1
+            if 0 <= index < len(refs):
+                slots[slot] = refs[index]
+            continue
+        if token:
+            slots[slot] = token
+    data = payload.model_dump()
+    data["refSlots"] = slots
+    return ExtSheetPayload(**data)
 
 
 @app.post("/api/uploads")
-async def api_upload(file: UploadFile = File(...)) -> dict[str, Any]:
-    return ok(await _store_upload(file))
+async def api_upload(file: UploadFile = File(...), kind: str = Query("")) -> dict[str, Any]:
+    return ok(await _store_upload(file, kind))
 
 
 @app.delete("/api/uploads/{ref_id}")
@@ -530,9 +787,13 @@ async def api_remove_upload(ref_id: str) -> dict[str, Any]:
 
 @app.get("/api/media")
 async def api_media(
-    ref: str | None = None, run: str | None = None, i: int = 0,
+    request: Request, ref: str | None = None, run: str | None = None, i: int = 0,
 ) -> Response:
-    """预览/缩略图：只允许取本次上传或本次任务产出的文件。"""
+    """预览/缩略图：只允许取本次上传或本次任务产出的文件。
+
+    视频和音频要能拖动进度条，就必须支持 Range 请求（206）：浏览器发
+    `Range: bytes=...` 时只回那一段，否则 `<video>` 会把整个文件下完才能播。
+    """
     if ref:
         item = state.refs.get(ref)
         path = Path(item["path"]) if item else None
@@ -543,7 +804,29 @@ async def api_media(
         path = None
     if not path or not path.exists() or not path.is_file():
         raise HTTPException(404, "文件不存在")
-    return FileResponse(path)
+    size = path.stat().st_size
+    rng = request.headers.get("range") or ""
+    if rng.startswith("bytes="):
+        try:
+            start_s, _, end_s = rng[6:].partition("-")
+            start = int(start_s or 0)
+            end = int(end_s) if end_s else size - 1
+            end = min(end, size - 1)
+            if start > end:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(416, "Range 不合法")
+        length = end - start + 1
+        with path.open("rb") as fh:
+            fh.seek(start)
+            chunk = fh.read(length)
+        return Response(chunk, status_code=206, headers={
+            "Content-Range": f"bytes {start}-{end}/{size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(len(chunk)),
+            "Content-Type": MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"),
+        })
+    return FileResponse(path, headers={"Accept-Ranges": "bytes"})
 
 
 @app.get("/api/download")
@@ -701,6 +984,29 @@ async def api_grade_effective(name: str, grade: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------- 角色设定图提示词库
+@app.get("/api/image-style/library")
+async def api_image_style_library() -> dict[str, Any]:
+    """图片生成通用模板：线稿风格句 + 风格预设（主体无关）。"""
+    try:
+        return ok(imagestylelib.library.view())
+    except imagestylelib.ImageStyleError as exc:
+        return blocked(str(exc))
+
+
+@app.put("/api/image-style/library")
+async def api_image_style_library_save(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    try:
+        return ok(imagestylelib.library.save(body))
+    except imagestylelib.ImageStyleError as exc:
+        return blocked(str(exc))
+
+
+@app.post("/api/image/preview")
+async def api_image_preview(body: ImagePreviewPayload) -> dict[str, Any]:
+    """图片生成「看完整提示词」：和真正提交走同一条服务端组装函数。"""
+    return ok({"prompt": compose_image_prompt(body.prompt, body.image)})
+
+
 @app.get("/api/sheet/library")
 async def api_sheet_library() -> dict[str, Any]:
     """提示词库快照：通用块、版式、风格预设、15 条已实测组合。"""
@@ -1036,3 +1342,242 @@ async def api_board_combo_grades(cid: str, body: dict[str, Any] = Body(...)) -> 
     registry.invalidate()
     registry.rebuild_all_copies()
     return ok(board.view_one(cid))
+
+
+# ---------------------------------------------------------------- 视频生成画布
+class OutRef(BaseModel):
+    """画布上的上游生成节点：直接用它的成品当参考素材。"""
+    run: str = ""
+    i: int = 0
+
+
+class CanvasInput(BaseModel):
+    """按连线顺序排好的一个输入位。
+
+    资产节点给 ref（上传素材 id），上游生成节点给 run（成品）。
+    顺序就是提示词里 [图 N] / [视频 N] 的编号，所以必须按连线顺序传，
+    不能像 refs + outs 那样分成两段拼接 —— 中间夹一个资产节点就会错位。
+    """
+    ref: str = ""
+    run: str = ""
+    i: int = 0
+
+
+class CanvasTaskRequest(BaseModel):
+    """画布上的一张节点卡提交一次生成。
+
+    一个节点 = 功能页面里的一个子功能，所以这里和 TaskRequest 收同一套结构化输入：
+    图片生成（image）、角色设定图（sheet）、场景/道具（ext）、故事板（board）、
+    视频四模式（video）、音频四功能（audio）。整理成任务交给 submit_task_body，
+    画布与创作台的规则只有一份。
+    """
+    capId: str = "image.generate"
+    prompt: str = ""
+    grade: str = "默认"
+    refs: list[str] = Field(default_factory=list)
+    outs: list[OutRef] = Field(default_factory=list)   # 旧字段：上游生成节点的成品（run 编号）
+    inputs: list[CanvasInput] = Field(default_factory=list)  # 新：按连线顺序，ref / run 混排
+    wf: str | None = None
+    projectId: str = ""
+    nodeId: str = ""
+    image: ImageStylePayload | None = None   # 图片生成节点：画法 / 风格
+    video: VideoPayload | None = None        # 视频节点：模式 / 比例 / 分辨率 / 步数 / 时长 / 宫格
+    audio: AudioPayload | None = None        # 音频节点：模式 / 歌词 / 时长
+    sheet: SheetPayload | None = None        # 角色设定图节点
+    ext: ExtSheetPayload | None = None       # 场景 / 道具设定图节点
+    board: BoardPayload | None = None        # 宫格分镜故事板节点
+
+
+@app.get("/api/canvas")
+async def api_canvas_state() -> dict[str, Any]:
+    """画布开机数据：能用哪些能力、有哪些已有项目、管理台排除了谁。"""
+    return ok(canvas.state_payload())
+
+
+@app.post("/api/canvas/project")
+async def api_canvas_new(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    return ok(canvas.new_project(str(body.get("name") or "未命名画布")))
+
+
+@app.get("/api/canvas/project/{pid}")
+async def api_canvas_get(pid: str) -> dict[str, Any]:
+    data = canvas.get_project(pid)
+    return ok(data) if data else blocked("这个画布不存在")
+
+
+@app.put("/api/canvas/project/{pid}")
+async def api_canvas_save(pid: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    accepted, reason = canvas.save_project(pid, body)
+    return ok() if accepted else blocked(reason)
+
+
+@app.post("/api/canvas/project/{pid}/rename")
+async def api_canvas_rename(pid: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    accepted, reason = canvas.rename_project(pid, str(body.get("name") or ""))
+    return ok() if accepted else blocked(reason)
+
+
+@app.delete("/api/canvas/project/{pid}")
+async def api_canvas_delete(pid: str) -> dict[str, Any]:
+    accepted, reason = canvas.delete_project(pid)
+    return ok() if accepted else blocked(reason)
+
+
+@app.put("/api/canvas/config")
+async def api_canvas_config(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    accepted, reason = canvas.save_config(body)
+    return ok(canvas.load_config()) if accepted else blocked(reason)
+
+
+@app.post("/api/canvas/tasks")
+async def api_canvas_task(body: CanvasTaskRequest) -> dict[str, Any]:
+    """画布节点的一次生成。
+
+    节点 = 功能页面里的一个子功能，所以这里只做两件事：
+    ① 把连线接进来的素材（资产 ref / 上游生成节点的成品 run）按顺序整理成 refs；
+    ② 其余整段交给 submit_task_body —— 和创作台 /api/tasks 走的是同一份规则
+    （设定图组合、故事板分格、视频四模式、音频四功能的校验与拼词都在里面）。
+    唯一多出来的只有「归档到画布目录」和右栏标一个 canvas。
+    """
+    refs: list[str] = []
+    if body.inputs:
+        # 按连线顺序一次给齐：ref = 上传素材，run = 上游生成节点的成品
+        for it in body.inputs:
+            if it.ref:
+                refs.append(it.ref)
+            elif it.run:
+                made = _ref_from_run(it.run, it.i)
+                if made:
+                    refs.append(made["id"])
+    else:
+        refs = list(body.refs)
+        # 上游生成节点的成品：不经过浏览器，直接在本机登记成参考素材
+        for o in body.outs:
+            made = _ref_from_run(o.run, o.i)
+            if made:
+                refs.append(made["id"])
+    merged = TaskRequest(
+        capId=body.capId, prompt=body.prompt, grade=body.grade, refs=refs, wf=body.wf,
+        image=body.image, video=body.video, audio=body.audio,
+        sheet=body.sheet, ext=_resolve_ext_slots(body.ext, refs), board=body.board,
+        archiveFolder=canvas.ARCHIVE_FOLDER,
+    )
+    accepted, job_id, reason = submit_task_body(merged, canvas.ARCHIVE_FOLDER)
+    if not accepted:
+        return blocked(reason)
+    job = state.job(job_id)
+    if job:
+        # 右栏任务栏据此标一行「画布」，不必再给 job 拆一套结构
+        job["src"] = "canvas"
+        if body.projectId:
+            job["canvas"] = {"project": body.projectId, "node": body.nodeId}
+        state.persist()
+    return ok({"job_id": job_id})
+
+
+@app.get("/api/canvas/catalog")
+async def api_canvas_catalog() -> dict[str, Any]:
+    """管理台「视频生成画布」页：ComfyTV 全部功能 + 已绑定情况 + 可选工作流文件。"""
+    return ok(canvas.catalog_payload())
+
+
+@app.post("/api/canvas/stage")
+async def api_canvas_stage(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """把一个 ComfyTV 功能挂上 / 摘下画布。
+
+    挂上时会同时在工作流表里建一条记录（名字=功能名），
+    于是「档位表 → 视频生成画布 → 该功能」就能直接配档位。
+    """
+    action = str(body.get("action") or "enable")
+    stage_id = str(body.get("stageId") or "")
+    if action == "disable":
+        accepted, reason = canvas.disable_stage(stage_id)
+        if not accepted:
+            return blocked(reason)
+        return ok(canvas.catalog_payload())
+
+    accepted, reason, name = canvas.enable_stage(stage_id, str(body.get("wfFile") or ""))
+    if not accepted:
+        return blocked(reason)
+    payload = canvas.catalog_payload()
+    payload["wfName"] = name
+    return ok(payload)
+
+
+# ---------------------------------------------------------------- 视频 / 音频档位
+class GradeRows(BaseModel):
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@app.get("/api/video/grades/{mode}")
+async def api_video_grades(mode: str) -> dict[str, Any]:
+    """视频某一模式的档位表（比例 / 分辨率 / 步数），带算出来的实际尺寸与 LoRA。"""
+    if mode not in videolib.MODE_IDS:
+        return blocked("没有这个视频模式")
+    rows = []
+    for g in videolib.grades(mode):
+        try:
+            rows.append(videolib.grade_row(mode, g["name"]) or g)
+        except Exception:  # noqa: BLE001 - 工作流还没登记时先给原始档位
+            rows.append(g)
+    return ok({"mode": mode, "rows": rows,
+               "ratios": list(videolib.RATIOS), "reses": list(videolib.RESES),
+               "steps": list(videolib.STEPS)})
+
+
+@app.put("/api/video/grades/{mode}")
+async def api_video_grades_save(mode: str, body: GradeRows) -> dict[str, Any]:
+    try:
+        videolib.save_grades(mode, body.rows)
+    except ValueError as exc:
+        return blocked(str(exc))
+    return ok({"rows": videolib.grades(mode)})
+
+
+@app.get("/api/audio/grades/{mode}")
+async def api_audio_grades(mode: str) -> dict[str, Any]:
+    if mode not in audiolib.MODE_IDS:
+        return blocked("没有这个音频功能")
+    return ok({"mode": mode, "rows": audiolib.grades(mode),
+               "durations": list(audiolib.DURATIONS),
+               "voiceFields": audiolib.VOICE_FIELDS})
+
+
+@app.put("/api/audio/grades/{mode}")
+async def api_audio_grades_save(mode: str, body: GradeRows) -> dict[str, Any]:
+    try:
+        audiolib.save_grades(mode, body.rows)
+    except ValueError as exc:
+        return blocked(str(exc))
+    return ok({"rows": audiolib.grades(mode)})
+
+
+@app.get("/api/video/modes")
+async def api_video_modes() -> dict[str, Any]:
+    return ok(videolib.state_payload())
+
+
+@app.get("/api/audio/modes")
+async def api_audio_modes() -> dict[str, Any]:
+    return ok(audiolib.state_payload())
+
+
+@app.get("/api/canvas/funcs")
+async def api_canvas_funcs() -> dict[str, Any]:
+    """画布两个生成子功能 + 可绑定的工作流清单（管理台下拉用）。"""
+    rows = canvas.funcs()
+    wf_names = list((config.raw.get("workflows") or {}).keys())
+    return ok({"funcs": rows, "workflows": wf_names})
+
+
+@app.put("/api/canvas/funcs")
+async def api_canvas_funcs_save(body: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """管理台改画布子功能：任意节点键的 换绑工作流 / 改名 / 启停开关。"""
+    patch: dict[str, Any] = {k: (v or {}) for k, v in (body or {}).items() if isinstance(v, dict)}
+    if not patch:
+        return blocked("没有要改的东西")
+    try:
+        canvas.save_funcs(patch)
+    except ValueError as exc:
+        return blocked(str(exc))
+    return ok({"funcs": canvas.funcs()})

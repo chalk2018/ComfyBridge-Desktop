@@ -1,0 +1,65 @@
+[
+  {
+    "name": "图片·文生图·水墨风格",
+    "ok": true,
+    "job": "job_5892",
+    "secs": 16.4,
+    "state": "done",
+    "size": "1024×1024",
+    "duration": null,
+    "seed": 3644550350551211570,
+    "workflow": "文生图",
+    "grade": "默认",
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\图片生成\\ComfyBridge_job_5892_5894_00001.png",
+        "kind": "image",
+        "size": "1024x1024",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "图片·线稿画法",
+    "ok": true,
+    "job": "job_5895",
+    "secs": 8.1,
+    "state": "done",
+    "size": "1024×1024",
+    "duration": null,
+    "seed": 2107548961115672095,
+    "workflow": "文生图",
+    "grade": "默认",
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\图片生成\\ComfyBridge_job_5895_5897_00001.png",
+        "kind": "image",
+        "size": "1024x1024",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "图片·参考生图",
+    "ok": true,
+    "job": "job_5898",
+    "secs": 120.8,
+    "state": "done",
+    "size": "2560×1920",
+    "duration": null,
+    "seed": 189397215304228002,
+    "workflow": "参考生图",
+    "grade": "默认",
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\图片生成\\ComfyBridge_job_5898_5900_00001.png",
+        "kind": "image",
+        "size": "2560x1920",
+        "duration": null
+      }
+    ],
+    "err": null
+  }
+]

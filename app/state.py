@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -15,6 +16,20 @@ from typing import Any
 from .config import ROOT, config
 
 STATE_FILE = ROOT / "data" / "tasks" / "state.json"
+REF_FILE = ROOT / "data" / "refs.json"
+_REF_NAME = re.compile(r"^(ref_\d+)(\.[A-Za-z0-9]+)$")
+_VIDEO_EXT = {".mp4", ".webm", ".mov", ".mkv", ".avi"}
+_AUDIO_EXT = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
+
+
+def _kind_of(path: Path) -> str:
+    """按扩展名判素材类型（扫描补索引时用，上传路径另有 MIME 判断）。"""
+    ext = path.suffix.lower()
+    if ext in _VIDEO_EXT:
+        return "video"
+    if ext in _AUDIO_EXT:
+        return "audio"
+    return "image"
 
 
 def now_ms() -> int:
@@ -23,15 +38,47 @@ def now_ms() -> int:
 
 
 class RefStore:
-    """上传的参考素材：本地副本在应用目录内，同时记录 ComfyUI 里的文件名。"""
+    """上传的参考素材：本地副本在应用目录内，同时记录 ComfyUI 里的文件名。
 
-    def __init__(self) -> None:
+    索引落盘到 data/refs.json。以前只放内存，服务一重启 ref_xxx 全部 404，
+    画布上的资产节点整片破图（文件其实还在 uploads 里）；索引丢了也能按文件名重建。
+    """
+
+    def __init__(self, path: Path | None = None) -> None:
         self._lock = threading.RLock()
-        self.items: dict[str, dict[str, Any]] = {}
+        self._path = Path(path) if path else REF_FILE
+        self.items: dict[str, dict[str, Any]] = self._load()
+
+    def _load(self) -> dict[str, dict[str, Any]]:
+        try:
+            raw = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        items = raw.get("items") if isinstance(raw, dict) else None
+        out: dict[str, dict[str, Any]] = {}
+        for ref_id, info in (items or {}).items():
+            if not isinstance(info, dict):
+                continue
+            p = Path(str(info.get("path") or ""))
+            if p.is_file():                 # 文件被手动删掉的条目直接丢掉，别一直 404
+                out[str(ref_id)] = info
+        return out
+
+    def _save(self) -> None:
+        with self._lock:
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = self._path.with_suffix(".tmp")
+                tmp.write_text(json.dumps({"items": self.items}, ensure_ascii=False, indent=1),
+                               encoding="utf-8")
+                tmp.replace(self._path)
+            except OSError:
+                pass
 
     def add(self, ref_id: str, info: dict[str, Any]) -> None:
         with self._lock:
             self.items[ref_id] = info
+            self._save()
 
     def get(self, ref_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -39,11 +86,42 @@ class RefStore:
 
     def remove(self, ref_id: str) -> dict[str, Any] | None:
         with self._lock:
-            return self.items.pop(ref_id, None)
+            gone = self.items.pop(ref_id, None)
+            if gone:
+                self._save()
+            return gone
 
     def as_list(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(self.items.values())
+
+    def scan_dir(self, folder: Path) -> int:
+        """按 uploads 里的 ref_xxx.ext 补回索引；返回补齐条数。
+
+        上传文件名就是 ref id，所以即便 refs.json 没了（或从旧版本升级上来），
+        也能把画布上的旧素材重新变成可访问的 URL。
+        """
+        added = 0
+        try:
+            files = list(folder.iterdir())
+        except OSError:
+            return 0
+        with self._lock:
+            for f in files:
+                m = _REF_NAME.match(f.name)
+                if not m or not f.is_file():
+                    continue
+                ref_id = m.group(1)
+                if ref_id in self.items:
+                    continue
+                self.items[ref_id] = {
+                    "id": ref_id, "kind": _kind_of(f), "name": f.name,
+                    "filename": f.name, "path": str(f), "comfyName": f.name,
+                }
+                added += 1
+            if added:
+                self._save()
+        return added
 
 
 class AppState:

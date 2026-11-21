@@ -1,0 +1,31 @@
+{
+ "1": {
+  "class_type": "SparkTTSRun",
+  "inputs": {
+   "text": "",
+   "gender": "female",
+   "age": "Youth-Adult",
+   "pitch": "moderate",
+   "speed": "moderate",
+   "temperature": 0.8,
+   "top_k": 50,
+   "top_p": 0.95,
+   "max_new_tokens": 3000,
+   "do_sample": true,
+   "unload_model": true,
+   "seed": 0
+  }
+ },
+ "2": {
+  "class_type": "SaveAudioAdvanced",
+  "inputs": {
+   "audio": [
+    "1",
+    0
+   ],
+   "filename_prefix": "ComfyBridge/tts",
+   "format": "mp3",
+   "format.quality": "V0"
+  }
+ }
+}

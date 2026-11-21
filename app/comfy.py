@@ -111,13 +111,21 @@ class ComfyClient:
 
     def upload_image(self, path: Path, filename: str) -> str:
         """把参考图交给 ComfyUI（写入它自己的 input 目录），返回可用的文件名。"""
+        return self.upload_asset(path, filename)
+
+    def upload_asset(self, path: Path, filename: str, mime: str = "application/octet-stream") -> str:
+        """把任意素材（图片 / 视频 / 音频）交给 ComfyUI 的 input 目录。
+
+        ComfyUI 的 /upload/image 只按文件名落盘，不校验内容类型：视频和音频走同一个
+        接口就能被 LoadVideo / LoadAudio 读到，不必另开一条上传通道。
+        """
         try:
             with path.open("rb") as handle:
                 resp = self._client.post(
                     self._url("/upload/image"),
-                    files={"image": (filename, handle, "image/png")},
+                    files={"image": (filename, handle, mime)},
                     data={"type": "input", "overwrite": "true"},
-                    timeout=60.0,
+                    timeout=300.0,
                 )
             resp.raise_for_status()
             data = resp.json()
@@ -125,7 +133,7 @@ class ComfyClient:
             subfolder = data.get("subfolder") or ""
             return f"{subfolder}/{name}" if subfolder else name
         except Exception as exc:  # noqa: BLE001
-            raise ComfyError("UPLOAD_FAILED", "参考图没能交给 ComfyUI", str(exc)) from exc
+            raise ComfyError("UPLOAD_FAILED", "参考素材没能交给 ComfyUI", str(exc)) from exc
 
     def submit(self, prompt: dict[str, Any], prompt_id_hint: str = "") -> str:
         """提交工作流，返回 prompt_id；被 ComfyUI 拒绝时带原始报错。"""

@@ -1,0 +1,35 @@
+{
+ "prompt_targets": [
+  {
+   "node": "11",
+   "field": "value"
+  }
+ ],
+ "seed_targets": [
+  {
+   "node": "22",
+   "field": "noise_seed"
+  }
+ ],
+ "ref_slots": [],
+ "output_nodes": [
+  "31"
+ ],
+ "root_load_images": [],
+ "media": "video",
+ "video_ref": {
+  "node": "10",
+  "prompt": "11",
+  "width": "width",
+  "height": "height",
+  "length": "length",
+  "switch": "15",
+  "steps": "17",
+  "base_steps": "16",
+  "lora_switch": "14",
+  "use8": "27",
+  "lora4": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+  "lora8": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+ },
+ "class_types": {}
+}

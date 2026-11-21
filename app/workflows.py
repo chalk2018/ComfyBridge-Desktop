@@ -401,11 +401,16 @@ class WorkflowRegistry:
         """档位表用的节点清单：按 class_type 分角色，参数节点才进可勾清单。"""
         api = self.load(wf_name)
         out: list[dict[str, Any]] = []
+        # 需求4：视频生成工作流的参数全部由档位表（比例/分辨率/步数）统一管理，
+        # 管理台档位表里「参数节点」必须是 0 个——所有节点都归到「不用设的节点」。
+        video_wf = wf_name.startswith("视频生成-")
         for node_id, spec in api.items():
             cls = spec["class_type"]
             role = ("prompt" if cls in PROMPT_CLASSES else
                     "upload" if cls in UPLOAD_CLASSES else
                     "output" if cls in OUTPUT_CLASSES or cls.startswith("Save") else "param")
+            if video_wf and role == "param":
+                role = "fixed"   # 不进可勾参数清单，落到「不用设的节点」
             widgets = [k for k, v in spec["inputs"].items() if not is_link(v)]
             links = [k for k, v in spec["inputs"].items() if is_link(v)]
             out.append({"id": node_id, "cls": cls, "w": widgets, "c": links,

@@ -281,8 +281,9 @@ def compose_scene(
         if scene:
             pieces.append(scene)
 
-    # 禁角色：仅文生图/图生图，且选「是」才强调；选「否」完全不写
-    if mode in ("t2i", "i2i") and str(nochar) == "yes":
+    # 禁角色：仅文生图/图生图，且选「是」才强调；选「否」完全不写。
+    # 扩图没有禁角色开关，产出永远是空场景设定图，参考图里的人物不能带进成图。
+    if (mode in ("t2i", "i2i") and str(nochar) == "yes") or mode == "expand":
         pieces.append(str(blocks.get("NO_CHAR", "画面里没有任何人物。")))
 
     # 画法 + 风格：扩图两者都没有

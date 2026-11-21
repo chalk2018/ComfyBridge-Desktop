@@ -1,0 +1,21 @@
+{
+ "prompt_targets": [
+  {
+   "node": "1",
+   "field": "text"
+  }
+ ],
+ "seed_targets": [
+  {
+   "node": "1",
+   "field": "seed"
+  }
+ ],
+ "ref_slots": [],
+ "output_nodes": [
+  "2"
+ ],
+ "root_load_images": [],
+ "media": "audio",
+ "class_types": {}
+}

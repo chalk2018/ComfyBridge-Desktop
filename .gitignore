@@ -16,3 +16,9 @@ data/*/**
 _dev/prompt_lab/out/
 _dev/prompt_lab/board/out/
 _dev/*.log
+
+# 冒烟测试产物（代码与文档均未引用）
+_dev/smoke/
+
+# 无引用的大体积参考数据
+_reference/oi_all.json

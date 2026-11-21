@@ -1,0 +1,2790 @@
+[
+ {
+  "id": "LineArtStage",
+  "cls": "LineArtStage",
+  "file": "geometry.py",
+  "cat": "3D",
+  "en": "Line Art",
+  "zh": "3D 线稿",
+  "in": [
+   "MODEL"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "BlenderAnimationStage",
+  "cls": "BlenderAnimationStage",
+  "file": "blender.py",
+  "cat": "3D",
+  "en": "Blender Animation",
+  "zh": "Blender Animation",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "BlenderCameraStage",
+  "cls": "BlenderCameraStage",
+  "file": "blender.py",
+  "cat": "3D",
+  "en": "Blender Camera",
+  "zh": "Blender Camera",
+  "in": [],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "BlenderSceneStage",
+  "cls": "BlenderSceneStage",
+  "file": "blender.py",
+  "cat": "3D",
+  "en": "Blender Scene",
+  "zh": "Blender Scene",
+  "in": [],
+  "out": [],
+  "render": false
+ },
+ {
+  "id": "MeshPrimitiveStage",
+  "cls": "MeshPrimitiveStage",
+  "file": "geometry.py",
+  "cat": "3D",
+  "en": "Mesh Primitive",
+  "zh": "网格基元",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "MeshOpStage",
+  "cls": "MeshOpStage",
+  "file": "geometry.py",
+  "cat": "3D",
+  "en": "Mesh Ops",
+  "zh": "网格处理",
+  "in": [
+   "MODEL"
+  ],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "MeshBooleanStage",
+  "cls": "MeshBooleanStage",
+  "file": "geometry.py",
+  "cat": "3D",
+  "en": "Mesh Boolean",
+  "zh": "网格布尔",
+  "in": [
+   "MODEL"
+  ],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "MeshBakeMapsStage",
+  "cls": "MeshBakeMapsStage",
+  "file": "geometry.py",
+  "cat": "3D",
+  "en": "Mesh Bake Maps",
+  "zh": "网格烘焙贴图",
+  "in": [
+   "MODEL"
+  ],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioVideoDemuxVideoStage",
+  "cls": "AudioVideoDemuxVideoStage",
+  "file": "video_edit.py",
+  "cat": "Audio",
+  "en": "Demux · Silent Video",
+  "zh": "分离 · 静默视频",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioVideoDemuxAudioStage",
+  "cls": "AudioVideoDemuxAudioStage",
+  "file": "video_edit.py",
+  "cat": "Audio",
+  "en": "Demux · Audio Track",
+  "zh": "分离 · 音轨",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioExtractVocalStage",
+  "cls": "AudioExtractVocalStage",
+  "file": "video_edit.py",
+  "cat": "Audio",
+  "en": "Audio · Vocals Only",
+  "zh": "音频 · 仅人声",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioExtractBgStage",
+  "cls": "AudioExtractBgStage",
+  "file": "video_edit.py",
+  "cat": "Audio",
+  "en": "Audio · Background Only",
+  "zh": "音频 · 仅背景声",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioAnalyzeStage",
+  "cls": "AudioAnalyzeStage",
+  "file": "audio_measure.py",
+  "cat": "AudioFX",
+  "en": "Audio Analyze",
+  "zh": "Audio Analyze",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioConvolveStage",
+  "cls": "AudioConvolveStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Audio Convolve (IR)",
+  "zh": "Audio Convolve (IR)",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioCrossfadeStage",
+  "cls": "AudioCrossfadeStage",
+  "file": "audio_edit.py",
+  "cat": "AudioFX",
+  "en": "Audio Crossfade",
+  "zh": "Audio Crossfade",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioDeconvolveStage",
+  "cls": "AudioDeconvolveStage",
+  "file": "audio_measure.py",
+  "cat": "AudioFX",
+  "en": "Audio Deconvolve (IR)",
+  "zh": "Audio Deconvolve (IR)",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioEchoStage",
+  "cls": "AudioEchoStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Audio Echo",
+  "zh": "Audio Echo",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioMixStage",
+  "cls": "AudioMixStage",
+  "file": "audio_edit.py",
+  "cat": "AudioFX",
+  "en": "Audio Mix",
+  "zh": "Audio Mix",
+  "in": [
+   "AUDIO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioModulationStage",
+  "cls": "AudioModulationStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Audio Modulation",
+  "zh": "Audio Modulation",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioRepairStage",
+  "cls": "AudioRepairStage",
+  "file": "audio_process.py",
+  "cat": "AudioFX",
+  "en": "Audio Repair",
+  "zh": "Audio Repair",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioSaturateStage",
+  "cls": "AudioSaturateStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Audio Saturate",
+  "zh": "Audio Saturate",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioSegmentExportStage",
+  "cls": "AudioSegmentExportStage",
+  "file": "audio_edit.py",
+  "cat": "AudioFX",
+  "en": "Audio Split Export",
+  "zh": "Audio Split Export",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioStereoStage",
+  "cls": "AudioStereoStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Audio Stereo",
+  "zh": "Audio Stereo",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioSweepStage",
+  "cls": "AudioSweepStage",
+  "file": "audio_measure.py",
+  "cat": "AudioFX",
+  "en": "Audio Sweep (ESS)",
+  "zh": "Audio Sweep (ESS)",
+  "in": [],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioTimePitchStage",
+  "cls": "AudioTimePitchStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Audio Time / Pitch",
+  "zh": "Audio Time / Pitch",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioVisualizeStage",
+  "cls": "AudioVisualizeStage",
+  "file": "audio_measure.py",
+  "cat": "AudioFX",
+  "en": "Audio Visualize",
+  "zh": "Audio Visualize",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "MuseReverbStage",
+  "cls": "MuseReverbStage",
+  "file": "audio_effects.py",
+  "cat": "AudioFX",
+  "en": "Muse Reverb (FDN)",
+  "zh": "Muse 混响 (FDN)",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioMeterStage",
+  "cls": "AudioMeterStage",
+  "file": "audio_reactive.py",
+  "cat": "AudioFX",
+  "en": "Audio Meter Overlay",
+  "zh": "电平表叠加",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioMIRStage",
+  "cls": "AudioMIRStage",
+  "file": "audio_mir_stages.py",
+  "cat": "AudioFX",
+  "en": "Audio Beats & Notes",
+  "zh": "节拍与音符分析",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioNoiseReductionStage",
+  "cls": "AudioNoiseReductionStage",
+  "file": "audio_mir_stages.py",
+  "cat": "AudioFX",
+  "en": "Noise Reduction (Spectral)",
+  "zh": "谱门控降噪",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioStemSplitStage",
+  "cls": "AudioStemSplitStage",
+  "file": "audio_mir_stages.py",
+  "cat": "AudioFX",
+  "en": "Audio Stem Split",
+  "zh": "音源分轨",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioSplitStage",
+  "cls": "AudioSplitStage",
+  "file": "audio_edit.py",
+  "cat": "AudioFX",
+  "en": "Audio Split",
+  "zh": "音频分割",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioClipStage",
+  "cls": "AudioClipStage",
+  "file": "audio_edit.py",
+  "cat": "AudioFX",
+  "en": "Audio Trim",
+  "zh": "音频剪辑",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioDynamicsStage",
+  "cls": "AudioDynamicsStage",
+  "file": "audio_process.py",
+  "cat": "AudioFX",
+  "en": "Audio Dynamics",
+  "zh": "音频动态",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioReactiveStage",
+  "cls": "AudioReactiveStage",
+  "file": "audio_reactive.py",
+  "cat": "AudioFX",
+  "en": "Audio Reactive",
+  "zh": "音频反应",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioLoudnessStage",
+  "cls": "AudioLoudnessStage",
+  "file": "audio_process.py",
+  "cat": "AudioFX",
+  "en": "Audio Loudness",
+  "zh": "音频响度",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioEQStage",
+  "cls": "AudioEQStage",
+  "file": "audio_process.py",
+  "cat": "AudioFX",
+  "en": "Audio EQ",
+  "zh": "音频均衡器",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioDuckStage",
+  "cls": "AudioDuckStage",
+  "file": "audio_edit.py",
+  "cat": "AudioFX",
+  "en": "Audio Duck",
+  "zh": "音频闪避",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioDenoiseStage",
+  "cls": "AudioDenoiseStage",
+  "file": "audio_process.py",
+  "cat": "AudioFX",
+  "en": "Audio Denoise",
+  "zh": "音频降噪",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "AUDIO",
+   "FXSPEC"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoLumaWipeStage",
+  "cls": "VideoLumaWipeStage",
+  "file": "video_timeline.py",
+  "cat": "Compose",
+  "en": "Luma Wipe",
+  "zh": "亮度擦除",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ShotImagesStage",
+  "cls": "ShotImagesStage",
+  "file": "generators.py",
+  "cat": "Compose",
+  "en": "Shot Images",
+  "zh": "分镜图集",
+  "in": [
+   "STORYBOARD"
+  ],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "ImageConcatStage",
+  "cls": "ImageConcatStage",
+  "file": "transforms.py",
+  "cat": "Compose",
+  "en": "Image Concat",
+  "zh": "图片拼接",
+  "in": [
+   "IMAGES"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "CompareStage",
+  "cls": "CompareStage",
+  "file": "transforms.py",
+  "cat": "Compose",
+  "en": "Compare",
+  "zh": "对比",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [],
+  "render": true
+ },
+ {
+  "id": "DirectorTimelineStage",
+  "cls": "DirectorTimelineStage",
+  "file": "timeline.py",
+  "cat": "Compose",
+  "en": "Director Timeline",
+  "zh": "导演时间线",
+  "in": [
+   "AUDIO"
+  ],
+  "out": [
+   "TIMELINE"
+  ],
+  "render": true
+ },
+ {
+  "id": "SequenceStage",
+  "cls": "SequenceStage",
+  "file": "video_timeline.py",
+  "cat": "Compose",
+  "en": "Sequence",
+  "zh": "序列编排",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "TimelineVideoStage",
+  "cls": "TimelineVideoStage",
+  "file": "timeline.py",
+  "cat": "Compose",
+  "en": "Timeline Render",
+  "zh": "时间线渲染",
+  "in": [
+   "TIMELINE"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoCompositeStage",
+  "cls": "VideoCompositeStage",
+  "file": "video_compose.py",
+  "cat": "Compose",
+  "en": "Video Composite",
+  "zh": "视频合成",
+  "in": [
+   "TEXT",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoConcatStage",
+  "cls": "VideoConcatStage",
+  "file": "video_edit.py",
+  "cat": "Compose",
+  "en": "Video Concat",
+  "zh": "视频拼接",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoTransitionStage",
+  "cls": "VideoTransitionStage",
+  "file": "video_timeline.py",
+  "cat": "Compose",
+  "en": "Video Transition",
+  "zh": "视频转场",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "Model3DStage",
+  "cls": "Model3DStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "3D Model Stage",
+  "zh": "3D 模型阶段",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "CustomStage",
+  "cls": "CustomStage",
+  "file": "custom_stage.py",
+  "cat": "Generate",
+  "en": "Custom Stage",
+  "zh": "Custom Stage",
+  "in": [],
+  "out": [
+   "AUDIO",
+   "IMAGE",
+   "IMAGES",
+   "MODEL",
+   "TEXT",
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "DirectorStage",
+  "cls": "DirectorStage",
+  "file": "director.py",
+  "cat": "Generate",
+  "en": "Director",
+  "zh": "Director",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ImageStage",
+  "cls": "ImageStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "Image Stage",
+  "zh": "图像阶段",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "StoryboardStage",
+  "cls": "StoryboardStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "Storyboard",
+  "zh": "故事板",
+  "in": [],
+  "out": [
+   "STORYBOARD"
+  ],
+  "render": true
+ },
+ {
+  "id": "TextStage",
+  "cls": "TextStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "Text Stage",
+  "zh": "文本阶段",
+  "in": [],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoStage",
+  "cls": "VideoStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "Video Stage",
+  "zh": "视频阶段",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SpeechStage",
+  "cls": "SpeechStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "Speech Stage",
+  "zh": "语音阶段",
+  "in": [
+   "AUDIO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioStage",
+  "cls": "AudioStage",
+  "file": "generators.py",
+  "cat": "Generate",
+  "en": "Music Stage",
+  "zh": "音乐阶段",
+  "in": [],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "PosterStage",
+  "cls": "PosterStage",
+  "file": "poster.py",
+  "cat": "Image",
+  "en": "Poster",
+  "zh": "Poster",
+  "in": [],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "ImageVariationsStage",
+  "cls": "ImageVariationsStage",
+  "file": "variations.py",
+  "cat": "Image",
+  "en": "Image Variations",
+  "zh": "图像变体",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "ImageEditStage",
+  "cls": "ImageEditStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Image Edit",
+  "zh": "图像编辑",
+  "in": [],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "MultiangleStage",
+  "cls": "MultiangleStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Multiangle",
+  "zh": "多角度",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "GridSplitStage",
+  "cls": "GridSplitStage",
+  "file": "transforms.py",
+  "cat": "Image",
+  "en": "Grid Split",
+  "zh": "宫格分割",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "OutpaintStage",
+  "cls": "OutpaintStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Outpaint",
+  "zh": "扩图",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "CutoutStage",
+  "cls": "CutoutStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Cutout",
+  "zh": "抠图",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "EraseStage",
+  "cls": "EraseStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Erase",
+  "zh": "擦除",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "RotateStage",
+  "cls": "RotateStage",
+  "file": "transforms.py",
+  "cat": "Image",
+  "en": "Rotate",
+  "zh": "旋转",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "CropStage",
+  "cls": "CropStage",
+  "file": "transforms.py",
+  "cat": "Image",
+  "en": "Crop",
+  "zh": "裁剪",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "ColorGradeStage",
+  "cls": "ColorGradeStage",
+  "file": "transforms.py",
+  "cat": "Image",
+  "en": "Color Grade",
+  "zh": "调色",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "SplitPartStage",
+  "cls": "SplitPartStage",
+  "file": "split_part.py",
+  "cat": "Image",
+  "en": "Split Parts",
+  "zh": "部件分割",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "InpaintStage",
+  "cls": "InpaintStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Inpaint",
+  "zh": "重绘",
+  "in": [],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "MirrorStage",
+  "cls": "MirrorStage",
+  "file": "transforms.py",
+  "cat": "Image",
+  "en": "Mirror",
+  "zh": "镜像",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "UpscaleStage",
+  "cls": "UpscaleStage",
+  "file": "model_edits.py",
+  "cat": "Image",
+  "en": "Upscale",
+  "zh": "高清",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "Scene3DStage",
+  "cls": "Scene3DStage",
+  "file": "scene3d.py",
+  "cat": "Input",
+  "en": "3D Scene",
+  "zh": "3D Scene",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "IMAGES",
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "TextLoaderStage",
+  "cls": "TextLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Input Text",
+  "zh": "Input Text",
+  "in": [],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "LayerEditorStage",
+  "cls": "LayerEditorStage",
+  "file": "layer_editor.py",
+  "cat": "Input",
+  "en": "Layer Editor",
+  "zh": "Layer Editor",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "StoryboardEditorStage",
+  "cls": "StoryboardEditorStage",
+  "file": "storyboard_editor.py",
+  "cat": "Input",
+  "en": "Storyboard Editor",
+  "zh": "Storyboard Editor",
+  "in": [
+   "IMAGES",
+   "STORYBOARD"
+  ],
+  "out": [
+   "IMAGE",
+   "IMAGES",
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AssetModelLoaderStage",
+  "cls": "AssetModelLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load 3D Model from Asset",
+  "zh": "从资产加载 3D 模型",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "AssetImageLoaderStage",
+  "cls": "AssetImageLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Image from Asset",
+  "zh": "从资产加载图片",
+  "in": [],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "AssetTextLoaderStage",
+  "cls": "AssetTextLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Text from Asset",
+  "zh": "从资产加载文本",
+  "in": [],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "AssetVideoLoaderStage",
+  "cls": "AssetVideoLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Video from Asset",
+  "zh": "从资产加载视频",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AssetAudioLoaderStage",
+  "cls": "AssetAudioLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Audio from Asset",
+  "zh": "从资产加载音频",
+  "in": [],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ModelLoaderStage",
+  "cls": "ModelLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load 3D Model",
+  "zh": "加载 3D 模型",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "MODEL"
+  ],
+  "render": true
+ },
+ {
+  "id": "ImageLoaderStage",
+  "cls": "ImageLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Image",
+  "zh": "加载图片",
+  "in": [],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoLoaderStage",
+  "cls": "VideoLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Video",
+  "zh": "加载视频",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AudioLoaderStage",
+  "cls": "AudioLoaderStage",
+  "file": "loaders.py",
+  "cat": "Input",
+  "en": "Load Audio",
+  "zh": "加载音频",
+  "in": [],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "RelightStage",
+  "cls": "RelightStage",
+  "file": "model_edits.py",
+  "cat": "Input",
+  "en": "Relight",
+  "zh": "打光",
+  "in": [],
+  "out": [
+   "IMAGE",
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "MaterialStage",
+  "cls": "MaterialStage",
+  "file": "material.py",
+  "cat": "Input",
+  "en": "Material",
+  "zh": "材质球",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "IMAGE",
+   "MATERIAL"
+  ],
+  "render": true
+ },
+ {
+  "id": "PIKStage",
+  "cls": "PIKStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "PIK Keyer",
+  "zh": "PIK 抠像",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ColorSuppressStage",
+  "cls": "ColorSuppressStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Color Suppress",
+  "zh": "压色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "DespillStage",
+  "cls": "DespillStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Despill",
+  "zh": "去溢色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "KeyerStage",
+  "cls": "KeyerStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Keyer",
+  "zh": "通用键控",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "KeyMixStage",
+  "cls": "KeyMixStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Key Mix",
+  "zh": "遮罩合成",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "MatteMorphStage",
+  "cls": "MatteMorphStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Matte Morphology",
+  "zh": "遮罩形态学",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "MatteMonitorStage",
+  "cls": "MatteMonitorStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Matte Monitor",
+  "zh": "遮罩质检",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "Select0rStage",
+  "cls": "Select0rStage",
+  "file": "video_keying.py",
+  "cat": "Keying",
+  "en": "Select0r",
+  "zh": "高级选色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "MidiEditorStage",
+  "cls": "MidiEditorStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "MIDI Editor",
+  "zh": "MIDI 编辑器",
+  "in": [
+   "AUDIO"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ScoreStage",
+  "cls": "ScoreStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "Score",
+  "zh": "乐谱",
+  "in": [
+   "TEXT"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "SF2SynthStage",
+  "cls": "SF2SynthStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "Score Synth",
+  "zh": "乐谱合成",
+  "in": [
+   "TEXT"
+  ],
+  "out": [
+   "AUDIO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ChordAccompStage",
+  "cls": "ChordAccompStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "Chord Accompaniment",
+  "zh": "和弦伴奏",
+  "in": [
+   "TEXT"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "ScoreEditorStage",
+  "cls": "ScoreEditorStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "Score Editor",
+  "zh": "打谱器",
+  "in": [
+   "TEXT"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "ScoreToMidiStage",
+  "cls": "ScoreToMidiStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "Score Performer",
+  "zh": "演奏引擎",
+  "in": [
+   "TEXT"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "ClickTrackStage",
+  "cls": "ClickTrackStage",
+  "file": "score_stages.py",
+  "cat": "Music",
+  "en": "Click Track",
+  "zh": "节拍器轨",
+  "in": [
+   "TEXT"
+  ],
+  "out": [
+   "AUDIO",
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "PanoramaMultiViewStage",
+  "cls": "PanoramaMultiViewStage",
+  "file": "panorama.py",
+  "cat": "Panorama",
+  "en": "Panorama · Multi-View",
+  "zh": "全景 · 多视角",
+  "in": [
+   "PANORAMA"
+  ],
+  "out": [
+   "IMAGE",
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "PanoramaCurrentViewStage",
+  "cls": "PanoramaCurrentViewStage",
+  "file": "panorama.py",
+  "cat": "Panorama",
+  "en": "Panorama · Current View",
+  "zh": "全景 · 当前视角",
+  "in": [
+   "PANORAMA"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "PanoramaStage",
+  "cls": "PanoramaStage",
+  "file": "panorama.py",
+  "cat": "Panorama",
+  "en": "Panorama",
+  "zh": "全景图",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "PANORAMA"
+  ],
+  "render": true
+ },
+ {
+  "id": "ProjectStage",
+  "cls": "ProjectStage",
+  "file": "generators.py",
+  "cat": "Project",
+  "en": "Project",
+  "zh": "项目",
+  "in": [],
+  "out": [],
+  "render": false
+ },
+ {
+  "id": "MaskCleanup",
+  "cls": "MaskCleanup",
+  "file": "split_part.py",
+  "cat": "Utils",
+  "en": "Mask Cleanup (ComfyTV)",
+  "zh": "Mask Cleanup (ComfyTV)",
+  "in": [],
+  "out": [],
+  "render": false
+ },
+ {
+  "id": "MakeProxyStage",
+  "cls": "MakeProxyStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Make Proxy",
+  "zh": "Make Proxy",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoMuxAudioStage",
+  "cls": "VideoMuxAudioStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Mux Audio",
+  "zh": "合成音轨",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "PatternStage",
+  "cls": "PatternStage",
+  "file": "video_generate.py",
+  "cat": "Video",
+  "en": "Pattern",
+  "zh": "图形生成",
+  "in": [],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SceneDetectStage",
+  "cls": "SceneDetectStage",
+  "file": "video_analysis.py",
+  "cat": "Video",
+  "en": "Scene Detect",
+  "zh": "场景检测",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGES",
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SubtitleStage",
+  "cls": "SubtitleStage",
+  "file": "video_text.py",
+  "cat": "Video",
+  "en": "Subtitles",
+  "zh": "字幕烧录",
+  "in": [
+   "TEXT",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ContactSheetStage",
+  "cls": "ContactSheetStage",
+  "file": "video_analysis.py",
+  "cat": "Video",
+  "en": "Contact Sheet",
+  "zh": "审片宫格",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoSubtitleSelectEraseStage",
+  "cls": "VideoSubtitleSelectEraseStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Subtitle Erase (Region)",
+  "zh": "扣选去字幕",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoFramesStage",
+  "cls": "VideoFramesStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Extract Frames",
+  "zh": "批量抽帧",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGES"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoExtractFrameStage",
+  "cls": "VideoExtractFrameStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Extract Frame",
+  "zh": "抽帧",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "TimeRemapStage",
+  "cls": "TimeRemapStage",
+  "file": "video_timeline.py",
+  "cat": "Video",
+  "en": "Time Remap",
+  "zh": "时间重映射",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoSubtitleSmartEraseStage",
+  "cls": "VideoSubtitleSmartEraseStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Subtitle Erase (Smart)",
+  "zh": "智能去字幕",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "TitleStage",
+  "cls": "TitleStage",
+  "file": "video_text.py",
+  "cat": "Video",
+  "en": "Title",
+  "zh": "标题",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoSplitStage",
+  "cls": "VideoSplitStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Split",
+  "zh": "视频分割",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoClipStage",
+  "cls": "VideoClipStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Clip",
+  "zh": "视频剪辑",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoSpeedStage",
+  "cls": "VideoSpeedStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Speed",
+  "zh": "视频变速",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoRotateStage",
+  "cls": "VideoRotateStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Rotate",
+  "zh": "视频旋转",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoScopesStage",
+  "cls": "VideoScopesStage",
+  "file": "video_analysis.py",
+  "cat": "Video",
+  "en": "Video Scopes",
+  "zh": "视频示波器",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoResizeStage",
+  "cls": "VideoResizeStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Resize",
+  "zh": "视频缩放",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoCropStage",
+  "cls": "VideoCropStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Crop",
+  "zh": "视频裁剪",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoUpscaleStage",
+  "cls": "VideoUpscaleStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Upscale",
+  "zh": "视频高清",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SubtitleGenStage",
+  "cls": "SubtitleGenStage",
+  "file": "video_text.py",
+  "cat": "Video",
+  "en": "Subtitles · Speech-to-Text",
+  "zh": "语音转字幕",
+  "in": [
+   "AUDIO",
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "MotionTrackStage",
+  "cls": "MotionTrackStage",
+  "file": "video_masking.py",
+  "cat": "Video",
+  "en": "Motion Track",
+  "zh": "运动跟踪",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "KenBurnsStage",
+  "cls": "KenBurnsStage",
+  "file": "video_generate.py",
+  "cat": "Video",
+  "en": "Ken Burns",
+  "zh": "静帧推拉",
+  "in": [
+   "IMAGE"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoVolumeStage",
+  "cls": "VideoVolumeStage",
+  "file": "video_edit.py",
+  "cat": "Video",
+  "en": "Video Volume",
+  "zh": "音量调整",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "Video360Stage",
+  "cls": "Video360Stage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "360 Projection",
+  "zh": "360 投影",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "Video360StabilizeStage",
+  "cls": "Video360StabilizeStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "360 Stabilize",
+  "zh": "360 稳定",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "Card3DStage",
+  "cls": "Card3DStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "Card 3D",
+  "zh": "3D 卡片",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "CDLStage",
+  "cls": "CDLStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "CDL Grade",
+  "zh": "CDL 调色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "RotoMaskStage",
+  "cls": "RotoMaskStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Roto Mask",
+  "zh": "Roto 遮罩",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "STMapGenStage",
+  "cls": "STMapGenStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "STMap Generate",
+  "zh": "STMap 生成",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "IMAGE"
+  ],
+  "render": true
+ },
+ {
+  "id": "STMapStage",
+  "cls": "STMapStage",
+  "file": "video_compose.py",
+  "cat": "VideoFX",
+  "en": "UV Remap",
+  "zh": "UV 重映射",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "KaleidoscopeStage",
+  "cls": "KaleidoscopeStage",
+  "file": "video_artfx.py",
+  "cat": "VideoFX",
+  "en": "Kaleidoscope",
+  "zh": "万花筒",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoStabilizeV2Stage",
+  "cls": "VideoStabilizeV2Stage",
+  "file": "video_enhance.py",
+  "cat": "VideoFX",
+  "en": "Stabilize Pro",
+  "zh": "专业防抖",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "FaceBlurStage",
+  "cls": "FaceBlurStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Face Blur",
+  "zh": "人脸打码",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "PseudocolorStage",
+  "cls": "PseudocolorStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Pseudocolor",
+  "zh": "伪彩色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoInterpolateStage",
+  "cls": "VideoInterpolateStage",
+  "file": "video_enhance.py",
+  "cat": "VideoFX",
+  "en": "Frame Interpolate",
+  "zh": "光流补帧",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "LightGraffitiStage",
+  "cls": "LightGraffitiStage",
+  "file": "video_artfx.py",
+  "cat": "VideoFX",
+  "en": "Light Graffiti",
+  "zh": "光绘",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "GodRaysStage",
+  "cls": "GodRaysStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "God Rays",
+  "zh": "光芒",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoDeinterlaceStage",
+  "cls": "VideoDeinterlaceStage",
+  "file": "video_enhance.py",
+  "cat": "VideoFX",
+  "en": "Deinterlace",
+  "zh": "去隔行",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "FeedbackFXStage",
+  "cls": "FeedbackFXStage",
+  "file": "video_timefx.py",
+  "cat": "VideoFX",
+  "en": "Feedback FX",
+  "zh": "反馈特效",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SelectiveColorStage",
+  "cls": "SelectiveColorStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Selective Color",
+  "zh": "可选颜色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "CornerPinStage",
+  "cls": "CornerPinStage",
+  "file": "video_compose.py",
+  "cat": "VideoFX",
+  "en": "Corner Pin",
+  "zh": "四角定位",
+  "in": [
+   "TEXT",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "FrameBlendStage",
+  "cls": "FrameBlendStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Frame Blend",
+  "zh": "帧混合",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ShapeMaskStage",
+  "cls": "ShapeMaskStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Shape Mask",
+  "zh": "形状蒙版",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "GlitchFXStage",
+  "cls": "GlitchFXStage",
+  "file": "video_artfx.py",
+  "cat": "VideoFX",
+  "en": "Glitch FX",
+  "zh": "数字故障",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "AnnotateStage",
+  "cls": "AnnotateStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Annotate",
+  "zh": "标注",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoBlurSharpenStage",
+  "cls": "VideoBlurSharpenStage",
+  "file": "video_enhance.py",
+  "cat": "VideoFX",
+  "en": "Blur / Sharpen",
+  "zh": "模糊/锐化",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "WaterStage",
+  "cls": "WaterStage",
+  "file": "video_artfx.py",
+  "cat": "VideoFX",
+  "en": "Water",
+  "zh": "水面",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "WaveWarpStage",
+  "cls": "WaveWarpStage",
+  "file": "video_artfx.py",
+  "cat": "VideoFX",
+  "en": "Wave Warp",
+  "zh": "波浪扭曲",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "PosterizeStage",
+  "cls": "PosterizeStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Posterize",
+  "zh": "海报化",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ZDefocusStage",
+  "cls": "ZDefocusStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "Z Defocus",
+  "zh": "深度散景",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "FXChainStage",
+  "cls": "FXChainStage",
+  "file": "fx_chain.py",
+  "cat": "VideoFX",
+  "en": "FX Chain",
+  "zh": "特效链",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SlitScanStage",
+  "cls": "SlitScanStage",
+  "file": "video_timefx.py",
+  "cat": "VideoFX",
+  "en": "Slit Scan",
+  "zh": "狭缝扫描",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "SpotRemoverStage",
+  "cls": "SpotRemoverStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Spot Remover",
+  "zh": "瑕疵移除",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "HistogramEqStage",
+  "cls": "HistogramEqStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Histogram Equalize",
+  "zh": "直方图均衡",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "PaintStrokeStage",
+  "cls": "PaintStrokeStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Paint Strokes",
+  "zh": "笔刷修补",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ParticlesStage",
+  "cls": "ParticlesStage",
+  "file": "video_particles.py",
+  "cat": "VideoFX",
+  "en": "Particles",
+  "zh": "粒子",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "OldFilmStage",
+  "cls": "OldFilmStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Old Film",
+  "zh": "老电影",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "RegrainStage",
+  "cls": "RegrainStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Regrain",
+  "zh": "胶片颗粒",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "GrayWorldStage",
+  "cls": "GrayWorldStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Auto White Balance",
+  "zh": "自动白平衡",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ChromaticAberrationStage",
+  "cls": "ChromaticAberrationStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "Chromatic Aberration",
+  "zh": "色差",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoChromaKeyStage",
+  "cls": "VideoChromaKeyStage",
+  "file": "video_keying.py",
+  "cat": "VideoFX",
+  "en": "Chroma Key",
+  "zh": "色度抠像",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ChromaShiftStage",
+  "cls": "ChromaShiftStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Chroma Shift",
+  "zh": "色度错位",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "HueCorrectStage",
+  "cls": "HueCorrectStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Hue Correct",
+  "zh": "色相校正",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ArtFXStage",
+  "cls": "ArtFXStage",
+  "file": "video_artfx.py",
+  "cat": "VideoFX",
+  "en": "Art FX",
+  "zh": "艺术滤镜",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "ExpressionStage",
+  "cls": "ExpressionStage",
+  "file": "expression_stage.py",
+  "cat": "VideoFX",
+  "en": "Expression",
+  "zh": "表达式",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "TEXT"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoLUTStage",
+  "cls": "VideoLUTStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Video LUT",
+  "zh": "视频 LUT",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoTransformStage",
+  "cls": "VideoTransformStage",
+  "file": "video_compose.py",
+  "cat": "VideoFX",
+  "en": "Video Transform",
+  "zh": "视频变换",
+  "in": [
+   "TEXT",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoCurvesStage",
+  "cls": "VideoCurvesStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Video Curves",
+  "zh": "视频曲线",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoColorStage",
+  "cls": "VideoColorStage",
+  "file": "video_color.py",
+  "cat": "VideoFX",
+  "en": "Video Color",
+  "zh": "视频调色",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoStabilizeStage",
+  "cls": "VideoStabilizeStage",
+  "file": "video_enhance.py",
+  "cat": "VideoFX",
+  "en": "Video Stabilize",
+  "zh": "视频防抖",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoDenoiseStage",
+  "cls": "VideoDenoiseStage",
+  "file": "video_enhance.py",
+  "cat": "VideoFX",
+  "en": "Video Denoise",
+  "zh": "视频降噪",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "VideoStylizeStage",
+  "cls": "VideoStylizeStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Video Stylize",
+  "zh": "视频风格化",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "GlowStage",
+  "cls": "GlowStage",
+  "file": "video_stylize.py",
+  "cat": "VideoFX",
+  "en": "Glow",
+  "zh": "辉光",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "MaskPropagateStage",
+  "cls": "MaskPropagateStage",
+  "file": "video_masking.py",
+  "cat": "VideoFX",
+  "en": "Mask Propagate",
+  "zh": "遮罩传播",
+  "in": [
+   "IMAGE",
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "LensFlareStage",
+  "cls": "LensFlareStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "Lens Flare",
+  "zh": "镜头光晕",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "LensDistortStage",
+  "cls": "LensDistortStage",
+  "file": "video_optics.py",
+  "cat": "VideoFX",
+  "en": "Lens Distort",
+  "zh": "镜头畸变",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ },
+ {
+  "id": "StrobeStage",
+  "cls": "StrobeStage",
+  "file": "video_timefx.py",
+  "cat": "VideoFX",
+  "en": "Strobe",
+  "zh": "闪帧",
+  "in": [
+   "VIDEO"
+  ],
+  "out": [
+   "VIDEO"
+  ],
+  "render": true
+ }
+]

@@ -143,7 +143,12 @@ def compose(layout_id: str, cells: list[str], ink: str = "color",
     lines: list[str] = []
     for i, text in enumerate(clean_cells):
         head = f"第 {cn[i]} 格（{cell_position(layout_id, i)}）："
-        lines.append(head + (text or str(b.get("blank_cell", ""))))
+        body = text or str(b.get("blank_cell", ""))
+        if ink == "line" and (text or "").strip():
+            # 全局的线稿约束压不住个别格子的内容诱导（夕阳/暖阳光格实测被涂成彩色），
+            # 必须在每一格行尾再钉一遍黑白线稿。
+            body += "（本格严格黑白线稿，只许黑线与白纸，这一格也不许出现任何颜色）"
+        lines.append(head + body)
     blocks.append("【逐格画面】\n" + "\n".join(lines))
 
     if refs == 0:
@@ -156,13 +161,27 @@ def compose(layout_id: str, cells: list[str], ink: str = "color",
         blocks.append("【参考图使用】" + ("\n".join(dict.fromkeys(mentions)) if mentions
                                        else str(b.get("ref_no_mention", ""))))
         blocks.append(str(b.get("ref_common", "")))
+        # 三视图/六视图这类参考图本身是多格拼图，模型会顺手把格子数照搬过来，
+        # 明明要 2×2 却画出 6 格。这一句专门压住它。
+        blocks.append(
+            "【多视图参考图】参考图若是三视图、六视图或多格拼图，只从中取人物长相、发型、服饰与配色，"
+            f"绝对不要照搬它的格子数量、排布或分割线；整张故事板必须严格是 {n} 格，多一格少一格都算错。")
 
     if ink == "line":
         blocks.append("【画法】" + line_style_text(line_style) + str(b.get("line_tail", "")))
     else:
         blocks.append("【画法】" + str(b.get("color_tail", "")))
-    tail = str(b.get("tail", "")) + (str(b.get("line_check", "")) if ink == "line" else "")
+    tail = str(b.get("tail", ""))
     blocks.append(tail)
+    # 格数放在最末：图像模型对结尾的约束最敏感，参考图本身是多格拼图时尤其要压一遍
+    rows, cols = int(lay.get("rows", 2)), int(lay.get("cols", 2))
+    blocks.append(
+        f"【格数硬约束】整张图必须正好 {n} 个格子，按 {rows} 行 × {cols} 列排，不多不少；"
+        f"第 {n + 1} 格不存在，任何情况下都不要再添一格。")
+    if ink == "line":
+        # 线稿检查句要独占最末：夕阳、晚霞、金色彩虹这类格子最容易把模型带回彩色，
+        # 放在倒数第二会被格数约束盖过去（实测 G4 第 4 格夕阳被涂成彩色）。
+        blocks.append("【最终检查】" + str(b.get("line_check", "")))
     return _clean("\n\n".join(blocks))
 
 
@@ -181,6 +200,10 @@ def all_combos() -> list[dict[str, Any]]:
         lid = str(lay["id"])
         for ink in ("color", "line"):
             wf = str(lay.get("wf") or "")
+            if ink == "line" and lay.get("wfLine"):
+                # 线稿组合走专用工作流（VAEDecode 后接 ImageDesaturate 去色兜底）：
+                # 夕阳/暖光格在 cfg=3.5 下仍会渗色，纯提示词压不住，只能输出侧确定性去彩。
+                wf = str(lay["wfLine"])
             out.append({
                 "id": f"{lid}.{ink}", "name": f"{lay.get('name', lid)} · {'彩色' if ink == 'color' else '线稿'}",
                 "layout": lid, "layoutName": lay.get("name", lid), "ink": ink,

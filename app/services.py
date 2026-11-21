@@ -28,10 +28,19 @@ from .comfy import ComfyClient, ComfyError, parse_history_error, read_seed_from_
 from .config import CONFIG_PATH, ROOT, ConfigError, config
 from .promptlib import SheetError, library as sheet_library
 from .state import now_ms, state
+from . import audiolib, videolib
 from .workflows import WorkflowError, flatten_params, pick_workflow, registry
 
 # 故事板 0 张参考图时给 LoadImage 的占位图文件名（固定名，上传目录里只存一份）
 BLANK_IMAGE_NAME = "_board_blank_ref.png"
+
+# ComfyUI 各种输出节点把成品塞在不同的键下：SaveImage 是 images、SaveAudio 是 audio、
+# 老式 SaveVideo 是 gifs。视频类现在也走 images（带 metadata.kind=videos）。
+OUTPUT_KEYS = ("images", "audio", "gifs", "videos", "video")
+MEDIA_SUFFIX = {
+    ".mp4": "video", ".webm": "video", ".mov": "video", ".mkv": "video",
+    ".mp3": "audio", ".wav": "audio", ".flac": "audio", ".ogg": "audio", ".m4a": "audio",
+}
 
 logger = logging.getLogger("comfybridge.services")
 
@@ -203,6 +212,12 @@ class TaskService:
             # 提示词库坏了不能连累整个创作台：给空库，页面上按「库读不到」提示
             sheet_lib = {}
         try:
+            from . import imagestylelib
+            image_style_lib = imagestylelib.library.view()
+        except Exception:  # noqa: BLE001 - 通用模板库坏了也要让创作台可用
+            from . import imagestylelib
+            image_style_lib = {"line_styles": [], "styles": []}
+        try:
             from . import combos
             sheet_combos = combos.view()
         except Exception:  # noqa: BLE001 - 组合同样不能拖垮页面
@@ -232,11 +247,15 @@ class TaskService:
                 "ui": copy.deepcopy(state.ui),
                 "schema": registry.schema,
                 "sheetLib": sheet_lib,
+                "imageStyleLib": image_style_lib,
                 "sheetCombos": sheet_combos,
                 "extLibs": ext_libs,
                 "extCombos": ext_combos,
                 "boardLib": board_lib,
                 "boardCombos": board_combos,
+                # 视频 / 音频的模式与档位元数据：创作台、画布、管理台共用一份口径
+                "video": videolib.state_payload(),
+                "audio": audiolib.state_payload(),
                 "health": {"online": state.comfy_online, "comfy": config.service.comfy,
                            "queue": copy.deepcopy(state.comfy_queue)},
                 "seeded": True,
@@ -246,7 +265,8 @@ class TaskService:
         """保存 UI 草稿（描述、参考图、档位、当前能力），刷新/切页不丢。"""
         with state.lock:
             for key in ("capId", "route", "adminPage", "galleryFilter", "wizardSeen",
-                        "drafts", "editingWfIndex", "gOpen", "draft"):
+                        "drafts", "editingWfIndex", "gOpen", "draft",
+                        "railMin", "drawerMin"):
                 if key in patch:
                     state.ui[key] = patch[key]
         state.persist()
@@ -299,9 +319,14 @@ class TaskService:
 
     # ------------------------------------------------------------------ 提交
     def _new_run(self, job: dict[str, Any], mode: str, wf_name: str, grade: str) -> dict[str, Any]:
+        media = "image"
+        try:
+            media = registry.bridge(wf_name).get("media", "image")
+        except Exception:  # noqa: BLE001 - 工作流还没登记时按图片处理
+            pass
         return {
             "id": state.next_id("run"), "seq": state.next_seq(), "mode": mode,
-            "wf": wf_name, "grade": grade or "默认", "seed": None, "media": "image",
+            "wf": wf_name, "grade": grade or "默认", "seed": None, "media": media,
             "state": "queued", "pct": 0, "step": 0, "total": 8,
             "t0": now_ms(), "t1": None, "file": "", "files": [],
             "prompt_id": "", "err": None, "archive_failed": None,
@@ -310,6 +335,36 @@ class TaskService:
 
     def _resolve_refs(self, ref_ids: list[str]) -> list[dict[str, Any]]:
         return [r for rid in ref_ids if (r := state.refs.get(rid))]
+
+    def resolve_refs(self, ref_ids: list[str]) -> list[dict[str, Any]]:
+        """对外版：接口层要按素材类型点数（图/视频/音频各几张）时用它。"""
+        return self._resolve_refs(ref_ids)
+
+    def video_opt(self, job: dict[str, Any], grade: str) -> dict[str, Any]:
+        """任务上记的视频参数 + 这一档 → 真正提交的出片参数。
+
+        档位负责「这套比例/分辨率/步数」，任务上的显式选择优先（用户在页面上
+        把比例从 16:9 改成 9:16 之后，换档重跑也不该被档位改回去）。
+        """
+        v = job.get("video") or {}
+        opt = videolib.opts(str(v.get("mode") or "ref2v"), grade,
+                            v.get("ratio"), v.get("res"), v.get("steps"))
+        # 需求6：创作台时长输入框（4~15 秒，精度 0.01）为准，换算成 H3 的帧数。
+        # H3 约 24fps；老草稿没有 duration 时沿用 length / 默认 124 帧。
+        dur = v.get("duration")
+        if dur is not None:
+            width, height = int(opt.get("width") or 1344), int(opt.get("height") or 768)
+            # 时长→帧数：124 帧≈5.17 秒 ⇒ 24fps，钳到 H3 合理范围
+            frames = int(round(float(dur) * 24))
+            opt["length"] = max(24, min(360, frames))
+            opt["duration"] = float(dur)
+        else:
+            opt["length"] = int(v.get("length") or 124)
+        return opt
+
+    def audio_opt(self, job: dict[str, Any], grade: str) -> dict[str, Any]:
+        a = job.get("audio") or {}
+        return audiolib.opts(str(a.get("mode") or "music"), grade)
 
     def ensure_blank_image(self) -> str:
         """故事板 0 张参考图时给 LoadImage 的纯白占位图，返回 ComfyUI 里的文件名。
@@ -363,7 +418,8 @@ class TaskService:
         self, cap_id: str, prompt: str, grade: str, ref_ids: list[str],
         wf: str | None = None, sheet: dict[str, Any] | None = None,
         brief: str = "", params: dict[str, Any] | None = None,
-        tag: str | None = None,
+        tag: str | None = None, archive_folder: str | None = None,
+        video: dict[str, Any] | None = None, audio: dict[str, Any] | None = None,
     ) -> tuple[bool, str, str]:
         """发送 / 再来一张 / 重试：新开一张卡，忙了只提示。返回 (ok, job_id, reason)。
 
@@ -385,10 +441,12 @@ class TaskService:
             return False, "", "写点描述再发送"
         refs = self._resolve_refs(ref_ids)
         max_refs = int(cap.get("maxRefs", 3) or 3)
-        if len(refs) > max_refs:
+        # 视频 / 音频能力的 maxRefs 只约束图片张数：视频 6 图 + 1 视频 + 2 音频
+        images_only = [r for r in refs if r.get("kind", "image") == "image"]
+        if len(images_only) > max_refs:
             return False, "", f"这个能力最多 {max_refs} 张参考图"
         if cap.get("requiredRef") and not refs:
-            return False, "", "这个能力需要参考图"
+            return False, "", "这个能力需要参考素材"
         # 显式工作流优先：仅当它确实属于这个能力时才采用，避免伪造/越权选择
         # 道具设定图的图生图：用户图只当「造型参考」。若让它占住 LoadImage 位，
         # 模型会把它当「要编辑的原图」整张照抄（场景里的窗棂、垫着的桌子全跟着进来）。
@@ -408,7 +466,16 @@ class TaskService:
         if not wf_name:
             return False, "", "这种情况还没有配置对应的工作流"
         wf = config.workflow(wf_name) or {}
-        if params is None:
+        if video or audio:
+            # 视频 / 音频的档位不在 workflows.<name>.grades 里，而是按模式存在
+            # videoGrades / audioGrades：同一套模型换模式就该换一组档位。
+            mode = str((video or audio or {}).get("mode") or "")
+            names = [g["name"] for g in (
+                videolib.grades(mode) if video else audiolib.grades(mode))]
+            if grade not in names:
+                grade = names[0]
+            tag = tag or grade
+        elif params is None:
             # 图片生成：档位来自 config 的 grades 表，名字不合法就退回第一档
             grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
             if grade not in grades:
@@ -423,6 +490,8 @@ class TaskService:
             return False, "", reason
         job = {
             "id": state.next_id("job"), "cap": cap_id, "capName": cap["name"],
+            # 画布是「另一个前端」：能力名仍按真实能力显示，但成品落到它自己的菜单目录
+            "archiveFolder": archive_folder or "",
             "capSnapshot": {"id": cap_id, "name": cap["name"]},
             "wf": wf_name, "why": why, "prompt": prompt.strip(),
             "refs": [r["id"] for r in refs], "t0": now_ms(), "seed": None, "runs": [],
@@ -435,6 +504,10 @@ class TaskService:
         if sheet:
             job["sheet"] = copy.deepcopy(sheet)
             job["brief"] = brief or ""
+        if video:
+            job["video"] = copy.deepcopy(video)
+        if audio:
+            job["audio"] = copy.deepcopy(audio)
         if params is not None:
             # 参数跟着任务走：换档重跑、再来一张都要拿回同一份覆盖，不能靠名字重查
             job["params"] = copy.deepcopy(params)
@@ -492,11 +565,21 @@ class TaskService:
                 params = combos.effective_params(cid, grade)
                 tag = combos.tag(cid, grade)
         else:
-            wf = config.workflow(job["wf"]) or {}
-            grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
-            if grade not in grades:
-                grade = grades[0]
-            tag = grade
+            # 视频 / 音频的档位按模式存在 videoGrades / audioGrades 里
+            vmode = str((job.get("video") or {}).get("mode") or "")
+            amode = str((job.get("audio") or {}).get("mode") or "")
+            if vmode or amode:
+                names = [g["name"] for g in (
+                    videolib.grades(vmode) if vmode else audiolib.grades(amode))]
+                if grade not in names:
+                    grade = names[0]
+                tag = grade
+            else:
+                wf = config.workflow(job["wf"]) or {}
+                grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
+                if grade not in grades:
+                    grade = grades[0]
+                tag = grade
         run = self._new_run(job, "queue", base["wf"], grade)
         run["params"] = params
         run["gradeTag"] = tag
@@ -519,6 +602,9 @@ class TaskService:
             wf=job.get("wf"), sheet=job.get("sheet"), brief=job.get("brief", ""),
             # 组合档位的参数不按名字重查（名字只在那一个组合里有意义），原样透传
             params=job.get("params"), tag=job.get("gradeTag"),
+            # 「再来一张」也要留在画布目录里，不能因为重跑又回到「图片生成」
+            archive_folder=job.get("archiveFolder") or None,
+            video=job.get("video"), audio=job.get("audio"),
         )
 
     def cancel(self, run_id: str) -> bool:
@@ -573,19 +659,49 @@ class TaskService:
                 seed = job.get("seed") if run["mode"] == "queue" and job.get("seed") else secrets.randbelow(2**62)
                 prefix = f"ComfyBridge_{job['id']}_{run['seq']}"
                 params, tag = run.get("params"), run.get("gradeTag")
-                prompt = registry.build_prompt(
-                    run["wf"], run["grade"], job["prompt"], refs, seed, prefix,
-                    params=params, tag=tag,
-                    placeholder=None if refs or job.get("cap") != "board.story" else self.ensure_blank_image())
-                # 记下这一档真正提交到 ComfyUI 的参数，页面上可核对「改了有没有生效」
-                applied = registry.grade_effective(
-                    run["wf"], run["grade"], params=params, tag=tag)
+                bridge = registry.bridge(run["wf"])
+                media = bridge.get("media", "image")
+                applied: dict[str, Any] = {}
+                if media == "video":
+                    opt = self.video_opt(job, run["grade"])
+                    # 视频工作流在 config 里只有「默认」一档：真正的档位（比例/分辨率/步数）
+                    # 是 videolib 按模式算出来的，不落在这条工作流的 grades 表里
+                    api = registry.load(run["wf"], "默认")
+                    prompt = videolib.build(api, bridge.get("video_ref") or {},
+                                            text=job["prompt"], opt=opt, refs=refs,
+                                            seed=seed, prefix=prefix)
+                    applied = {"mode": opt["modeName"], "size": opt["size"],
+                               "steps": opt["steps"], "lora": opt["lora"] or "不挂 LoRA"}
+                    size_label = f"{opt['size']} · {opt['steps']} 步"
+                elif media == "audio":
+                    opt = self.audio_opt(job, run["grade"])
+                    api = registry.load(run["wf"], "默认")
+                    audio_ref = next((r for r in refs if r.get("kind") == "audio"), None)
+                    prompt = audiolib.build(api, bridge, text=job["prompt"],
+                                            lyrics=str((job.get("audio") or {}).get("lyrics") or ""),
+                                            duration=opt.get("duration"), seed=seed,
+                                            prefix=prefix, ref=audio_ref)
+                    for node_id, fields in (opt.get("params") or {}).items():
+                        node = prompt.get(node_id)
+                        if node:
+                            node["inputs"].update(fields)
+                            applied[node_id] = dict(fields)
+                    size_label = (f"{int(opt['duration'])} 秒" if opt.get("duration") else "语音")
+                else:
+                    prompt = registry.build_prompt(
+                        run["wf"], run["grade"], job["prompt"], refs, seed, prefix,
+                        params=params, tag=tag,
+                        placeholder=None if refs or job.get("cap") != "board.story" else self.ensure_blank_image())
+                    # 记下这一档真正提交到 ComfyUI 的参数，页面上可核对「改了有没有生效」
+                    eff = registry.grade_effective(
+                        run["wf"], run["grade"], params=params, tag=tag)
+                    applied, size_label = eff["applied"], eff["size"]["label"]
                 prompt_id = self.comfy.submit(prompt)
                 with state.lock:
                     run["prompt_id"] = prompt_id
                     run["seed"] = seed
-                    run["applied"] = applied["applied"]
-                    run["sizeExpected"] = applied["size"]["label"]
+                    run["applied"] = applied
+                    run["sizeExpected"] = size_label
                 state.persist()
             else:
                 with state.lock:
@@ -645,29 +761,61 @@ class TaskService:
         bridge = registry.bridge(run["wf"])
         files: list[dict[str, Any]] = []
         for node_id in bridge.get("output_nodes", []):
-            for item in (outputs.get(node_id, {}) or {}).get("images", []) or []:
-                filename = item.get("filename")
-                if not filename:
-                    continue
-                info = {"filename": filename, "subfolder": item.get("subfolder", "") or "",
-                        "type": item.get("type", "output") or "output"}
-                info["width"] = (item.get("metadata") or {}).get("width")
-                info["height"] = (item.get("metadata") or {}).get("height")
-                self._archive(job, run, info)
-                # 道具多视图：模型会把同一视角复制几份凑满画布，出图后做一次视觉去重
-                if (job.get("cap") == "sheet.prop"
-                        and str((job.get("sheet") or {}).get("layout") or "") == "MV"
-                        and info.get("path")):
-                    try:
-                        from .extsheets import view_source
-                        from .viewdedup import dedup_views
-                        # 只有系统自动凑的三个视角才允许把同一个圆形态合掉；
-                        # 用户自己点了「正面、背面」，一个都不许动。
-                        src = view_source(str((job.get("sheet") or {}).get("text") or ""))
-                        info["dedup"] = dedup_views(Path(info["path"]), auto=(src == "auto"))
-                    except Exception as exc:  # noqa: BLE001
-                        info["dedup"] = {"ok": False, "reason": str(exc)}
-                files.append(info)
+            payload = outputs.get(node_id, {}) or {}
+            for key in OUTPUT_KEYS:
+                for item in payload.get(key) or []:
+                    filename = item.get("filename")
+                    if not filename:
+                        continue
+                    meta = item.get("metadata") or {}
+                    info = {"filename": filename, "subfolder": item.get("subfolder", "") or "",
+                            "type": item.get("type", "output") or "output"}
+                    info["width"] = meta.get("width")
+                    info["height"] = meta.get("height")
+                    # 视频 / 音频按扩展名与 metadata.kind 一起判，别把 mp4 当图片渲染
+                    kind = str(meta.get("kind") or "")
+                    if kind not in ("video", "audio"):
+                        kind = MEDIA_SUFFIX.get(Path(filename).suffix.lower(), "image")
+                    info["kind"] = kind
+                    for extra in ("duration", "fps", "frame_count"):
+                        if meta.get(extra) is not None:
+                            info[extra] = meta[extra]
+                    self._archive(job, run, info)
+                    # 宫格分镜线稿：夕阳/暖光格在 cfg=3.5 下仍会渗色（Qwen 对暖色先验太强），
+                    # 提示词与 CFG 都压不住，最后一线：线稿工作流的成品落盘后确定性转灰度。
+                    # 只影响 wf 名带「线稿」的任务，彩色与其它能力不受影响。
+                    if info.get("path") and "线稿" in str(run.get("wf") or ""):
+                        try:
+                            from PIL import Image, ImageOps
+                            p = Path(info["path"])
+                            with Image.open(p) as im:
+                                ImageOps.grayscale(im).convert("RGB").save(p)
+                            info["desaturated"] = True
+                        except Exception as exc:  # noqa: BLE001 - 后处理失败不挡出图
+                            info["desaturated"] = f"failed: {exc}"
+                    # 音频/视频节点不写 duration：归档完自己探一次，卡片上才有「N 秒」
+                    if info.get("duration") is None and info.get("kind") in ("audio", "video") and info.get("path"):
+                        try:
+                            from .mediaprobe import duration as probe_duration
+                            got = probe_duration(info["path"])
+                            if got:
+                                info["duration"] = got
+                        except Exception:  # noqa: BLE001 - 探测失败不能影响收尾
+                            pass
+                    # 道具多视图：模型会把同一视角复制几份凑满画布，出图后做一次视觉去重
+                    if (job.get("cap") == "sheet.prop"
+                            and str((job.get("sheet") or {}).get("layout") or "") == "MV"
+                            and info.get("path")):
+                        try:
+                            from .extsheets import view_source
+                            from .viewdedup import dedup_views
+                            # 只有系统自动凑的三个视角才允许把同一个圆形态合掉；
+                            # 用户自己点了「正面、背面」，一个都不许动。
+                            src = view_source(str((job.get("sheet") or {}).get("text") or ""))
+                            info["dedup"] = dedup_views(Path(info["path"]), auto=(src == "auto"))
+                        except Exception as exc:  # noqa: BLE001
+                            info["dedup"] = {"ok": False, "reason": str(exc)}
+                    files.append(info)
         if not files:
             # 工作流"跑完"但一个成品都没产出：ComfyUI 那句
             # "Failed to validate prompt / Output will be ignored / Prompt executed in 0.0X seconds"
@@ -688,6 +836,11 @@ class TaskService:
             run["seed"] = seed
             if files and files[0].get("width") and files[0].get("height"):
                 run["size"] = f"{files[0]['width']}×{files[0]['height']}"
+            if files and files[0].get("duration"):
+                # 视频 / 音频都记一条实际时长：卡片上显示「5.2 秒」比「成功」有用
+                run["duration"] = round(float(files[0]["duration"]), 2)
+                if files[0].get("kind") == "audio":
+                    run["size"] = f"{run['duration']:.1f} 秒"
             if not job.get("seed"):
                 job["seed"] = seed
             for sibling in job["runs"]:
@@ -701,7 +854,7 @@ class TaskService:
         归档失败不算任务失败：成品照常可看可下载，卡片上加一行黄标说明。
         """
         src = Path(config.service.comfyOutputDir).resolve() / info["subfolder"] / info["filename"]
-        dst_dir = Path(config.service.archiveDir).resolve() / job["capName"]
+        dst_dir = Path(config.service.archiveDir).resolve() / (job.get("archiveFolder") or job["capName"])
         info["path"] = str(src)
         info["archived_path"] = ""
         try:
@@ -1007,13 +1160,19 @@ class TaskService:
            ref id 只活在内存里，服务重启或「基于上一条」重新登记后会换 id，
            只有路径是跨重启可靠的锚。以前只按 id 保护，正是「图被当孤儿删掉」的根因。
         """
-        draft_ids = set(protect)
+        prot = [r if isinstance(r, str) else str((r or {}).get("id") or "") for r in (protect or [])]
+        draft_ids = set(i for i in prot if i)
         protected = set(draft_ids)
         protected_paths: set[str] = set()
         with state.lock:
             for draft in (state.ui.get("drafts") or {}).values():
-                draft_ids.update((draft or {}).get("refs") or [])
-                protected.update((draft or {}).get("refs") or [])
+                # 草稿里的 refs 可能是 id 字符串（创作台），也可能是 {id:...} 对象
+                # （画布的连线/素材记录）；统一抽成 id 再进 set，不然 dict 直接当 key
+                # 会炸「unhashable type: 'dict'」，上传直接 500。
+                ids = [r if isinstance(r, str) else str((r or {}).get("id") or "")
+                       for r in ((draft or {}).get("refs") or [])]
+                draft_ids.update(i for i in ids if i)
+                protected.update(i for i in ids if i)
             for job in state.jobs:
                 if job.get("sessionRemoved"):
                     continue

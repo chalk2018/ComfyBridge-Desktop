@@ -58,6 +58,7 @@ input,textarea,select{font:inherit;color:inherit}
 .dot.g{background:var(--green);box-shadow:0 0 0 3px rgba(47,163,107,.15)}
 .dot.r{background:var(--red);box-shadow:0 0 0 3px rgba(224,82,58,.15)}
 .dot.a{background:var(--amber)}
+.dot.x{background:#c6ccd6}
 .muted{color:var(--ink3)}
 .tiny{font-size:11.5px}
 .mono{font-family:Consolas,"SFMono-Regular",Menlo,monospace;font-size:12px}
@@ -105,7 +106,7 @@ select.input{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg 
 .topbar{position:sticky;top:0;z-index:50}
 /* 「未连接」的短文案只在手机上用，桌面上照旧显示整句 */
 .topbar .health .txt-short{display:none}
-.studio{flex:1;display:grid;grid-template-columns:224px minmax(0,1fr) 232px;align-items:start}
+.studio{flex:1;display:grid;--railw:224px;--draww:232px;grid-template-columns:var(--railw) minmax(0,1fr) var(--draww);align-items:start;transition:grid-template-columns .16s}
 .rail{background:#fafbfe;border-right:1px solid var(--line);padding:12px 10px 24px;position:sticky;top:52px;align-self:start;max-height:calc(100vh - 52px);overflow-y:auto}
 .rail .group{font-size:11px;font-weight:700;color:var(--ink3);padding:10px 8px 6px;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center}
 .rail .item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;font-size:13px;color:var(--ink2);cursor:pointer;transition:.12s;margin-bottom:1px;white-space:nowrap}
@@ -185,6 +186,11 @@ select.input{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg 
 .tile.portrait{aspect-ratio:3/4}
 .tile.wide{aspect-ratio:16/9}
 .tile.vid{aspect-ratio:16/9}
+/* 需求7：视频右上角工具条，避开底部原生控件，不拦截播放点击 */
+.tile .vtop{position:absolute;top:6px;right:6px;z-index:3;display:flex;gap:5px}
+.tile .vtop button{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.94);color:#222;font-size:12px;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.25);opacity:.9}
+.tile .vtop button:hover{opacity:1;background:#fff}
 .tile .acts{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,16,28,0) 40%,rgba(10,16,28,.72));opacity:0;transition:.15s;display:flex;align-items:flex-end;gap:6px;padding:8px}
 .tile:hover .acts{opacity:1}
 .tile .acts button{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.94);color:#222;font-size:12px;display:flex;align-items:center;justify-content:center}
@@ -261,7 +267,7 @@ textarea[readonly]{background:#f6f8fb;color:#5a6472;cursor:default}
 /* ---------- 管理台 ---------- */
 .admin{min-height:100vh;display:flex;flex-direction:column}
 .admin-body{flex:1;display:grid;grid-template-columns:196px minmax(0,1fr);align-items:start}
-.admin-nav{background:#fafbfe;border-right:1px solid var(--line);padding:14px 10px;position:sticky;top:52px;align-self:start;max-height:calc(100vh - 52px);overflow-y:auto}
+.admin-nav{background:#fafbfe;border-right:1px solid var(--line);padding:14px 10px;position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);max-height:calc(100vh - 52px);overflow-y:auto}
 .admin-nav .item{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;font-size:13px;color:var(--ink2);cursor:pointer;margin-bottom:2px;transition:.12s}
 .admin-nav .item:hover{background:#eef2f9}
 .admin-nav .item.on{background:var(--accent);color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(47,107,255,.26)}
@@ -353,7 +359,7 @@ textarea[readonly]{background:#f6f8fb;color:#5a6472;cursor:default}
 audio{width:100%;height:34px}
 .mobile-note{display:none}
 @media (max-width:1180px){
-  .studio{grid-template-columns:172px minmax(0,1fr)}
+  .studio{--railw:172px;grid-template-columns:var(--railw) minmax(0,1fr)}
 }
 
 /* ===== 档位 / 归档 相关（本轮新增） ===== */
@@ -522,10 +528,10 @@ audio{width:100%;height:34px}
 /* ⑤ 默认档的行 */
 .grow.def{background:#fbfaf5}
 .grow.def .grow-hd{background:#fbf7ea}
-.gname-txt{flex:1;min-width:0;display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink);height:30px}
+.gname-txt{flex:1;min-width:0;display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink);height:30px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gname-txt .lock{font-style:normal;font-size:9.5px;font-weight:400;color:#8a5a00;background:#fff3d9;border:1px solid #efdcb2;border-radius:4px;padding:1px 5px}
 .gdefnote{font-size:10px;color:#9a7a35;white-space:nowrap}
-.gcopy{font-size:10px;color:var(--ink4);white-space:nowrap}
+.gcopy{font-size:10px;color:var(--ink4);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .grow-hd .gdel[disabled]{opacity:.3;cursor:not-allowed}
 .grow-hd .gdel[disabled]:hover{background:transparent;color:var(--ink3)}
 .defbar{margin-top:8px;padding:7px 10px;background:#fff8ec;border:1px solid #f0dcb8;border-radius:7px;
@@ -644,7 +650,7 @@ audio{width:100%;height:34px}
 .configerr .msg{flex:1;min-width:240px}
 /* 档位表：逐参数生效自检 + 每档出图尺寸 */
 .geff{font-size:10px;color:#5b6575;background:#f2f5fa;border:1px solid transparent;border-radius:5px;
-  padding:2px 7px;margin-left:8px;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+  padding:2px 7px;margin-left:8px;white-space:nowrap;min-width:0;max-width:230px;overflow:hidden;text-overflow:ellipsis}
 .geff.ok{border-color:#cfe8d8;color:#26734a}
 .geff.bad{border-color:#f0c9bd;color:#a83a20}
 .effbox{background:#f7faff;border:1px solid #dfe8fb;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:11px}
@@ -674,7 +680,7 @@ audio{width:100%;height:34px}
 .tdel:hover{background:#fdefec;color:#a83a20}
 @media (max-width:1180px){
   /* 平板/窄桌面：右栏移到页面底部整行，进度和会话任务都还看得到 */
-  .studio{grid-template-columns:172px minmax(0,1fr)}
+  .studio{--railw:172px;grid-template-columns:var(--railw) minmax(0,1fr)}
   .drawer{display:block;grid-column:1 / -1;position:static;max-height:none;border-top:1px solid var(--line)}
 }
 
@@ -692,8 +698,8 @@ audio{width:100%;height:34px}
 .modedis{font-size:11.5px;color:var(--ink4);padding:4px 2px}
 
 /* ② 内容可编辑的提示词编辑器（支持行内图片引用 chip）
-   高度规则：不溢出时随文字自适应（一行就一行），超过 5 行封顶并出现滚动条 */
-.editor{border:0;outline:none;font-size:13.5px;line-height:1.7;min-height:calc(1.7em + 2px);
+   高度规则：至少 3 行（用户要求提示词区能输入三行），超过 5 行封顶并出现滚动条 */
+.editor{border:0;outline:none;font-size:13.5px;line-height:1.7;min-height:calc(5.1em + 4px);
   max-height:calc(8.5em + 10px);overflow-y:auto;overflow-x:hidden;padding:5px 3px;background:transparent;
   white-space:pre-wrap;word-break:break-word;overscroll-behavior:contain}
 .editor::-webkit-scrollbar{width:6px}
@@ -939,7 +945,8 @@ audio{width:100%;height:34px}
   .grow-hd{flex-wrap:wrap;row-gap:6px;padding:9px 10px}
   .grow-hd .gnum{width:14px}
   .grow-hd .gname{flex:1 1 auto;min-width:104px}
-  .grow-hd .gname-txt{flex:1 1 auto;min-width:104px;white-space:nowrap;overflow:hidden}
+  .grow-hd .gname-txt{flex:1 1 auto;min-width:104px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grow-hd .gcopy{max-width:150px}
   .grow-hd .geff{margin-left:0;max-width:100%}
   .grow-hd .gsp{display:none}
   .grow-hd .gedit{margin-left:auto}
@@ -1002,9 +1009,13 @@ audio{width:100%;height:34px}
   font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;transition:.12s}
 .segb:hover{color:var(--ink)}
 .segb.on{background:#fff;color:var(--accent);font-weight:600;box-shadow:0 1px 3px rgba(20,30,50,.1)}
+.segb.dis{color:var(--ink4);background:#f4f6fa;border:1px dashed var(--line);cursor:not-allowed;opacity:.7}
+.segb.dis:hover{color:var(--ink4)}
 .segx{font-style:normal;font-size:9.5px;color:var(--ink4);margin-left:5px}
 .segb.on .segx{color:var(--accent)}
-.segsel{height:26px;width:auto;min-width:132px;max-width:260px;font-size:12px;padding:0 8px;flex:0 0 auto}
+/* 风格等下拉：必须和旁边的自定义输入框(.segtext)一样高。
+   基类 select.input 是 36px 且优先级更高，这里用 .input.segsel 提高优先级盖掉它。 */
+.input.segsel,select.segsel{height:26px;width:auto;min-width:132px;max-width:260px;font-size:12px;padding:0 8px;flex:0 0 auto}
 .segtext{height:26px;font-size:12px;padding:0 8px;flex:1 1 200px;min-width:140px;width:auto}
 .sheetchar{width:100%;border:0;outline:none;resize:vertical;font:inherit;font-size:13.5px;line-height:1.65;
   min-height:68px;max-height:200px;padding:7px 3px;background:transparent;color:var(--ink)}
@@ -1041,7 +1052,7 @@ audio{width:100%;height:34px}
 
 @media (max-width:820px){
   .sheetbar{gap:6px}
-  .segsel,.segtext{height:28px}
+  .input.segsel,select.segsel,.segtext{height:28px}
   .sheetchar{min-height:60px}
   .style-row{flex-wrap:wrap}
   .style-row .sname{width:100%}
@@ -1131,10 +1142,162 @@ audio{width:100%;height:34px}
   .admin-seg .segb{flex:0 0 auto}
   .admin-seg .segx{display:none}
 }
+
+/* ---------- 1.04 视频 / 音频表单 ---------- */
+.vmodes{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.vmode{height:28px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:#fff;
+  font-size:12.5px;color:var(--ink2);transition:.12s;white-space:nowrap}
+.vmode:hover{border-color:#c9d3e3;background:#fbfcfe}
+.vmode.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.vmode.dis{color:var(--ink4);background:#f6f8fb;border-style:dashed}
+.vmode.dis:hover{border-color:var(--line);background:#f6f8fb}
+.vopt{display:inline-flex;align-items:center;gap:4px;padding:2px;border-radius:9px;background:#eef1f7;border:1px solid #e6eaf2}
+.vopt-n{font-size:11px;color:var(--ink3);padding:0 6px 0 4px;white-space:nowrap}
+.vseg{height:24px;padding:0 9px;border-radius:7px;background:transparent;font-size:12px;color:var(--ink2);white-space:nowrap}
+.vseg:hover{color:var(--ink)}
+.vseg.on{background:#fff;color:var(--accent);font-weight:600;box-shadow:0 1px 4px rgba(20,30,50,.10)}
+.vsize{font-size:11.5px;color:var(--ink4);white-space:nowrap}
+/* 需求6：视频时长——数值框(左) + 滑条(右)，实时同步，框里精度 0.01 */
+.vdurbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.vdurbar::-webkit-scrollbar{display:none}
+.vdur-num{width:74px;flex:0 0 auto;height:28px;text-align:center;font-variant-numeric:tabular-nums}
+.vdur-unit{flex:0 0 auto}
+.vdur-range{flex:1 1 130px;min-width:110px;max-width:280px;accent-color:var(--accent);height:24px;cursor:pointer}
+.vdur-meta{flex:0 0 auto;white-space:nowrap;margin-left:auto}
+.vg-new{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 12px}
+.vg-new .cvf select{min-width:92px}
+.vslots{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.vslots.two{align-items:flex-start}
+.vslots.two>.vslot{width:104px;height:104px}
+.vadds{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.vadd{height:26px;padding:0 10px;border-radius:7px;border:1px dashed var(--line);background:#fafbfe;
+  font-size:12px;color:var(--ink2)}
+.vadd:hover{border-color:var(--accent3);color:var(--accent);background:var(--accent2)}
+.vslot{width:84px;height:84px;border:1.4px dashed var(--line);border-radius:9px;background:#f8fafd;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:0 0 auto;
+  position:relative;overflow:hidden;padding:0}
+.vslot:hover{border-color:var(--accent3);background:var(--accent2)}
+.vslot .vs-ic{font-size:17px}
+.vslot .vs-lb{font-size:11px;color:var(--ink2)}
+.vslot .vs-hint{font-size:9.5px;color:var(--ink4)}
+.vslot.has{border-style:solid;border-color:var(--line);background:#eef2f8}
+.vslot.has img,.vslot.has video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.vslot.has .vs-audio{font-size:24px}
+.vslot .vs-lb2{position:absolute;left:0;right:0;bottom:0;padding:1px 4px;font-size:9.5px;color:#fff;
+  background:linear-gradient(0deg,rgba(10,16,28,.72),transparent);text-align:left}
+.vslot .vs-token{position:absolute;left:3px;top:3px;font-size:9px;color:#fff;background:rgba(10,16,28,.6);
+  border-radius:4px;padding:0 4px}
+.vslot .at{position:absolute;right:3px;bottom:3px;width:18px;height:18px;border-radius:50%;
+  background:#2f6bff;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
+.vslot .x{position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;
+  background:rgba(15,20,32,.65);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
+.vgrid{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:2px;border-radius:9px;
+  background:#eef1f7;border:1px solid #e6eaf2;max-width:420px}
+.vgrid-hint{font-size:10.5px;color:var(--ink4);padding:0 6px;line-height:1.4}
+.vcells{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-bottom:6px}
+.vcell{display:flex;flex-direction:column;gap:2px}
+.vcell span{font-size:10.5px;color:var(--ink3)}
+.vcell .input{height:28px;font-size:12px}
+.vlyrics{width:100%;border:1px dashed var(--line2);border-radius:8px;padding:6px 8px;font-size:12.5px;
+  resize:vertical;min-height:38px;outline:none;background:#fbfcfe;line-height:1.6}
+.vlyrics:focus{border-color:var(--accent3);background:#fff}
+select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
+/* 音频成品：一条播放器占满整行 */
+.tile.audio-tile{aspect-ratio:auto;padding:12px 12px 8px;background:linear-gradient(135deg,#f7f9ff,#eef3fb);display:flex;flex-direction:column;gap:8px}
+.atile-hd{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);min-width:0}
+.atile-hd .aname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.atile-ft{display:flex;align-items:center;gap:6px}
+.atile-ft button{width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid var(--line);font-size:11px}
+@media (max-width:820px){
+  .vopt .vseg{padding:0 7px;font-size:11.5px}
+  .vsize{display:none}
+  .vslots.two>.vslot{width:92px;height:92px}
+}
+
+/* ---------- 1.04 左右栏折叠（任何尺寸都支持；手机以外默认展开） ---------- */
+.studio.rail-min{--railw:58px}
+.studio.drawer-min{--draww:58px}
+.rail-min-btn{position:absolute;top:10px;right:6px;width:22px;height:22px;border-radius:6px;
+  border:1px solid var(--line);background:#fff;color:var(--ink3);font-size:10px;line-height:1;
+  display:flex;align-items:center;justify-content:center;z-index:3}
+.rail-min-btn:hover{color:var(--accent);border-color:var(--accent3);background:var(--accent2)}
+/* 桌面/平板上能力栏是常驻一栏，需要 relative 给折叠按钮定位；
+   手机上它是从左边滑出的固定抽屉，这里绝不能覆盖成 relative —— 一旦进了文档流，
+   它会把整列高度吃光，聊天区和画布都变成 0 高（1.04 实测踩过）。 */
+@media (min-width:821px){
+  /* 需求15：桌面能力栏必须紧贴顶栏、铺满整列。
+     之前从 sticky 改成 relative 时忘了清掉 top:52px，整栏被额外下移 52px；
+     同时没有固定高度，内容少时下半截露出 body 灰底，形成顶部/底部两块多余灰色。 */
+  .rail{position:relative;top:0;height:calc(100vh - 52px);max-height:calc(100vh - 52px)}
+  .rail .side-hd{padding-right:26px}
+}
+.studio.rail-min .rail{padding-left:6px;padding-right:6px}
+.studio.rail-min .rail .group,
+.studio.rail-min .rail .item .nm,
+.studio.rail-min .rail .item .tag,
+.studio.rail-min .rail .tip{display:none}
+.studio.rail-min .rail .item{justify-content:center;padding:8px 0}
+.studio.rail-min .rail .item .em{width:auto;font-size:16px}
+.drawer-min-btn{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:#fff;
+  color:var(--ink3);font-size:10px;display:flex;align-items:center;justify-content:center}
+.drawer-min-btn:hover{color:var(--accent);border-color:var(--accent3);background:var(--accent2)}
+.studio.drawer-min .drawer{padding:10px 6px}
+.studio.drawer-min .drawer-fixed,
+.studio.drawer-min .drawer-scroll,
+.studio.drawer-min .drawer .sheet-hd b{display:none}
+.drawer-stub{display:none;flex-direction:column;align-items:center;gap:10px;padding-top:4px}
+.studio.drawer-min .drawer-stub{display:flex}
+.drawer-stub .ds-dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.drawer-stub .ds-dot.busy{background:var(--amber)}
+.drawer-stub .ds-n{font-size:11px;color:var(--ink2);font-weight:700}
+.drawer-stub .ds-lb{font-size:10px;color:var(--ink3);writing-mode:vertical-rl;letter-spacing:.1em}
+@media (max-width:820px){
+  .studio.rail-min .rail .item .nm{display:inline}
+  .studio.rail-min{--railw:172px}
+  .studio.drawer-min{--draww:280px}
+  .rail-min-btn,.drawer-min-btn{display:none}
+}
+
+/* ---------- 1.04 任务栏：勾选框对齐 + 整行可选 ---------- */
+.ti-top .tsel{width:14px;height:14px;margin:0;flex:0 0 auto;accent-color:var(--accent);
+  position:relative;top:0;vertical-align:middle;cursor:pointer}
+.task-item .ti-top{align-items:center;gap:7px}
+.task-item .t{line-height:1.35}
+.task-thumbs{padding-left:21px}
+.task-item{cursor:pointer}
+.task-item.sel{background:#fff;border-color:var(--accent3)}
+.tjump{width:20px;height:20px;border-radius:5px;border:1px solid var(--line);background:#fff;
+  color:var(--ink3);font-size:10px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.tjump:hover{color:var(--accent);border-color:var(--accent3);background:var(--accent2)}
+.task-item .tdel{position:static;transform:none;flex:0 0 auto}
+/* 需求14：左侧 checkbox 与右侧 定位/✕ 各自竖排成列、严格对齐 */
+.task-item .ti-top input.tsel{width:15px;height:15px;flex:0 0 15px;margin:0;accent-color:var(--accent)}
+.task-item .ti-top>.dot{flex:0 0 8px}
+.task-item .ti-top .t{flex:1 1 auto;min-width:0}
+.task-item .ti-acts{margin-left:auto;display:flex;gap:6px;align-items:center;flex:0 0 auto;justify-content:flex-end}
+/* 需求 6：.task-item 在窄屏是纵向 flex，子项默认按内容宽度居中收缩，
+   导致每行的 checkbox/定位/✕ 各自错开；这里强制撑满整行，列的竖排才严格对齐 */
+.task-item>.ti-top,.task-item>.task-thumbs{width:100%;box-sizing:border-box}
+.task-item>.ti-top{display:flex}
+.task-item{padding-right:8px}       /* 清掉 1.03 残留给绝对定位 ✕ 留的 30px，让按钮贴近右边 */
+.task-item .ti-acts{width:58px}
+.task-item .ti-acts .tdel{position:static;transform:none}
+.task-item.jump-flash{animation:jumpFlash 1s ease-in-out 2}
+@keyframes jumpFlash{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 4px rgba(47,107,255,.28)}}
+
+/* ---------- 1.04 图片生成：画法 / 风格 ---------- */
+.imgstyle{gap:8px}
+.imgstyle .vopt{padding:2px 4px}
+.input.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
+.input.vsmall.grow{flex:1;min-width:160px;padding-right:8px}
 </style>
+<link rel="stylesheet" href="/static/canvas.css">
 </head>
 <body>
 <div id="root"></div>
 <script src="/static/app.js"></script>
+<script src="/static/genui.js"></script>
+<script src="/static/media.js"></script>
+<script src="/static/canvas.js"></script>
 </body>
 </html>

@@ -1,0 +1,37 @@
+{
+ "prompt_targets": [
+  {
+   "node": "5",
+   "field": "style"
+  }
+ ],
+ "lyrics_target": {
+  "node": "5",
+  "field": "lyrics"
+ },
+ "seed_targets": [
+  {
+   "node": "5",
+   "field": "seed"
+  },
+  {
+   "node": "8",
+   "field": "seed"
+  }
+ ],
+ "ref_slots": [],
+ "output_nodes": [
+  "10"
+ ],
+ "root_load_images": [],
+ "media": "audio",
+ "duration_target": {
+  "node": "5",
+  "field": "max_duration"
+ },
+ "audio_ref": {
+  "load": "3",
+  "field": "audio"
+ },
+ "class_types": {}
+}

@@ -1,0 +1,297 @@
+[
+  {
+    "name": "视频模式 7 个（4 可用 + 3 禁用）",
+    "ok": true,
+    "detail": "[('文生视频', True), ('首尾帧生视频', True), ('参考生视频', True), ('故事板生视频', True), ('角色替换', False), ('动作迁移', False), ('白膜生视频', False)]"
+  },
+  {
+    "name": "音频能力合并为 audio.generate",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "文生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · fl2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 'wf': '视频生成-文生视频-h3'}]"
+  },
+  {
+    "name": "首尾帧生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · fl2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 'wf': '视频生成-首尾帧生视频-h3'}]"
+  },
+  {
+    "name": "参考生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · ref2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', 'wf': '视频生成-参考生视频-h3'}]"
+  },
+  {
+    "name": "故事板生视频 初始只有默认档",
+    "ok": true,
+    "detail": "[{'name': '默认', 'ratio': '16:9', 'res': '480P', 'steps': 8, 'locked': True, 'note': '16:9 · 480P · 8 步 · ref2v LoRA', 'width': 864, 'height': 480, 'size': '864×480', 'lora': 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', 'wf': '视频生成-故事板生视频-h3'}]"
+  },
+  {
+    "name": "t2v/4步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "fl2v/4步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "ref2v/4步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "board/4步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "t2v/8步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "fl2v/8步 LoRA fl2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "ref2v/8步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "board/8步 LoRA ref2v",
+    "ok": true,
+    "detail": "lora=minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors size=864x480 frames=None"
+  },
+  {
+    "name": "t2v/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "fl2v/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "ref2v/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "board/20步 LoRA 不挂",
+    "ok": true,
+    "detail": "lora= size=864x480 frames=None"
+  },
+  {
+    "name": "全部 bridge 注入节点存在",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "视频生成-文生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "视频生成-首尾帧生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "视频生成-参考生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "视频生成-故事板生视频-h3 media=video",
+    "ok": true,
+    "detail": "media=video video_ref=yes"
+  },
+  {
+    "name": "音频·music（audio.generate 四 tab 之一）",
+    "ok": true,
+    "job": "job_6010",
+    "secs": 65.3,
+    "state": "done",
+    "size": "25.9 秒",
+    "duration": 25.88,
+    "seed": 4401062011025256510,
+    "workflow": "音频-音乐生成",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\音频生成\\ComfyBridge_job_6010_6012_00001.mp3",
+        "kind": "audio",
+        "size": "",
+        "duration": 25.88
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "音频·tts（audio.generate 四 tab 之一）",
+    "ok": true,
+    "job": "job_6013",
+    "secs": 16.9,
+    "state": "done",
+    "size": "3.1 秒",
+    "duration": 3.1,
+    "seed": 2156274111271745065,
+    "workflow": "音频-语音生成",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\音频生成\\ComfyBridge_job_6013_6015_00001.mp3",
+        "kind": "audio",
+        "size": "",
+        "duration": 3.1
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "音频·clone（audio.generate 四 tab 之一）",
+    "ok": true,
+    "job": "job_6017",
+    "secs": 25.5,
+    "state": "done",
+    "size": "12.9 秒",
+    "duration": 12.86,
+    "seed": 2143438921143465416,
+    "workflow": "音频-声音克隆",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\音频生成\\ComfyBridge_job_6017_6019_00001.mp3",
+        "kind": "audio",
+        "size": "",
+        "duration": 12.86
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "音频·cover（audio.generate 四 tab 之一）",
+    "ok": true,
+    "job": "job_6020",
+    "secs": 14.0,
+    "state": "done",
+    "size": "30.0 秒",
+    "duration": 30.0,
+    "seed": 130074499850411135,
+    "workflow": "音频-参考生成音乐",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\音频生成\\ComfyBridge_job_6020_6022_00001.mp3",
+        "kind": "audio",
+        "size": "",
+        "duration": 30.0
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "故事板·苏轼分镜镜1-4",
+    "ok": true,
+    "job": "job_6023",
+    "secs": 76.5,
+    "state": "done",
+    "size": "1536×864",
+    "duration": null,
+    "seed": 2158880060452721264,
+    "workflow": "故事板-参考生图",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\宫格分镜故事板\\ComfyBridge_job_6023_6025_00001.png",
+        "kind": "image",
+        "size": "1536x864",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "视频·故事板生视频（苏轼分镜联调）",
+    "ok": true,
+    "job": "job_6027",
+    "secs": 188.1,
+    "state": "done",
+    "size": "864×480",
+    "duration": 5.88,
+    "seed": 2052333102096956683,
+    "workflow": "视频生成-故事板生视频-h3",
+    "grade": "默认",
+    "prompt": "",
+    "video": {
+      "mode": "board",
+      "grid": 4,
+      "cells": [
+        "镜1 俯拍汴京礼部科举考场大全景，连片考棚整齐排列，缓慢推进至主考官厅堂，欧阳修拍案惊艳，苏轼在考棚内执笔答题",
+        "镜2 眉山苏家书房中景，程氏指着书卷给小苏轼讲范滂事迹，推近至程氏面部近景，再切小苏轼仰头提问",
+        "镜3 岷江嘉州段江面远景缓慢横移，木船顺流而下，推至船头，苏轼衣袂随风、抬手遥指远方吟诗",
+        "镜4 汴京考官值房，欧阳修与梅尧臣同框中景，欧阳修递考卷给梅尧臣大笑，皆面露赞赏"
+      ],
+      "ratio": "16:9",
+      "res": "480P",
+      "steps": 8,
+      "length": 124,
+      "duration": 5.2
+    },
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\视频生成\\ComfyBridge_job_6027_6029_00001_.mp4",
+        "kind": "video",
+        "size": "864x480",
+        "duration": 5.875
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "画布·图片生成节点（共用参考生图挡位）",
+    "ok": true,
+    "job": "job_6030",
+    "secs": 80.6,
+    "state": "done",
+    "size": "2560×1440",
+    "duration": null,
+    "seed": 1959377489730926970,
+    "workflow": "参考生图",
+    "grade": "默认",
+    "prompt": "",
+    "video": null,
+    "files": [
+      {
+        "path": "D:\\ComfyUI-0.37.1\\ComfyUI\\output\\ComfyBridgeOutput\\视频生成画布\\ComfyBridge_job_6030_6032_00001.png",
+        "kind": "image",
+        "size": "2560x1440",
+        "duration": null
+      }
+    ],
+    "err": null
+  },
+  {
+    "name": "画布·视频生成节点（共用参考生视频挡位）",
+    "ok": false,
+    "reason": "这种情况还没有配置对应的工作流"
+  }
+]

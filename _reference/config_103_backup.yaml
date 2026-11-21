@@ -1,0 +1,452 @@
+version: 1.03
+service:
+  comfy: http://127.0.0.1:8188
+  port: 8190
+  bindLan: true
+  comfyOutputDir: D:/ComfyUI-0.37.1/ComfyUI/output
+  archiveDir: D:/ComfyUI-0.37.1/ComfyUI/output/ComfyBridgeOutput
+  wfDir: ./workflows
+  copyDir: ./workflows/ComfyBridge
+  uploadDir: ./data/uploads
+  taskDir: ./data/tasks
+  uploadMaxMB: 32
+  maxQueue: 20
+  keepDays: 7
+  maxRecords: 500
+capabilities:
+- id: image.generate
+  name: 图片生成
+  em: 🖼️
+  group: 图像
+  enabled: true
+  desc: 文字描述生成图片，支持参考图
+  maxRefs: 3
+  requiredRef: false
+  rules:
+  - when: 图片 = 0
+    wf: 文生图
+  - when: 图片 ≥ 1
+    wf: 参考生图
+  fallback: auto
+  workflows:
+  - 文生图
+  - 参考生图
+- id: image.reference
+  name: 参考风格生图
+  em: 🎨
+  group: 图像
+  enabled: false
+  desc: 上传参考图学画风或主体
+  maxRefs: 0
+  workflows: []
+- id: image.lineart
+  name: 线稿图生成
+  em: ✏️
+  group: 图像
+  enabled: false
+  desc: 生成线稿，或把图片转成线稿
+  maxRefs: 0
+  workflows: []
+- id: image.sketch
+  name: 简单手绘创作
+  em: 🖌
+  group: 图像
+  enabled: false
+  desc: 手绘草稿上色与细化
+  maxRefs: 0
+  workflows: []
+- id: sheet.character
+  name: 角色设定图
+  em: 👤
+  group: 设定图
+  enabled: true
+  desc: 多视角角色设定，四视图/四宫格/单张全身，支持参考角色与线稿
+  maxRefs: 1
+  requiredRef: false
+  rules:
+  - when: 图片 = 0
+    wf: 设定图-文生图
+  - when: 图片 ≥ 1
+    wf: 设定图-参考生图
+  fallback: auto
+  workflows:
+  - 设定图-文生图
+  - 设定图-参考生图
+- id: sheet.scene
+  name: 场景设定图
+  em: 🏞
+  group: 设定图
+  enabled: true
+  desc: 场景概念设定，文生图/图生图/扩图，支持布局图识别与推拉转镜头
+  maxRefs: 4
+  requiredRef: false
+  rules:
+  - when: 模式 = 文生图
+    wf: 设定图-文生图
+  - when: 模式 = 图生图/扩图
+    wf: 设定图-参考生图
+  fallback: auto
+  workflows:
+  - 设定图-文生图
+  - 设定图-参考生图
+- id: sheet.prop
+  name: 道具设定图
+  em: 🗡
+  group: 设定图
+  enabled: true
+  desc: 道具概念设定，多视图/单视图，支持参考图与线稿
+  maxRefs: 1
+  requiredRef: false
+  rules:
+  - when: 图片 = 0
+    wf: 设定图-文生图
+  - when: 图片 ≥ 1
+    wf: 设定图-参考生图
+  fallback: auto
+  workflows:
+  - 设定图-文生图
+  - 设定图-参考生图
+- id: board.story
+  name: 宫格分镜故事板
+  em: ▦
+  group: 故事板
+  enabled: true
+  desc: 逐格描述镜头画面，一次生成四/六/九宫格分镜故事板
+  maxRefs: 6
+  requiredRef: false
+  rules:
+  - when: 图片 = 0/1~6
+    wf: 故事板-参考生图
+  fallback: auto
+  workflows:
+  - 故事板-参考生图
+  - 故事板-参考生图-宽幅6格
+- id: video.generate
+  name: 视频生成
+  em: 🎬
+  group: 视频
+  enabled: false
+  desc: 文字描述生成视频
+  maxRefs: 0
+  workflows: []
+- id: video.reference
+  name: 参考生成视频
+  em: 🎥
+  group: 视频
+  enabled: false
+  desc: 用图片或视频作参考生成
+  maxRefs: 0
+  workflows: []
+- id: video.firstlast
+  name: 首尾帧生成视频
+  em: ⏮
+  group: 视频
+  enabled: false
+  desc: 给首帧和尾帧，生成中间过程
+  maxRefs: 0
+  workflows: []
+- id: canvas.video
+  name: 视频生成画布
+  em: 🎬
+  group: 视频
+  enabled: true
+  kind: canvas
+  desc: 无限画布上摆节点、连线传图，一张卡一次生成
+  maxRefs: 6
+  workflows:
+  - 图像阶段
+- id: audio.music
+  name: 音乐生成
+  em: 🎵
+  group: 音频
+  enabled: false
+  desc: 按风格与情绪生成音乐
+  maxRefs: 0
+  workflows: []
+- id: audio.music.ref
+  name: 参考生成音乐
+  em: 🎼
+  group: 音频
+  enabled: false
+  desc: 用参考音频生成同风格音乐
+  maxRefs: 0
+  workflows: []
+- id: audio.tts
+  name: 语音生成
+  em: 🎙
+  group: 音频
+  enabled: false
+  desc: 文字转语音
+  maxRefs: 0
+  workflows: []
+- id: audio.clone
+  name: 声音克隆
+  em: 🎤
+  group: 音频
+  enabled: false
+  desc: 用一段参考音频克隆音色
+  maxRefs: 0
+  workflows: []
+workflows:
+  文生图:
+    file: workflows/图片生成-文生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '13'
+      field: aspect_ratio
+    - node: '13'
+      field: megapixels
+    - node: '13'
+      field: multiple
+    grades:
+    - name: 默认
+      locked: true
+      note: 原样出图
+    - name: 快速（16:9）
+      note: ''
+      params:
+        '13':
+          aspect_ratio: 16:9 (Widescreen)
+    - name: 精细（16:9）
+      note: ''
+      params:
+        '13':
+          aspect_ratio: 16:9 (Widescreen)
+          megapixels: 2
+          multiple: 20
+  参考生图:
+    file: workflows/图片生成-参考生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    grades:
+    - name: 默认
+      locked: true
+      note: 原样出图
+    - name: 快速（16:9）
+      note: ''
+      params:
+        '502':
+          aspect_ratio: 16:9 (Widescreen)
+          multiple: 8
+    - name: 精细（16:9）
+      note: ''
+      params:
+        '502':
+          aspect_ratio: 16:9 (Widescreen)
+          megapixels: 2
+          multiple: 20
+  设定图-文生图:
+    file: workflows/角色设定图-文生图-qwen2.1turbo.json
+    bridge: workflows/角色设定图-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '13'
+      field: aspect_ratio
+    - node: '13'
+      field: megapixels
+    - node: '13'
+      field: multiple
+    - node: '459_489'
+      field: cfg
+    - node: '459_484'
+      field: sigmas
+    grades: []
+  设定图-参考生图:
+    file: workflows/角色设定图-参考生图-qwen2.1turbo.json
+    bridge: workflows/角色设定图-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  故事板-参考生图:
+    file: workflows/故事板-参考生图-qwen2.1turbo.json
+    bridge: workflows/故事板-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  故事板-参考生图-宽幅6格:
+    file: workflows/故事板-参考生图-宽幅6格.json
+    bridge: workflows/故事板-参考生图-宽幅6格.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_456'
+      field: width
+    - node: '459_456'
+      field: height
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  图像阶段:
+    file: workflows/图片生成-文生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 原样出图
+sheetGrades:
+  A.t2i:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+      '459_489':
+        cfg: 1.0
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  - name: 高清
+    note: ''
+    params:
+      '13':
+        megapixels: 4.0
+        multiple: 20
+  A.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.t2i:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  B.t2i:
+  - name: 快速
+    note: ''
+    params:
+      '13':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '13':
+        megapixels: 2.0
+        multiple: 20
+  C.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+extGrades:
+  scene: {}
+  prop: {}
+boardGrades:
+  G4:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  G6:
+  - name: 快速
+    note: 6 格宽幅草稿 1920×720
+    params:
+      '459_456':
+        width: 1920
+        height: 720
+  - name: 精细
+    note: 6 格宽幅高清 2560×960
+    params:
+      '459_456':
+        width: 2560
+        height: 960
+  G9:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20

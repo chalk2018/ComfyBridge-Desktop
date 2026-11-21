@@ -1,4 +1,4 @@
-version: 1.03
+version: '1.05'
 service:
   comfy: http://127.0.0.1:8188
   port: 8190
@@ -31,30 +31,6 @@ capabilities:
   workflows:
   - 文生图
   - 参考生图
-- id: image.reference
-  name: 参考风格生图
-  em: 🎨
-  group: 图像
-  enabled: false
-  desc: 上传参考图学画风或主体
-  maxRefs: 0
-  workflows: []
-- id: image.lineart
-  name: 线稿图生成
-  em: ✏️
-  group: 图像
-  enabled: false
-  desc: 生成线稿，或把图片转成线稿
-  maxRefs: 0
-  workflows: []
-- id: image.sketch
-  name: 简单手绘创作
-  em: 🖌
-  group: 图像
-  enabled: false
-  desc: 手绘草稿上色与细化
-  maxRefs: 0
-  workflows: []
 - id: sheet.character
   name: 角色设定图
   em: 👤
@@ -121,62 +97,47 @@ capabilities:
   workflows:
   - 故事板-参考生图
   - 故事板-参考生图-宽幅6格
+  - 故事板-参考生图-线稿
+  - 故事板-参考生图-宽幅6格-线稿
 - id: video.generate
   name: 视频生成
   em: 🎬
   group: 视频
-  enabled: false
-  desc: 文字描述生成视频
-  maxRefs: 0
-  workflows: []
-- id: video.reference
-  name: 参考生成视频
-  em: 🎥
+  enabled: true
+  media: video
+  desc: 文生视频 / 首尾帧 / 参考生视频 / 故事板生视频，四种模式共用一页
+  maxRefs: 6
+  requiredRef: false
+  workflows:
+  - 视频生成-文生视频-h3
+  - 视频生成-首尾帧生视频-h3
+  - 视频生成-参考生视频-h3
+  - 视频生成-故事板生视频-h3
+- id: canvas.video
+  name: 视频生成画布
+  em: 🎬
   group: 视频
-  enabled: false
-  desc: 用图片或视频作参考生成
-  maxRefs: 0
-  workflows: []
-- id: video.firstlast
-  name: 首尾帧生成视频
-  em: ⏮
-  group: 视频
-  enabled: false
-  desc: 给首帧和尾帧，生成中间过程
-  maxRefs: 0
-  workflows: []
-- id: audio.music
-  name: 音乐生成
+  enabled: true
+  kind: canvas
+  desc: 无限画布：图片/视频/音频节点连成一条线，引用素材直接生成
+  maxRefs: 6
+  workflows:
+  - 画布-图片生成
+  - 画布-视频生成
+  - 画布-图片生成-参考
+- id: audio.generate
+  name: 音频生成
   em: 🎵
   group: 音频
-  enabled: false
-  desc: 按风格与情绪生成音乐
-  maxRefs: 0
-  workflows: []
-- id: audio.music.ref
-  name: 参考生成音乐
-  em: 🎼
-  group: 音频
-  enabled: false
-  desc: 用参考音频生成同风格音乐
-  maxRefs: 0
-  workflows: []
-- id: audio.tts
-  name: 语音生成
-  em: 🎙
-  group: 音频
-  enabled: false
-  desc: 文字转语音
-  maxRefs: 0
-  workflows: []
-- id: audio.clone
-  name: 声音克隆
-  em: 🎤
-  group: 音频
-  enabled: false
-  desc: 用一段参考音频克隆音色
-  maxRefs: 0
-  workflows: []
+  enabled: true
+  media: audio
+  desc: 音乐生成 / 参考生成音乐 / 语音生成 / 声音克隆，四个子功能共用一个页面
+  maxRefs: 1
+  workflows:
+  - 音频-音乐生成
+  - 音频-参考生成音乐
+  - 音频-语音生成
+  - 音频-声音克隆
 workflows:
   文生图:
     file: workflows/图片生成-文生图-qwen2.1turbo.json
@@ -189,6 +150,10 @@ workflows:
       field: megapixels
     - node: '13'
       field: multiple
+    - node: '459_451'
+      field: unet_name
+    - node: '459_451'
+      field: weight_dtype
     grades:
     - name: 默认
       locked: true
@@ -301,6 +266,172 @@ workflows:
     - node: '459_502'
       field: sigmas
     grades: []
+  故事板-参考生图-线稿:
+    file: workflows/故事板-参考生图-线稿.json
+    bridge: workflows/故事板-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  故事板-参考生图-宽幅6格-线稿:
+    file: workflows/故事板-参考生图-宽幅6格-线稿.json
+    bridge: workflows/故事板-参考生图-宽幅6格.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_456'
+      field: width
+    - node: '459_456'
+      field: height
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  图像阶段:
+    file: workflows/图片生成-文生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 原样出图
+  视频生成-文生视频-h3:
+    file: workflows/视频生成-文生视频-h3.json
+    bridge: workflows/视频生成-文生视频-h3.bridge.json
+    status: ok
+    media: video
+    note: H3 fl2va · 纯提示词出片
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  视频生成-首尾帧生视频-h3:
+    file: workflows/视频生成-首尾帧生视频-h3.json
+    bridge: workflows/视频生成-首尾帧生视频-h3.bridge.json
+    status: ok
+    media: video
+    note: H3 fl2va · 首帧/尾帧两张图驱动
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  视频生成-参考生视频-h3:
+    file: workflows/视频生成-参考生视频-h3.json
+    bridge: workflows/视频生成-参考生视频-h3.bridge.json
+    status: ok
+    media: video
+    note: H3 ref2va · 图/视频/音频参考
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  视频生成-故事板生视频-h3:
+    file: workflows/视频生成-故事板生视频-h3.json
+    bridge: workflows/视频生成-故事板生视频-h3.bridge.json
+    status: ok
+    media: video
+    note: H3 ref2va · 四/六/九宫格故事板驱动
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  音频-音乐生成:
+    file: workflows/音频-音乐生成.json
+    bridge: workflows/音频-音乐生成.bridge.json
+    status: ok
+    media: audio
+    note: MiniMax Music 3 · 风格+歌词
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  音频-参考生成音乐:
+    file: workflows/音频-参考生成音乐.json
+    bridge: workflows/音频-参考生成音乐.bridge.json
+    status: ok
+    media: audio
+    note: YuE2 cover · 参考音频复刻
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  音频-语音生成:
+    file: workflows/音频-语音生成.json
+    bridge: workflows/音频-语音生成.bridge.json
+    status: ok
+    media: audio
+    note: Spark-TTS · 文字转语音
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  音频-声音克隆:
+    file: workflows/音频-声音克隆.json
+    bridge: workflows/音频-声音克隆.bridge.json
+    status: ok
+    media: audio
+    note: Spark-TTS · 音色克隆
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  画布-图片生成:
+    file: workflows/图片生成-文生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    media: image
+    note: 画布图片生成节点：不接任何素材，纯提示词出图
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 按工作流原样出图
+  画布-视频生成:
+    file: workflows/视频生成-参考生视频-h3.json
+    bridge: workflows/视频生成-参考生视频-h3.bridge.json
+    status: ok
+    media: video
+    note: 画布视频生成节点：可无参考，纯提示词出片
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 参数由能力页的比例/分辨率/步数决定
+  画布-图片生成-参考:
+    file: workflows/图片生成-参考生图-qwen2.1turbo.json
+    bridge: workflows/图片生成-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    media: image
+    note: 画布图片生成节点：接了图片时用，按参考图改画
+    fields: []
+    grades:
+    - name: 默认
+      locked: true
+      note: 按工作流原样出图
 sheetGrades:
   A.t2i:
   - name: 快速
@@ -389,8 +520,229 @@ sheetGrades:
         megapixels: 2.0
         multiple: 20
 extGrades:
-  scene: {}
-  prop: {}
+  scene:
+    t2i.N:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    t2i.P:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    t2i.B:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    t2i.F4:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    t2i.F9:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    i2i.N:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    i2i.P:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    i2i.B:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    i2i.F4:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    i2i.F9:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    expand.PUSH:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    expand.PULL:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    expand.TURN:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+  prop:
+    t2i.MV:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    t2i.SV:
+    - name: 快速
+      note: ''
+      params:
+        '13':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '13':
+          megapixels: 2.0
+          multiple: 20
+    i2i.MV:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
+    i2i.SV:
+    - name: 快速
+      note: ''
+      params:
+        '502':
+          megapixels: 1.0
+          multiple: 8
+    - name: 精细
+      note: ''
+      params:
+        '502':
+          megapixels: 2.0
+          multiple: 20
 boardGrades:
   G4:
   - name: 快速
@@ -431,3 +783,115 @@ boardGrades:
       '502':
         megapixels: 2.0
         multiple: 20
+videoGrades:
+  t2v:
+  - name: 默认
+    ratio: '16:9'
+    res: 480P
+    steps: 8
+    locked: true
+    note: 16:9 · 480P · 8 步 · fl2v LoRA
+  - name: 快速（16:9）
+    ratio: '16:9'
+    res: 480P
+    steps: 4
+    locked: false
+    note: ''
+  - name: 精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 8
+    locked: false
+    note: ''
+  - name: 超精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 20
+    locked: false
+    note: ''
+  fl2v:
+  - name: 默认
+    ratio: '16:9'
+    res: 480P
+    steps: 8
+    locked: true
+    note: 16:9 · 480P · 8 步 · fl2v LoRA
+  - name: 快速（16:9）
+    ratio: '16:9'
+    res: 480P
+    steps: 4
+    locked: false
+    note: ''
+  - name: 精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 8
+    locked: false
+    note: ''
+  - name: 超精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 20
+    locked: false
+    note: ''
+  ref2v:
+  - name: 默认
+    ratio: '16:9'
+    res: 480P
+    steps: 8
+    locked: true
+    note: 16:9 · 480P · 8 步 · ref2v LoRA
+  - name: 快速（16:9）
+    ratio: '16:9'
+    res: 480P
+    steps: 4
+    locked: false
+    note: ''
+  - name: 精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 8
+    locked: false
+    note: ''
+  - name: 超精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 20
+    locked: false
+    note: ''
+  board:
+  - name: 默认
+    ratio: '16:9'
+    res: 480P
+    steps: 8
+    locked: true
+    note: 16:9 · 480P · 8 步 · ref2v LoRA
+  - name: 快速（16:9）
+    ratio: '16:9'
+    res: 480P
+    steps: 4
+    locked: false
+    note: ''
+  - name: 精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 8
+    locked: false
+    note: ''
+  - name: 超精细（16:9）
+    ratio: '16:9'
+    res: 768P
+    steps: 20
+    locked: false
+    note: ''
+audioGrades: {}
+canvasFuncs:
+  image:
+    name: 图片生成-图生图
+    wf: 画布-图片生成
+    wfRef: 画布-图片生成-参考
+  video:
+    name: 视频生成-参考生视频
+    wf: 画布-视频生成
+  sheetprop_i2i:
+    enabled: true
