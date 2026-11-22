@@ -1,0 +1,244 @@
+{
+ "items": {
+  "ref_6152": {
+   "id": "ref_6152",
+   "kind": "image",
+   "name": "ComfyBridge_job_6149_6151_00001.png",
+   "filename": "ref_6152.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_6152.png",
+   "comfyName": "ref_6152.png"
+  },
+  "ref_8853": {
+   "id": "ref_8853",
+   "kind": "video",
+   "name": "11月21日-1.mp4",
+   "filename": "ref_8853.mp4",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8853.mp4",
+   "comfyName": "ref_8853.mp4"
+  },
+  "ref_8854": {
+   "id": "ref_8854",
+   "kind": "image",
+   "name": "奥黛塔.png",
+   "filename": "ref_8854.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8854.png",
+   "comfyName": "ref_8854.png"
+  },
+  "ref_8855": {
+   "id": "ref_8855",
+   "kind": "image",
+   "name": "镜子.png",
+   "filename": "ref_8855.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8855.png",
+   "comfyName": "ref_8855.png"
+  },
+  "ref_8856": {
+   "id": "ref_8856",
+   "kind": "image",
+   "name": "至冬皇宫.png",
+   "filename": "ref_8856.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8856.png",
+   "comfyName": "ref_8856.png"
+  },
+  "ref_8861": {
+   "id": "ref_8861",
+   "kind": "image",
+   "name": "镜子.png",
+   "filename": "ref_8861.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8861.png",
+   "comfyName": "ref_8861.png"
+  },
+  "ref_8865": {
+   "id": "ref_8865",
+   "kind": "image",
+   "name": "镜子.png",
+   "filename": "ref_8865.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8865.png",
+   "comfyName": "ref_8865.png"
+  },
+  "ref_8896": {
+   "id": "ref_8896",
+   "kind": "image",
+   "name": "至冬皇宫.png",
+   "filename": "ref_8896.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8896.png",
+   "comfyName": "ref_8896.png"
+  },
+  "ref_8907": {
+   "id": "ref_8907",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_8907.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8907.png",
+   "comfyName": "ref_8907.png"
+  },
+  "ref_8912": {
+   "id": "ref_8912",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_8912.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8912.png",
+   "comfyName": "ref_8912.png"
+  },
+  "ref_8920": {
+   "id": "ref_8920",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_8920.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_8920.png",
+   "comfyName": "ref_8920.png"
+  },
+  "ref_9020": {
+   "id": "ref_9020",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9020.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9020.png",
+   "comfyName": "ref_9020.png"
+  },
+  "ref_9021": {
+   "id": "ref_9021",
+   "kind": "image",
+   "name": "奥黛塔.png",
+   "filename": "ref_9021.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9021.png",
+   "comfyName": "ref_9021.png"
+  },
+  "ref_9040": {
+   "id": "ref_9040",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9040.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9040.png",
+   "comfyName": "ref_9040.png"
+  },
+  "ref_9041": {
+   "id": "ref_9041",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9041.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9041.png",
+   "comfyName": "ref_9041.png"
+  },
+  "ref_9048": {
+   "id": "ref_9048",
+   "kind": "image",
+   "name": "奥黛塔.png",
+   "filename": "ref_9048.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9048.png",
+   "comfyName": "ref_9048.png"
+  },
+  "ref_9055": {
+   "id": "ref_9055",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9055.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9055.png",
+   "comfyName": "ref_9055.png"
+  },
+  "ref_9059": {
+   "id": "ref_9059",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9059.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9059.png",
+   "comfyName": "ref_9059.png"
+  },
+  "ref_9072": {
+   "id": "ref_9072",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9072.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9072.png",
+   "comfyName": "ref_9072.png"
+  },
+  "ref_9079": {
+   "id": "ref_9079",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9079.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9079.png",
+   "comfyName": "ref_9079.png"
+  },
+  "ref_9080": {
+   "id": "ref_9080",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9080.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9080.png",
+   "comfyName": "ref_9080.png"
+  },
+  "ref_9081": {
+   "id": "ref_9081",
+   "kind": "image",
+   "name": "image.png",
+   "filename": "ref_9081.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9081.png",
+   "comfyName": "ref_9081.png"
+  },
+  "ref_9088": {
+   "id": "ref_9088",
+   "kind": "image",
+   "name": "ref_canvas.png",
+   "filename": "ref_9088.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9088.png",
+   "comfyName": "ref_9088.png"
+  },
+  "ref_9097": {
+   "id": "ref_9097",
+   "kind": "image",
+   "name": "media.png",
+   "filename": "ref_9097.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9097.png",
+   "comfyName": "ref_9097.png"
+  },
+  "ref_9098": {
+   "id": "ref_9098",
+   "kind": "image",
+   "name": "镜子2.png",
+   "filename": "ref_9098.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9098.png",
+   "comfyName": "ref_9098.png"
+  },
+  "ref_9099": {
+   "id": "ref_9099",
+   "kind": "video",
+   "name": "11月21日-1.mp4",
+   "filename": "ref_9099.mp4",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9099.mp4",
+   "comfyName": "ref_9099.mp4"
+  },
+  "ref_9100": {
+   "id": "ref_9100",
+   "kind": "image",
+   "name": "奥黛塔.png",
+   "filename": "ref_9100.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9100.png",
+   "comfyName": "ref_9100.png"
+  },
+  "ref_9101": {
+   "id": "ref_9101",
+   "kind": "image",
+   "name": "镜子2.png",
+   "filename": "ref_9101.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9101.png",
+   "comfyName": "ref_9101.png"
+  },
+  "ref_9102": {
+   "id": "ref_9102",
+   "kind": "image",
+   "name": "至冬皇宫.png",
+   "filename": "ref_9102.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9102.png",
+   "comfyName": "ref_9102.png"
+  },
+  "ref_9109": {
+   "id": "ref_9109",
+   "kind": "image",
+   "name": "1000099766.png",
+   "filename": "ref_9109.png",
+   "path": "D:\\workspace\\WorkBuddyProject\\ComfyBridge-Desktop\\data\\uploads\\ref_9109.png",
+   "comfyName": "ref_9109.png"
+  }
+ }
+}

@@ -6,11 +6,9 @@ __pycache__/
 node_modules/
 *.log
 
-# data：只保留四个目录结构，目录内的文件一律不入库
-data/*
-!data/*/
-data/*/**
-!data/*/.gitkeep
+# data：只排除回收站与上传图，其余（tasks/canvas/prompt_templates/refs.json 等）入库
+data/uploads/
+data/trash/
 
 # 调试出图产物（体积大，且运行时不依赖；refs 参考图保留）
 _dev/prompt_lab/out/
