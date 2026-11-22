@@ -6,9 +6,12 @@ __pycache__/
 node_modules/
 *.log
 
-# data：只排除回收站与上传图，其余（tasks/canvas/prompt_templates/refs.json 等）入库
+# data：只排除回收站、上传图，以及本机运行态记录（启动会自动重建）
 data/uploads/
 data/trash/
+data/tasks/state.json
+data/tasks/records.jsonl
+data/refs.json
 
 # 调试出图产物（体积大，且运行时不依赖；refs 参考图保留）
 _dev/prompt_lab/out/
