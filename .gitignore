@@ -6,9 +6,11 @@ __pycache__/
 node_modules/
 *.log
 
-# data：只排除回收站、上传图，以及本机运行态记录（启动会自动重建）
-data/uploads/
-data/trash/
+# data：目录结构保留（.gitkeep 占位），文件不入库
+data/uploads/*
+!data/uploads/.gitkeep
+data/trash/*
+!data/trash/.gitkeep
 data/tasks/state.json
 data/tasks/records.jsonl
 data/refs.json
