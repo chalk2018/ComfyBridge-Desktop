@@ -48,6 +48,8 @@ capabilities:
   workflows:
   - 设定图-文生图
   - 设定图-参考生图
+  - 设定图-锁定同角色
+  - 设定图-只借画风
 - id: sheet.scene
   name: 场景设定图
   em: 🏞
@@ -58,13 +60,13 @@ capabilities:
   requiredRef: false
   rules:
   - when: 模式 = 文生图
-    wf: 设定图-文生图
+    wf: 场景设定图-文生图
   - when: 模式 = 图生图/扩图
-    wf: 设定图-参考生图
+    wf: 场景设定图-参考生图
   fallback: auto
   workflows:
-  - 设定图-文生图
-  - 设定图-参考生图
+  - 场景设定图-文生图
+  - 场景设定图-参考生图
 - id: sheet.prop
   name: 道具设定图
   em: 🗡
@@ -75,13 +77,13 @@ capabilities:
   requiredRef: false
   rules:
   - when: 图片 = 0
-    wf: 设定图-文生图
+    wf: 道具设定图-文生图
   - when: 图片 ≥ 1
-    wf: 设定图-参考生图
+    wf: 道具设定图-参考生图
   fallback: auto
   workflows:
-  - 设定图-文生图
-  - 设定图-参考生图
+  - 道具设定图-文生图
+  - 道具设定图-参考生图
 - id: board.story
   name: 宫格分镜故事板
   em: ▦
@@ -150,10 +152,6 @@ workflows:
       field: megapixels
     - node: '13'
       field: multiple
-    - node: '459_451'
-      field: unet_name
-    - node: '459_451'
-      field: weight_dtype
     grades:
     - name: 默认
       locked: true
@@ -217,6 +215,70 @@ workflows:
   设定图-参考生图:
     file: workflows/角色设定图-参考生图-qwen2.1turbo.json
     bridge: workflows/角色设定图-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  场景设定图-文生图:
+    file: workflows/场景设定图-文生图-qwen2.1turbo.json
+    bridge: workflows/场景设定图-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '13'
+      field: aspect_ratio
+    - node: '13'
+      field: megapixels
+    - node: '13'
+      field: multiple
+    - node: '459_489'
+      field: cfg
+    - node: '459_484'
+      field: sigmas
+    grades: []
+  场景设定图-参考生图:
+    file: workflows/场景设定图-参考生图-qwen2.1turbo.json
+    bridge: workflows/场景设定图-参考生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  道具设定图-文生图:
+    file: workflows/道具设定图-文生图-qwen2.1turbo.json
+    bridge: workflows/道具设定图-文生图-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '13'
+      field: aspect_ratio
+    - node: '13'
+      field: megapixels
+    - node: '13'
+      field: multiple
+    - node: '459_489'
+      field: cfg
+    - node: '459_484'
+      field: sigmas
+    grades: []
+  道具设定图-参考生图:
+    file: workflows/道具设定图-参考生图-qwen2.1turbo.json
+    bridge: workflows/道具设定图-参考生图-qwen2.1turbo.bridge.json
     status: ok
     fields:
     - node: '502'
@@ -432,6 +494,38 @@ workflows:
     - name: 默认
       locked: true
       note: 按工作流原样出图
+  设定图-锁定同角色:
+    file: workflows/角色设定图-锁定同角色-qwen2.1turbo.json
+    bridge: workflows/角色设定图-锁定同角色-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
+  设定图-只借画风:
+    file: workflows/角色设定图-只借画风-qwen2.1turbo.json
+    bridge: workflows/角色设定图-只借画风-qwen2.1turbo.bridge.json
+    status: ok
+    fields:
+    - node: '502'
+      field: aspect_ratio
+    - node: '502'
+      field: megapixels
+    - node: '502'
+      field: multiple
+    - node: '459_507'
+      field: cfg
+    - node: '459_502'
+      field: sigmas
+    grades: []
 sheetGrades:
   A.t2i:
   - name: 快速
@@ -507,6 +601,84 @@ sheetGrades:
         megapixels: 2.0
         multiple: 20
   C.i2i:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  A.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  A.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  B.style:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.lock:
+  - name: 快速
+    note: ''
+    params:
+      '502':
+        megapixels: 1.0
+        multiple: 8
+  - name: 精细
+    note: ''
+    params:
+      '502':
+        megapixels: 2.0
+        multiple: 20
+  C.style:
   - name: 快速
     note: ''
     params:
@@ -855,6 +1027,18 @@ videoGrades:
     note: ''
   - name: 超精细（16:9）
     ratio: '16:9'
+    res: 768P
+    steps: 20
+    locked: false
+    note: ''
+  - name: 快速（9:16）
+    ratio: '9:16'
+    res: 480P
+    steps: 4
+    locked: false
+    note: ''
+  - name: 超精细（9:16）
+    ratio: '9:16'
     res: 768P
     steps: 20
     locked: false

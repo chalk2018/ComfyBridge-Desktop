@@ -34,29 +34,31 @@ MASTER_ALIASES: tuple[str, ...] = (MASTER, "母版")
 INKS: tuple[str, ...] = ("color", "line")
 REFS: tuple[str, ...] = ("none", "lock", "style")
 WF_T2I = "设定图-文生图"
-WF_I2I = "设定图-参考生图"
+WF_I2I = "设定图-参考生图"          # 历史工作流名：老任务与旧拷贝仍可能引用，保留常量
+WF_LOCK = "设定图-锁定同角色"
+WF_STYLE = "设定图-只借画风"
 MAX_NAME = 12
 
 _SIGMAS_RE = re.compile(r"^\s*\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)+\s*$")
 
 
 def wf_for_ref(ref: str) -> str:
-    """参考方式 → 子工作流：有参考图就走参考生图，没有就文生图。"""
-    return WF_T2I if ref == "none" else WF_I2I
+    """参考方式 → 独立子工作流：文生图 / 锁定同角色 / 只借画风各走各的母版。"""
+    return {"none": WF_T2I, "lock": WF_LOCK, "style": WF_STYLE}.get(ref, WF_T2I)
 
 
 def group_of(cid: str) -> str:
-    """档位组 key：`版式.子功能`（如 `A.t2i` / `A.i2i`）。
+    """档位组 key：`版式.子功能`（如 `A.t2i` / `A.lock` / `A.style`）。
 
-    画法（color/line）与参考方式（lock/style）只改提示词、不改工作流的参数节点，
-    所以 18 种组合的档位按「版式 × 子功能」归成 6 组共享。创作台仍保留 18 种选择，
-    只是同组的画法/参考切来切去看到的是同一份档位。
+    1.07 起锁定同角色与只借画风是两条独立工作流，档位与工作流拷贝也必须分开；
+    画法（color/line）仍只改提示词，所以同一版式同一参考方式下两种画法共享档位。
     """
     parsed = parse(cid)
     if not parsed:
         return str(cid)
     layout, _ink, ref = parsed
-    return f"{layout}.{'t2i' if ref == 'none' else 'i2i'}"
+    mode = "t2i" if ref == "none" else ref
+    return f"{layout}.{mode}"
 
 
 def combo_id(layout: str, ink: str, ref: str) -> str:
@@ -118,7 +120,8 @@ def meta(cid: str) -> dict[str, Any]:
         "ratio": str(layout.get("ratio", "")), "size": str(layout.get("size", "")),
         "ink": ink, "inkName": _ink_name(ink), "ref": ref, "refName": _ref_name(ref),
         "wf": wf_for_ref(ref),
-        "group": "文生图" if ref == "none" else "图生图",
+        "mode": ref,                       # t2i / lock / style：管理台按它拆成三套
+        "group": {"none": "文生图", "lock": "图生图-锁定同角色", "style": "图生图-只借画风"}[ref],
         "name": f"{layout.get('name', layout_id)} · {_ink_name(ink)} · {_ref_name(ref)}",
     }
 
@@ -181,8 +184,12 @@ def _custom_grades(cid: str) -> list[dict[str, Any]]:
     key = group_of(cid)
     table = config.raw.get("sheetGrades") or {}
     raw = table.get(key)
+    if raw is None and key.endswith((".lock", ".style")):
+        # 1.07 兼容：旧版 lock/style 共用 A.i2i 这组档位，新组还没单独保存过时
+        # 继续沿用旧档位，确保拆分后每个档位的参数能力与拆分前完全一致。
+        raw = table.get(key.rsplit(".", 1)[0] + ".i2i")
     if raw is None and key != cid:
-        # 兼容旧配置：18 段 key（如 A.color.none）里的自建档位迁到 6 段组 key。
+        # 兼容更早的配置：18 段 key（如 A.color.none）里的自建档位迁到组 key。
         # 迁移只在内存里做，写回发生在用户下一次保存档位时（不悄悄改盘上的文件）。
         for old_cid in (f"{key.split('.')[0]}.{ink}.{ref}" for ink in INKS for ref in REFS):
             rows = table.get(old_cid)

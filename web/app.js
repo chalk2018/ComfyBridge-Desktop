@@ -303,7 +303,8 @@ function sheetForm() {
   Object.keys(defs).forEach(k => { if (f[k] === undefined || f[k] === null) f[k] = defs[k]; });
   const layouts = sheetLayouts();
   if (layouts.length && !layouts.some(l => l.id === f.layout)) f.layout = layouts[0].id;
-  if (!f.lineStyle) f.lineStyle = (sheetLineStyles()[0] || {}).id || '';
+  const lineIds = sheetLineStyles().map(s => s.id);
+  if (!f.lineStyle || !lineIds.includes(f.lineStyle)) f.lineStyle = lineIds[0] || '';
   const styles = sheetStyles();
   // 空 style 可能只是「还没选过」，也可能是用户选了「自定义…」；后者靠 styleCustom 区分，
   // 不能再把空值悄悄改回第一个预设，否则下拉会自己跳回去、和实际提交的风格句对不上。
@@ -311,6 +312,13 @@ function sheetForm() {
   return f;
 }
 function sheetLayout() { return sheetLayoutOf(sheetForm().layout) || sheetLayouts()[0] || null; }
+/* 1.07：角色设定图顶部三种子功能。仍复用全局 UI.mode 的 t2i/i2i（上传门槛等共用逻辑不动），
+   「锁定同角色 / 只借画风」用 sheetForm.ref 区分，不引入第三套全局状态。 */
+function sheetMode() {
+  const f = sheetForm();
+  return UI.mode === 'i2i' ? (f.ref === 'style' ? 'style' : 'lock') : 't2i';
+}
+const SHEET_MODE_NAME = { t2i: '文生图', lock: '图生图-锁定同角色', style: '图生图-只借画风' };
 /* 组合 = 版式 × 画法 × 参考方式：一个组合就是一条母版配方（提示词 + 工作流 + 画幅）。
    档位只在这个组合里可选，换组合时旧档位可能不存在，所以要回到「母版」。 */
 function sheetCombos() { return (S && S.sheetCombos) || []; }
@@ -319,7 +327,7 @@ function sheetComboOf(layout, ink, ref) {
 }
 function sheetCombo() {
   const f = sheetForm();
-  return sheetComboOf(f.layout, f.ink, UI.mode === 'i2i' ? f.ref : 'none');
+  return sheetComboOf(f.layout, f.ink, sheetMode() === 't2i' ? 'none' : f.ref);
 }
 function sheetGrades() { const c = sheetCombo(); return (c && c.grades) || []; }
 function sheetGrade() {
@@ -338,11 +346,12 @@ function sheetStyleValue() {
 function sheetPayload() {
   const f = sheetForm();
   return {
-    layout: f.layout, character: String(f.character || '').trim(), style: sheetStyleValue(),
-    // 风格原样带给服务端，供「基于上一条」精确还原（含自定义句）
-    styleCustom: !!f.styleCustom, styleText: String(f.styleText || ''),
+    layout: f.layout, character: String(f.character || '').trim(),
+    // 风格只对文生图生效：文生图没有参考图，画风靠「风格」下拉；
+    // 图生图两项靠参考图，服务端不会注入这里的风格（compose 按 ref 区分）。
+    style: sheetStyleValue(), styleCustom: !!f.styleCustom, styleText: String(f.styleText || ''),
     ink: f.ink, lineStyle: f.ink === 'line' ? (f.lineStyle || null) : null,
-    ref: UI.mode === 'i2i' ? f.ref : 'none',
+    ref: sheetMode() === 't2i' ? 'none' : f.ref,
     // 档位只影响参数（画幅/像素/CFG/步数），提示词由组合决定，跟档位无关
     grade: (sheetGrade() || {}).name || '默认',
   };
@@ -383,19 +392,22 @@ function viewSheetComposer(cap) {
   const layout = sheetLayout();
   const grade = sheetGrade();
   const grades = sheetGrades();
-  const i2i = UI.mode === 'i2i';
+  const smode = sheetMode(), i2i = smode !== 't2i';
   // 图生图纯转换允许空角色描述；文生图才要求写描述（需求 #8）
   const empty = !String(f.character || '').trim() && !i2i;
-  const styles = sheetStyles(), lineStyles = sheetLineStyles();
-  const curStyle = (!f.styleCustom && styles.includes(f.style)) ? f.style : '';
-  const custom = !!f.styleCustom;
+  const lineStyles = sheetLineStyles();
+  // 风格下拉的当前值：选了「自定义…」时下拉落到自定义项、露出自由输入框
+  const styles = sheetStyles();
+  const customStyle = !!f.styleCustom;
+  const curStyle = (!customStyle && styles.includes(f.style)) ? f.style : '';
   return `<div class="composer"><div class="composer-inner">
     <div class="parambar">
       <div class="modepick" role="group" aria-label="生成方式">
-        <button class="${i2i ? '' : 'on'}" data-mode="t2i"><span class="dotg"></span>文生图</button>
-        <button class="${i2i ? 'on' : ''}" data-mode="i2i"><span class="dotb"></span>图生图</button>
+        <button class="${smode === 't2i' ? 'on' : ''}" data-sheet-mode="t2i"><span class="dotg"></span>文生图</button>
+        <button class="${smode === 'lock' ? 'on' : ''}" data-sheet-mode="lock"><span class="dotb"></span>图生图-锁定同角色</button>
+        <button class="${smode === 'style' ? 'on' : ''}" data-sheet-mode="style"><span class="dotb"></span>图生图-只借画风</button>
       </div>
-      <span class="modedis">${i2i ? '拿现有角色图重画成设定图' : '纯文字描述直接出设定图'}</span>
+      <span class="modedis">${smode === 't2i' ? '纯文字描述直接出设定图' : smode === 'lock' ? '图 1 就是这个人：不换人、不改性别' : '图 1 只借画风笔触，人物照文字新写'}</span>
       <span class="scope-hint"></span>
     </div>
     <div class="inputbox sheetbox" id="inputbox">
@@ -416,24 +428,26 @@ function viewSheetComposer(cap) {
         ${f.ink === 'line'
           ? `<select class="input segsel" id="sheetLine" title="线稿风格句">
               ${lineStyles.map(s => `<option value="${esc(s.id)}" ${s.id === f.lineStyle ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
-            </select><span class="warnhint">线稿别写颜色词 · 画风只借造型</span>`
+            </select><span class="tiny muted">在原有画风基础上改成铅笔勾勒，风格保持不变</span>`
           : '<span class="tiny muted">彩色：风格行用下面的「风格」</span>'}
       </div>
+      ${!i2i ? `<div class="sheetbar">
+        <span class="slb">风格</span>
+        <select class="input segsel" id="sheetStyle" style="min-width:148px" title="决定文生图的画风：12 类预设 + 自定义">
+          ${sheetStyles().map(n => `<option value="${esc(n)}" ${n === curStyle ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+          <option value="" ${customStyle ? 'selected' : ''}>自定义…</option>
+        </select>
+        <input class="input segtext" id="sheetStyleText" placeholder="画种 + 材质笔触 + 色调 + 光线，一两句"
+          value="${esc(f.styleText)}" ${customStyle ? '' : 'style="display:none"'}>
+        <span class="tiny muted">${f.ink === 'line' ? '线稿：画风只借造型比例与线条气质，不上色' : '彩色：决定「风格」那一行的画风'}</span>
+      </div>` : ''}
       ${i2i ? `<div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
-      <div class="sheetbar">
-        <span class="slb">参考</span>
-        <div class="seg" role="group" aria-label="参考方式">
-          <button class="segb ${f.ref === 'style' ? '' : 'on'}" data-sheet-ref="lock">锁定同角色</button>
-          <button class="segb ${f.ref === 'style' ? 'on' : ''}" data-sheet-ref="style">只借画风</button>
-        </div>
-        <span class="tiny muted">${f.ref === 'style' ? '图 1 只借画风笔触，人物照文字新写' : '图 1 就是这个人：不换人、不改性别'}</span>
-      </div>
       <div class="refquoted" id="sheetQuoted"><span class="slb">已引用</span>
         ${(f.refChips || []).map(rid => {
           const ref = UI.refs.find(r => r.id === rid); const slot = UI.refs.findIndex(r => r.id === rid) + 1;
           return ref ? `<span class="qchipimg" data-ref="${esc(rid)}"><img src="${refUrl(rid)}" alt="图${slot}"><b>图${slot}</b><span class="x" data-unquote="${esc(rid)}" title="取消引用">✕</span></span>` : '';
         }).join('')}
-        <span class="tiny muted">点参考图上的 @ 引用到这里；生成时按上面的参考方式使用</span></div>` : ''}
+        <span class="tiny muted">点参考图上的 @ 引用到这里；生成时按上方选中的子功能使用</span></div>` : ''}
       <textarea class="sheetchar" id="sheetChar" rows="3" placeholder="${i2i ? '角色描述（可留空）：只做图片转换时不用写，直接生成即可' : '角色描述：年龄身份 + 脸型五官 + 发型发色 + 服装分件（上衣/下装/外套/鞋）+ 2~3 个标志物'}">${esc(f.character)}</textarea>
       <div class="sheetbar">
         <span class="slb">档位</span>
@@ -445,16 +459,6 @@ function viewSheetComposer(cap) {
         <span class="tiny muted">${grade
           ? `${esc(grade.locked ? '默认就是这个组合的完整配方' : '与默认同提示词、同参考，只改参数')} · 出图 ${esc(grade.size || '')}`
           : ''}</span>
-      </div>
-      <div class="sheetbar">
-        <span class="slb">风格</span>
-        <select class="input segsel" id="sheetStyle" style="min-width:148px" title="${i2i ? '图生图只能用自定义风格' : '12 类实测画风'}">
-          ${styles.map(n => `<option value="${esc(n)}" ${n === curStyle ? 'selected' : ''} ${i2i ? 'disabled' : ''}>${esc(n)}</option>`).join('')}
-          <option value="" ${custom || i2i ? 'selected' : ''}>自定义…</option>
-        </select>
-        <input class="input segtext" id="sheetStyleText" placeholder="画种 + 材质笔触 + 色调 + 光线，一两句"
-          value="${esc(f.styleText)}" ${custom || i2i ? '' : 'style="display:none"'}>
-        <span class="tiny muted">${i2i ? '图生图：只能用自定义风格（预设已禁用）' : f.ink === 'line' ? '线稿：画风只借造型比例与线条气质，不上色' : '彩色：决定「风格」那一行的画风'}</span>
       </div>
       ${UI.sheetOpen ? `<div class="pvbox" id="sheetPv">${sheetPreviewHTML()}</div>` : ''}
       </div>
@@ -490,7 +494,7 @@ function sheetPasteInto(e, ch, fromFallback = false) {
   const end = ch.selectionEnd == null ? start : ch.selectionEnd;
   ch.setRangeText(text, start, end, 'end');     // 保留选区语义；setRangeText 不会派发 input 事件
   UI.sheetForm.character = ch.value;            // 显式同步，别等 oninput，也别被轮询重绘冲掉
-  const okToSend = !!ch.value.trim() || UI.mode === 'i2i';
+  const okToSend = !!ch.value.trim() || sheetMode() !== 't2i';
   const btn = $('#sendBtn'); if (btn) btn.disabled = !okToSend;
   const hint = $('#emptyHint'); if (hint) hint.style.display = okToSend ? 'none' : '';
   const box = $('#inputbox'); if (box) box.classList.remove('err');
@@ -533,12 +537,26 @@ function bindSheetComposer() {
     UI.sheetForm.ink = el.dataset.sheetInk === 'line' ? 'line' : 'color';
     after();
   });
-  $$('[data-sheet-ref]').forEach(el => el.onclick = () => {
-    UI.sheetForm.ref = el.dataset.sheetRef === 'style' ? 'style' : 'lock';
+  // 1.07：顶部三算子功能各走各的工作流；同步全局 UI.mode 只为复用上传/发送门槛
+  $$('[data-sheet-mode]').forEach(el => el.onclick = () => {
+    const m = el.dataset.sheetMode;
+    if (!SHEET_MODE_NAME[m] || m === sheetMode()) return;
+    UI.mode = m === 't2i' ? 't2i' : 'i2i';
+    if (m !== 't2i') UI.sheetForm.ref = m;
     after();
   });
   const line = $('#sheetLine');
   if (line) line.onchange = () => { UI.sheetForm.lineStyle = line.value; after(); };
+  // 风格下拉/自定义句（只对文生图显示）：选预设收起输入框、选「自定义…」露出输入框
+  const st = $('#sheetStyle');
+  if (st) st.onchange = () => {
+    UI.sheetForm.styleCustom = !st.value;
+    UI.sheetForm.style = st.value || UI.sheetForm.style;
+    UI.sheetForm.styleText = '';
+    after();
+  };
+  const stx = $('#sheetStyleText');
+  if (stx) stx.oninput = () => { UI.sheetForm.styleText = stx.value; scheduleDraft(); };
   // 已引用参考图 chip 条：点 ✕ 取消引用（只影响 chip 展示，参考图本体仍在 refs 里）
   $$('[data-unquote]').forEach(el => el.onclick = () => {
     const f = sheetForm();
@@ -549,7 +567,7 @@ function bindSheetComposer() {
   if (ch) {
     ch.oninput = () => {
       UI.sheetForm.character = ch.value;
-      const okToSend = !!ch.value.trim() || UI.mode === 'i2i';   // 图生图纯转换允许空描述
+      const okToSend = !!ch.value.trim() || sheetMode() !== 't2i';   // 图生图纯转换允许空描述
       const btn = $('#sendBtn'); if (btn) btn.disabled = !okToSend;
       const hint = $('#emptyHint'); if (hint) hint.style.display = okToSend ? 'none' : '';
       const box = $('#inputbox'); if (box) box.classList.remove('err');
@@ -563,37 +581,28 @@ function bindSheetComposer() {
   // （render / refreshComposer / refreshDynamic 里的 chat 重绘都会调它），事件属性天然不叠加。
   const sbox = $('#inputbox');
   if (sbox) sbox.onpaste = e => {
+    // 图片生成等能力没有 #sheetChar：它们的编辑器自带 onpaste，这里再接管一次
+    // 就会把同一张剪贴板图上传两遍（用户报的「Ctrl+V 一次粘两张」）。
+    if (!ch) return;
     if (e.target && e.target.id === 'sheetChar') return;   // textarea 自己已处理
     sheetPasteInto(e, ch);
   };
-  const st = $('#sheetStyle');
-  if (st) st.onchange = () => {
-    // 选「自定义…」→ 清掉预设，露出自由输入框；选预设 → 收起自由输入框。
-    // 每次换选项都丢掉上一次的自定义句：sheetStyleValue() 是「自定义优先」，
-    // 不清的话用户从自定义切回预设，页面显示预设、预览和提交却还是上一句自定义。
-    UI.sheetForm.styleCustom = !st.value;                       // 空值 = 选了「自定义…」
-    UI.sheetForm.style = st.value || UI.sheetForm.style;         // 切回预设就覆盖，选自定义先留着上次预设
-    UI.sheetForm.styleText = '';                                // 丢掉上一句自定义，避免它继续盖住预设
-    after();
-  };
-  const stx = $('#sheetStyleText');
-  if (stx) stx.oninput = () => { UI.sheetForm.styleText = stx.value; scheduleDraft(); };
   const pv = $('#sheetPvBtn');
-  if (pv) pv.onclick = async () => {
+  if (pv) pv.onclick = () => keepScroll(async () => {
     UI.sheetOpen = !UI.sheetOpen;
     saveDraft();
     // 先重绘一次：面板立刻以「正在组装提示词…」出现，不用等服务端返回才有反馈；
     // 组装完再刷一次内容（服务端忙时这一下可能要一两秒）。
     refreshComposer();
     if (UI.sheetOpen) { await refreshSheetPreview(); refreshComposer(); }
-  };
+  });
   bindSheetPreviewButtons();
 }
 
 /* ============================================================ 1.03 场景 / 道具设定图
    两条新能力和角色设定图共用「结构化表单 → 服务端拼提示词」思路，但完全走
    /api/ext/* 与 prompts/scene_sheet.json、prompts/prop_sheet.json，不碰 1.02 的 sheet.* 路径。 */
-const EXT_MODE_NAME = { t2i: '文生图', i2i: '图生图', expand: '扩图', color: '彩色', line: '线稿' };
+const EXT_MODE_NAME = { t2i: '文生图', none: '文生图', i2i: '图生图', lock: '图生图-锁定同角色', style: '图生图-只借画风', expand: '扩图', color: '彩色', line: '线稿' };
 function isExtSheetCap(cap) { return !!cap && (cap.id === 'sheet.scene' || cap.id === 'sheet.prop'); }
 function extKindOf(cap) { return cap && cap.extKind ? cap.extKind : (cap && cap.id === 'sheet.scene' ? 'scene' : cap && cap.id === 'sheet.prop' ? 'prop' : ''); }
 function extLib(kind) { return ((S && S.extLibs) || {})[kind] || {}; }
@@ -965,12 +974,12 @@ function bindExtSheetComposer() {
   const stx = $('#extStyleText');
   if (stx) stx.oninput = () => { UI.extForm.styleText = stx.value; scheduleDraft(); };
   const pv = $('#extPvBtn');
-  if (pv) pv.onclick = async () => {
+  if (pv) pv.onclick = () => keepScroll(async () => {
     UI.extOpen = !UI.extOpen;
     saveDraft();
     if (UI.extOpen) await refreshExtPreview();
     refreshComposer();
-  };
+  });
   bindExtPreviewButtons();
 }
 
@@ -1146,11 +1155,11 @@ function bindBoardComposer() {
     saveDraft(); refreshComposer();
   });
   const pv = $('#boardPvBtn');
-  if (pv) pv.onclick = async () => {
+  if (pv) pv.onclick = () => keepScroll(async () => {
     UI.boardOpen = !UI.boardOpen; saveDraft();
     refreshComposer();                     // 面板先出现（显示「正在组装提示词…」）
     if (UI.boardOpen) { await refreshBoardPreview(); refreshComposer(); }
-  };
+  });
   // 面板从草稿里恢复成展开态时没人去取提示词，会一直停在「正在组装提示词…」
   if (UI.boardOpen && !UI.boardPreview) setTimeout(() => refreshBoardPreview(), 0);
   bindBoardPreviewButtons();
@@ -1419,6 +1428,96 @@ function normalizeCapForRoute() {
     if (fb) UI.capId = fb.id;
   }
 }
+/* 「看完整提示词 / 收起提示词」会重绘整个 #root，浏览器把滚动位置重置到顶部。
+   创作台的滚动容器是 .chat-scroll（内部 div，不是 window），所以 window.scrollTo
+   对它无效——必须把所有会滚的容器都记下来，重绘后用选择器重新找到元素再恢复。
+   这类按钮统一用它包一层，不改 render 的通用行为，以免影响切换能力、路由跳转
+   这些本来就该回到顶部的场景。 */
+function keepScroll(fn) {
+  const sels = ['.chat-scroll', '.rail', '.drawer-scroll', '#root'];
+  const win = [window.pageXOffset || 0, window.pageYOffset || 0];
+  const boxes = [];
+  sels.forEach(s => {
+    const el = document.querySelector(s);
+    if (el && (el.scrollTop || el.scrollLeft)) boxes.push([s, el.scrollLeft, el.scrollTop]);
+  });
+  const restore = () => {
+    window.scrollTo(win[0], win[1]);
+    boxes.forEach(([s, l, t]) => {
+      const el = document.querySelector(s);
+      if (el) { el.scrollLeft = l; el.scrollTop = t; }
+    });
+  };
+  let r;
+  try { r = fn(); } finally { restore(); }
+  if (r && typeof r.then === 'function') return r.then(v => { restore(); return v; });
+  return r;
+}
+
+/* 需求6：移动端输入区「收起/展开」把手。
+   统一给每个 .inputbox 注入一个把手（桌面端 CSS 隐藏），点击切换 .folded。
+   关键：点击输入区里的档位/模式/时长等按钮会触发 refreshComposer()，
+   它用 outerHTML 整块替换 composer，新 DOM 没有把手。因此用 MutationObserver
+   监听 DOM 变化自动补注入，并按稳定 key 恢复折叠状态，保证把手不会「点一下就没」。 */
+window.__foldState = window.__foldState || {};   // 稳定key -> 是否折叠
+function foldKeyOf(box) {
+  // 优先用 inputbox 的稳定 id；画布节点用所在 .cnode 的 data-id；兜底用对象上的标记
+  if (box.id) return 'id:' + box.id;
+  const cn = box.closest && box.closest('.cnode');
+  if (cn) return 'node:' + (cn.getAttribute('data-id') || '');
+  if (!box.__foldKey) box.__foldKey = 'fk' + (window.__foldKeySeq = (window.__foldKeySeq || 0) + 1);
+  return box.__foldKey;
+}
+function enhanceFoldHandles() {
+  if (typeof window === 'undefined') return;
+  $$('.inputbox').forEach(box => {
+    const folded = !!window.__foldState[foldKeyOf(box)];
+    const wantTxt = folded ? '展开输入' : '收起输入';
+    const existing = box.querySelector('.fold-handle');
+    if (existing) {
+      // 已有把手：只在状态确实不同时才写 DOM（避免触发 observer 死循环）
+      if (box.classList.contains('folded') !== folded) box.classList.toggle('folded', folded);
+      const t = existing.querySelector('.fold-txt');
+      if (t && t.textContent !== wantTxt) t.textContent = wantTxt;
+      return;
+    }
+    // 只对「有 sheetbody/输入内容」的输入块加折叠，纯展示块跳过
+    if (!box.querySelector('.sheetbody') && !box.querySelector('textarea')) return;
+    const h = document.createElement('button');
+    h.type = 'button';
+    h.className = 'fold-handle';
+    h.setAttribute('data-fold', '1');
+    h.innerHTML = '<i class="fold-bar"></i><span class="fold-txt">' + wantTxt + '</span>';
+    box.insertBefore(h, box.firstChild);
+    if (folded) box.classList.add('folded');
+  });
+}
+if (typeof document !== 'undefined' && !window.__foldBound) {
+  window.__foldBound = true;
+  document.addEventListener('click', e => {
+    const h = e.target.closest && e.target.closest('[data-fold]');
+    if (!h) return;
+    const box = h.closest('.inputbox');
+    if (!box) return;
+    const folded = box.classList.toggle('folded');
+    window.__foldState[foldKeyOf(box)] = folded;
+    const txt = h.querySelector('.fold-txt');
+    if (txt) txt.textContent = folded ? '展开输入' : '收起输入';
+  }, true);
+  // DOM 变化自动补注入，覆盖 refreshComposer / repaintNode 等所有局部重绘。
+  // 用 rAF 节流 + 执行期布尔锁，且 enhanceFoldHandles 内部已做「值不同才写」守卫，
+  // 三重保证注入行为本身不会再触发新一轮回调（不会死循环）。
+  if (typeof MutationObserver !== 'undefined') {
+    let scheduled = false;
+    const ob = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => { scheduled = false; enhanceFoldHandles(); });
+    });
+    ob.observe(document.documentElement, { childList: true, subtree: true });
+  }
+}
+
 function render() {
   const root = $('#root');
   syncHash();
@@ -1431,7 +1530,9 @@ function render() {
     bindStudio();
     bindDrawer();
     if (window.CanvasModule) CanvasModule.mount($('#cvsRoot'));
+    if (typeof enhanceFoldHandles === 'function') enhanceFoldHandles();
     _lastSignature = stateSignature();
+    if (window.PromptLib) window.PromptLib.syncDock('canvas');
     return;
   }
   try {
@@ -1458,6 +1559,9 @@ function render() {
   if (UI.route === 'admin' && UI.adminPage === 'grades' && !isSheetCap(currentCap())
       && !isExtSheetCap(currentCap()) && !isBoardCap(currentCap())) showGradeEffective();
   _lastSignature = stateSignature();
+  // 1.06：浮动小窗只在创作台 / 画布显示；管理台与历史页自动隐藏
+  if (window.PromptLib) window.PromptLib.syncDock(UI.route);
+  if (typeof enhanceFoldHandles === 'function') enhanceFoldHandles();
 }
 
 function paintProgress() {
@@ -1527,6 +1631,7 @@ const ICO_SVG = {
     + '<path d="M3.6 17.4l4.5-4.1a1.7 1.7 0 0 1 2.3 0l3.4 3.1"/><path d="M13.6 14.4l2.5-2.3a1.7 1.7 0 0 1 2.3 0l2 1.8"/></svg>',
   tasks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
     + '<path d="M4 6.5h16"/><path d="M4 12h9.5"/><path d="M4 17.5h6.5"/><circle cx="18" cy="17.5" r="3.1"/><path d="M18 16v1.6l1.2.8"/></svg>',
+  prompt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2l2.25 6.55L21 11l-6.75 2.25L12 19.8l-2.25-6.55L3 11l6.75-2.25z"/></svg>',
 };
 function viewTopbar() {
   const on = UI.comfyOnline;
@@ -1537,6 +1642,14 @@ function viewTopbar() {
   // 而不是把人扔回创作台（1.03 的 bug：画布进去就再也回不来）
   const backRoute = UI.prevRoute === 'canvas' ? 'canvas' : 'studio';
   const backLabel = backRoute === 'canvas' ? '返回画布' : '返回创作台';
+  // 提示词模板开关：创作台/画布顶栏常驻，控制提示词速取窗的弹出与隐藏。
+  // 手机端隐藏文字、把图标做进滑块里；开关状态直接读 ui.promptDock。
+  const dockOn = !!(S.ui && S.ui.promptDock);
+  const promptSwitch = (UI.route === 'studio' || UI.route === 'canvas')
+    ? `<button type="button" id="ptTopDockSwitch" class="pt-top-switch${dockOn ? ' on' : ''}" role="switch" aria-checked="${dockOn}" aria-label="提示词模板" title="提示词模板">
+        <span class="pts-track"><span class="pts-knob">${ICO_SVG.prompt}</span></span>
+        <span class="pts-label">提示词模板</span></button>`
+    : '';
   return `<div class="topbar">
     <div class="brand"><i></i><span class="bname">ComfyBridge</span></div>
     <div class="health ${on ? '' : 'off'}" id="healthBtn" title="重新检测">
@@ -1549,6 +1662,7 @@ function viewTopbar() {
     <div class="spacer"></div>
     ${(UI.route === 'studio' || UI.route === 'admin' || UI.route === 'canvas') ? '<button class="btn ghost sm navbtn" id="navToggle" title="菜单"><span class="ico">☰</span></button>' : ''}
     ${(UI.route === 'studio' || UI.route === 'canvas') ? `<button class="btn ghost sm sheetbtn" id="sheetToggle" title="折叠 / 展开任务栏"><span class="ico dico">☰</span><span class="ico mico">${ICO_SVG.tasks}</span><span class="lbl">任务</span></button>` : ''}
+    ${promptSwitch}
     ${UI.route === 'gallery'
       ? `<button class="btn ghost sm" data-nav="${backRoute}"><span class="ico">←</span><span class="lbl">${backLabel}</span></button>`
       : `<button class="btn ghost sm" data-nav="gallery"><span class="ico dico">🗂</span><span class="ico mico">${ICO_SVG.gallery}</span><span class="lbl">历史</span></button>`}
@@ -1666,7 +1780,7 @@ function viewComposer() {
   if (!usable) return `<div class="composer"><div class="composer-inner">
     <div class="inputbox" style="border-color:var(--line);box-shadow:none;background:#fafbfe">
       <div class="tiny muted" style="padding:18px 4px;text-align:center">这个能力还没配好档位，暂时不能发送。</div></div></div></div>`;
-  // 角色设定图有自己的表单（版式 / 画法 / 参考方式 / 角色行 / 风格）
+  // 角色设定图有自己的表单（版式 / 画法 / 参考方式 / 角色行）
   if (isSheetCap(cap)) return viewSheetComposer(cap);
   // 1.03 场景 / 道具设定图：结构不同，单独表单，但仍复用输入区骨架
   if (isExtSheetCap(cap)) return viewExtSheetComposer(cap);
@@ -1693,6 +1807,8 @@ function viewComposer() {
       <span class="scope-hint"></span>
     </div>
     ${GenUI.imageInput({
+      // 图生图不显示风格行；设定图模板属于管理台功能，创作台不放入口
+      show: { style: !i2i, template: false },
       refs: UI.refs.map(r => ({ id: r.id, kind: r.kind || 'image', name: r.name,
         src: r.kind === 'video' ? refUrl(r.id) : refUrl(r.id) })),
       prompt: UI.prompt, i2i,
@@ -1759,10 +1875,33 @@ function openImageTemplateModal() {
     S.imageStyleLib = res.data; closeModal(); refreshComposer(); toast('通用模板已保存，创作台立即生效');
   };
 }
+/* compose_image_prompt 的产物形如「画面风格：xxx。\n<用户原话>」，线稿还会在末尾加
+   「（线稿硬性要求：…）」。基于上一条时若直接回填这段，再生成会被二次拼装，旧线稿句
+   写死在开头（用户报的「4 个线稿选项切换无效」）。新任务服务端会另存 rawPrompt；这里只
+   是给没有 rawPrompt 的老任务兜底还原。只剥我们自己固定的前后缀，绝不动用户原生输入。 */
+function stripComposedPrompt(p) {
+  if (typeof p !== 'string' || !p) return p;
+  let s = p;
+  const tail = '（线稿硬性要求：';
+  const ti = s.lastIndexOf(tail);
+  if (ti >= 0 && s.endsWith('）')) s = s.slice(0, ti);
+  if (s.startsWith('画面风格：')) {
+    const nl = s.indexOf('\n');
+    if (nl >= 0) s = s.slice(nl + 1);
+  }
+  return s;
+}
 /* 需求1：和角色设定图一样给出「看完整提示词」。预览与提交共用服务端 compose_image_prompt，
    前端不自己拼一份，免得通用模板改了以后两边显示不一致。 */
 function imgPayload() {
   const f = imgForm();
+  // 图生图隐藏的是「风格」行（style），不是「画法」行（ink=彩色/线稿）。
+  // 所以这里只清空草稿里残留的旧风格文字，画法与线稿风格句必须按用户选择保留——
+  // 否则选了线稿也会被强制成彩色，线稿风格句拼不进提示词（用户报的回归）。
+  if (UI.mode === 'i2i') {
+    return { ink: f.ink, lineStyle: f.ink === 'line' ? f.lineStyle : null,
+             styleCustom: true, style: '', styleText: '' };
+  }
   return { ink: f.ink, lineStyle: f.ink === 'line' ? f.lineStyle : null,
            styleCustom: !!f.styleCustom, style: f.styleCustom ? '' : f.style,
            styleText: f.styleCustom ? f.styleText : '' };
@@ -2115,10 +2254,10 @@ function bindStudio() {
     if (UI.imgOpen) refreshImgPreview();
   };
   const imgPvBtn = $('#imgPvBtn');
-  if (imgPvBtn) imgPvBtn.onclick = async () => {
+  if (imgPvBtn) imgPvBtn.onclick = () => keepScroll(async () => {
     UI.imgOpen = !UI.imgOpen; UI.imgPreview = null; render();
     if (UI.imgOpen) await refreshImgPreview();
-  };
+  });
   // 需求2：图片生成「设定图模板」入口（通用模板，只有线稿风格句 + 风格预设两部分）
   $$('[data-sheet-template]').forEach(el => el.onclick = () => {
     if (currentCap() && currentCap().id === 'image.generate') openImageTemplateModal();
@@ -2240,7 +2379,7 @@ function bindStudio() {
                        grade: old.grade || (j.runs[0] || {}).grade || '默认' };
         extForm(); UI.extPreview = null;
       } else {
-        // 设定图：把整台表单（版式/画法/参考方式/档位/角色行/风格含自定义句）带回来
+        // 设定图：把整台表单（版式/画法/参考方式/档位/角色行）带回来
         UI.sheetForm = { ...UI.sheetForm, ...j.sheet };
         // 老任务可能没记档位，按它当时用的那一档回填
         if (!UI.sheetForm.grade) UI.sheetForm.grade = (j.runs[0] || {}).grade || '默认';
@@ -2249,7 +2388,14 @@ function bindStudio() {
         UI.sheetPreview = null;
       }
     } else {
-      UI.prompt = j.prompt || '';
+      // 普通图片生成：把「画法 / 线稿风格 / 风格」整条选项也带回来。
+      // 提示词用服务端另存的 rawPrompt（compose 前的用户原话），没有则保守剥掉
+      // 我们自己的前后缀，避免把已拼装的句子当原话回填造成二次拼装。
+      UI.prompt = j.rawPrompt || stripComposedPrompt(j.prompt || '');
+      if (j.image && typeof j.image === 'object') {
+        UI.imgForm = { ...(UI.imgForm || {}), ...j.image };
+        imgForm();  // 补默认值 / 校验 lineStyle 合法
+      }
     }
     if (!refs.length) {
       // 图片确实没了（文件被清理）：把 <imageN> 令牌一起去掉，提示词不能留下指空的引用
@@ -2301,7 +2447,7 @@ function bindStudio() {
   bindDropZone();
 }
 /* 重绘输入区前把「正在编辑的内容 + 光标位置」拍照，重绘后原样还回去。
-   普通能力的 contenteditable、设定图的角色描述框、自定义风格输入框都要照顾到：
+   普通能力的 contenteditable、设定图的角色描述框都要照顾到：
    页面每秒会按状态签名局部重绘，漏掉哪一个，那个框就会出现「刚打/刚粘的字或焦点消失」。 */
 function snapshotComposerFocus() {
   const ae = document.activeElement;
@@ -2373,6 +2519,8 @@ function refreshComposer() {
   const snap = snapshotComposerFocus();
   node.outerHTML = viewComposer(); bindStudio();
   restoreComposerFocus(snap);
+  // outerHTML 整块替换后新 DOM 没有折叠把手，立即补注入并恢复折叠态
+  if (typeof enhanceFoldHandles === 'function') enhanceFoldHandles();
 }
 function openFilePicker() {
   const input = document.createElement('input');
@@ -2411,10 +2559,10 @@ async function submitAction(path, body, successMsg) {
   if (path === '/api/tasks') {                  // 新发一条：输入框和参考图都清空，模式/档位保持用户的选择
     UI.prompt = ''; UI.refs = [];
     const ed = $('#promptInput'); if (ed) ed.innerHTML = '';   // 同时清 DOM，避免 saveDraft 又把旧文字序列化回去
-    // 设定图：角色描述跟着清空（和「描述框发完清零」一致），版式/画法/风格保持不变
+    // 设定图：角色描述跟着清空（和「描述框发完清零」一致），版式/画法/参考方式保持不变
     if (isSheetCap(currentCap())) {
       UI.sheetForm.character = ''; UI.sheetPreview = null;
-      UI.sheetForm.styleCustom = true; UI.sheetForm.styleText = ''; UI.sheetForm.refChips = [];  // 需求 #6：生成后回到默认自定义风格
+      UI.sheetForm.refChips = [];
       const sc = $('#sheetChar'); if (sc) sc.value = '';
     } else if (isExtSheetCap(currentCap())) {
       UI.extForm.text = ''; UI.extForm.refSlots = {}; UI.extPreview = null;
@@ -2457,19 +2605,19 @@ async function doSendSheet(cap) {
   const box = $('#inputbox');
   // 需求 #8：图生图纯转换（单人图转四视图 / 彩色转线稿）允许不写角色描述；
   // 文生图仍要求写角色描述。
-  if (!String(f.character || '').trim() && UI.mode !== 'i2i') {
+  if (!String(f.character || '').trim() && sheetMode() === 't2i') {
     if (box) box.classList.add('err');
     const ch = $('#sheetChar'); if (ch) ch.focus();
     toast('先写角色描述：年龄身份 + 五官 + 发型 + 服装 + 标志物');
     return;
   }
-  if (UI.mode === 'i2i' && !UI.refs.length) {
+  if (sheetMode() !== 't2i' && !UI.refs.length) {
     if (box) box.classList.add('err');
     toast('图生图要先上传一张参考图');
     return;
   }
   const grade = sheetGrade();
-  const wf = currentWorkflowName(cap);
+  const wf = (sheetCombo() || {}).wf || currentWorkflowName(cap);
   if (!wf) { toast('这个能力还没有对应的工作流'); return; }
   if (!grade) { toast('这个组合还没有档位'); return; }
   const body = {
@@ -2618,7 +2766,7 @@ function openZoom(key) {
 /* ------------------------------------------------------------ 管理台 */
 // 设定图模板不再是全局菜单项：它是角色设定图的子功能，入口挪到档位表里（模态框打开）。
 // 保留 'sheet' 路由分支仅为兼容旧草稿里残留的 adminPage，不出现在菜单里。
-const ADMIN_PAGES = [['caps', '能力与工作流'], ['grades', '档位表'], ['canvas', '视频生成画布'], ['service', '服务设置'], ['diag', '自检']];
+const ADMIN_PAGES = [['caps', '能力与工作流'], ['grades', '档位表'], ['canvas', '视频生成画布'], ['prompts', '提示词模板库'], ['service', '服务设置'], ['diag', '自检']];
 /* 「档位表」下挂的子菜单：能配档位的能力（有工作流的能力），点了直接跳到它的档位表。
    能力清单在 config.yaml 里是固定的，所以这里按实际配置生成，不写死。 */
 function gradesCaps() {
@@ -2641,6 +2789,8 @@ function viewAdmin() {
 function adminPage(cap) {
   if (UI.adminPage === 'caps') return pageCaps();
   if (UI.adminPage === 'canvas') return pageCanvasAdmin();
+  // 1.06：提示词模板库（独立模块，卡片列表 + 标签管理；速取窗由顶栏开关控制）
+  if (UI.adminPage === 'prompts') return window.PromptLib ? window.PromptLib.viewAdmin() : '<div class="pt-loading">模板库正在加载…</div>';
   // 设定图 / 故事板的档位挂在「组合」上，不是工作流上，所以档位表页要换一套界面
   if (UI.adminPage === 'grades') {
     if (isSheetCap(cap) || isExtSheetCap(cap) || isBoardCap(cap)) return pageComboGrades(cap);
@@ -3174,7 +3324,8 @@ function comboEffHTML(row, isDef) {
 function comboPickBar(combos, combo) {
   const mode = comboModeOf(combo);
   const modes = [...new Set(combos.map(comboModeOf))].sort((a, b) => {
-    const order = { t2i: 0, i2i: 1, expand: 2 };
+    // mode 由服务端给：文生图是 none（创作台沿用 t2i），两种都要排在最前，和创作台顺序一致。
+    const order = { none: 0, t2i: 0, lock: 1, style: 2, i2i: 3, expand: 4 };
     return (order[a] ?? 9) - (order[b] ?? 9);
   });
   const layouts = [];
@@ -3246,7 +3397,7 @@ function pageComboGrades(cap) {
       <div class="panel" style="margin:0;position:sticky;top:12px"><h3>① 工作流文件</h3>
         <div class="wffile"><span class="wfname mono">${esc(wfName)}</span><span class="wfauto">自动读取</span></div>
         <div class="tiny muted" style="margin:8px 0 14px;line-height:1.7">文件：<span class="mono">${esc(wfLib(wfName).path || '—')}</span><br>
-          只读，不对它做任何改动。这个组合固定用这条母版工作流；三个设定图能力共用同一条母版，差异全部在提示词里。</div>
+          只读，不对它做任何改动。这个组合固定用这条母版工作流；文生图 / 锁定同角色 / 只借画风各有独立工作流与档位。</div>
         <h3 style="flex-wrap:wrap">② 参数节点 <span class="tag">${setNodes.length} 个</span></h3>
         <div class="tiny muted" style="margin:-2px 0 8px;line-height:1.7">勾上哪些节点，右边 ④ 就出现哪些参数。</div>
         <div class="node-list">${setNodes.length ? setNodes.map(id => {
@@ -3406,7 +3557,8 @@ function bindComboGrades() {
       else if (f.kind === 'prop') f.ref = 'none';
       extForm(); UI.extOpen = false; UI.extPreview = null;
     } else {
-      UI.mode = mode;
+      // 服务端文生图的 mode 是 none（创作台内部沿用 t2i），两者都算文生图，别带成图生图。
+      UI.mode = (mode === 't2i' || mode === 'none') ? 't2i' : 'i2i';
       UI.sheetForm = { ...UI.sheetForm, layout: c.layout, ink: c.ink,
                        ref: c.ref === 'none' ? 'lock' : c.ref, grade: '默认' };
       UI.sheetOpen = false; UI.sheetPreview = null;
@@ -4170,6 +4322,8 @@ function pageDiag() {
 /* ------------------------------------------------------------ 管理台交互 */
 function bindAdmin() {
   bindCanvasAdmin();
+  // 1.06 提示词模板库自己的事件（搜索、卡片编辑、标签、小窗开关）
+  if (UI.adminPage === 'prompts' && window.PromptLib) window.PromptLib.bindAdmin();
   // 需求2：图片生成的档位表也有「设定图模板」，打开的是通用图片模板（不是角色设定图那套）
   $$('[data-sheet-template]').forEach(el => {
     if (currentCap() && currentCap().id === 'image.generate') el.onclick = openImageTemplateModal;
@@ -4739,6 +4893,12 @@ function renderWizard() {
   };
 }
 function bindGlobal() {
+  const ptSw = $('#ptTopDockSwitch');
+  if (ptSw) ptSw.onclick = async () => {
+    // 以 ui.promptDock 为准：请求失败时状态不变，连点不会把开关和浮窗点歪
+    const next = !(S.ui && S.ui.promptDock);
+    if (window.PromptLib) await window.PromptLib.setDockEnabled(next);
+  };
   $$('[data-nav]').forEach(el => el.onclick = async () => {
     const t = el.dataset.nav;
     UI.sheet = false; UI.navOpen = false;

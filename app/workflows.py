@@ -335,6 +335,64 @@ class WorkflowRegistry:
             node["inputs"][gate["field"]] = gate.get("value", True)
         return True
 
+    def _apply_prompt_enhance(self, api: dict[str, Any], bridge: dict[str, Any], text: str = "") -> bool:
+        """按 bridge 声明打开工作流自带的「多模态提示词改写器」，并排除会漂移的场景。
+
+        这个改写器（TextGenerate）是多模态节点：它同时吃用户提示词和全部参考图，
+        由 qwen3.5 看图后把含糊指令改写成精确指令。实测结论：
+          · 跨图编辑 / 风格迁移 / 局部提取（"沿用<image1>风格""只留某物"等）→ 改写器
+            看着参考图能正确理清每张图的角色，输出精准的迁移指令，效果远好于原话直进
+            编码器（原话直进时模型无法自主把图2人物的配色/风格换成图1的）。
+          · 设定图 / 多视图 / 版式类（"角色设定图""三视图""画布16:9"等）→ 该模型有根深
+            蒂固的"设定图=2D矢量/卡通"先验，会把真人参考图改写成扁平矢量风，连加
+            system prompt 约束都压不过。这类必须关掉改写器，让原话直进编码器。
+
+        因此采用黑名单语义（通用、不依赖具体提示词）：
+          · bridge 声明 unless_any 时，提示词命中任一排除词（设定图/版式类）→ 不开；
+          · 未命中 → 开。when_any（白名单）保留兼容：若声明，则还须命中任一词才开。
+        开关、字段、排除词都写在 bridge.json（和 size_gate 同一套路子），代码不认固定
+        节点 id、不改母版，只在运行时档位拷贝上生效（X22 / X35）。
+        """
+        enh = bridge.get("prompt_enhance")
+        if not isinstance(enh, dict):
+            return False
+        low = (text or "").lower()
+        exclude = enh.get("unless_any")
+        if isinstance(exclude, list) and exclude:
+            if any(str(k).lower() in low for k in exclude):
+                return False
+        triggers = enh.get("when_any")
+        if isinstance(triggers, list) and triggers:
+            if not any(str(k).lower() in low for k in triggers):
+                return False
+        node_id, field = enh.get("node"), enh.get("field")
+        node = api.get(node_id) if node_id else None
+        if not node or field not in node.get("inputs", {}):
+            return False
+        node["inputs"][field] = enh.get("value", True)
+        # 可选：给改写器的 system prompt 追加一段补充规则（声明式，不改母版）。
+        # 用途：修正模型对「跨图配色/风格沿用」的 identity 判定——配色被明确要求
+        # 迁移时属于编辑目标，不应作为 identity 保留，否则改写器会自相矛盾导致
+        # 出图仍保留原配色。只在本次开启改写器时注入，运行时拷贝生效。
+        spa = enh.get("system_prompt_append")
+        if isinstance(spa, dict):
+            sp_node = api.get(spa.get("node"))
+            sp_field = spa.get("field", "value")
+            text_add = spa.get("text", "")
+            if sp_node and sp_field in sp_node.get("inputs", {}) and text_add:
+                cur = str(sp_node["inputs"][sp_field] or "")
+                if text_add not in cur:
+                    before = spa.get("before")
+                    if before and before in cur:
+                        # 必须插在结尾标记之前：qwen3.5 把"规则段 + 用户输入标记"当作
+                        # 结构，规则追加到标记之后会破坏结构、触发思维链重复循环（输出
+                        # 同一段几十遍 + </think> 标签）。插在标记之前输出才稳定。
+                        sp_node["inputs"][sp_field] = cur.replace(
+                            before, text_add.strip() + "\n\n" + before, 1)
+                    else:
+                        sp_node["inputs"][sp_field] = cur + "\n" + text_add
+        return True
+
     def build_prompt(
         self,
         wf_name: str,
@@ -362,6 +420,7 @@ class WorkflowRegistry:
         api = self.load(wf_name, grade, params=params, tag=tag)
         bridge = self.bridge(wf_name)
         self._apply_size_gate(api, wf_name, params)
+        self._apply_prompt_enhance(api, bridge, text)
         for target in bridge.get("prompt_targets", []):
             node = api.get(target["node"])
             if node:

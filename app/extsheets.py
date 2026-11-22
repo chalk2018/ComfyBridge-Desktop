@@ -34,8 +34,12 @@ CAP_OF = {SCENE: "sheet.scene", PROP: "sheet.prop"}
 LIB_PATHS = {SCENE: ROOT / "prompts" / "scene_sheet.json",
              PROP: ROOT / "prompts" / "prop_sheet.json"}
 CHAR_LIB_PATH = ROOT / "prompts" / "character_sheet.json"
-WF_T2I = "设定图-文生图"
-WF_I2I = "设定图-参考生图"
+# 每个能力用自己独立的工作流，不再和角色设定图共用一对（1.06 单点测试拆分）。
+# 命名与 config.yaml 的 workflows / capabilities[].rules 完全一致。
+WF_OF = {
+    SCENE: {"t2i": "场景设定图-文生图", "i2i": "场景设定图-参考生图"},
+    PROP: {"t2i": "道具设定图-文生图", "i2i": "道具设定图-参考生图"},
+}
 MASTER = "默认"
 MASTER_ALIASES = (MASTER, "母版")
 MAX_SCENE = 1200
@@ -122,7 +126,7 @@ def library_view(kind: str) -> dict[str, Any]:
         "ink_modes": d.get("ink_modes", []),
         "variable_hints": d.get("variable_hints", {}),
         "styles": d.get("styles") or cl.get("styles", []),
-        "line_styles": cl.get("line_styles", []),
+        "line_styles": d.get("line_styles") or cl.get("line_styles", []),
         "line_style_overlay": cl.get("line_style_overlay", {}),
         "line_style_profiles": cl.get("line_style_profiles", {}),
     }
@@ -145,11 +149,16 @@ def style_text(style: str, kind: str = SCENE) -> str:
     return text
 
 
-def line_style_text(line_style: str | None) -> str:
-    items = char_lib().get("line_styles", [])
+def line_style_text(line_style: str | None, kind: str = SCENE) -> str:
+    # 用本能力自己的线稿母版（场景/道具已各自定制），缺该风格才回角色库兜底，
+    # 避免把「角色设定图」字样带进场景/道具提示词。
+    items = lib(kind).load().get("line_styles") or []
     if not line_style:
         return items[0]["text"] if items else ""
     for item in items:
+        if item["id"] == line_style or item["name"] == line_style:
+            return item["text"]
+    for item in char_lib().get("line_styles", []):
         if item["id"] == line_style or item["name"] == line_style:
             return item["text"]
     raise ExtSheetError(f"没有这个线稿风格：{line_style}")
@@ -289,7 +298,7 @@ def compose_scene(
     # 画法 + 风格：扩图两者都没有
     if mode in ("t2i", "i2i"):
         if ink == "line":
-            pieces.append(line_style_text(line_style))
+            pieces.append(line_style_text(line_style, SCENE))
             use_style = style_text_val if style_custom else style
             if use_style:
                 pieces.append(line_overlay(use_style))
@@ -628,7 +637,7 @@ def compose_prop(
             pieces.append(str(blocks.get("SINGLE", {}).get("text", "")))
 
     if ink == "line":
-        pieces.append(line_style_text(line_style))
+        pieces.append(line_style_text(line_style, PROP))
         use_style = style_text_val if style_custom else style
         if use_style:
             pieces.append(line_overlay(use_style))
@@ -691,7 +700,7 @@ def _combos_scene() -> list[dict[str, Any]]:
                         "subs": subs,
                         "ink": ink, "nochar": nc, "ratio": "16:9",
                         "size": "1536 × 864", "aspect": lay["aspect"],
-                        "wf": WF_T2I if mid == "t2i" else WF_I2I,
+                        "wf": WF_OF[SCENE]["t2i"] if mid == "t2i" else WF_OF[SCENE]["i2i"],
                         "style": str(m.get("style", "none")),
                         "promptRequired": bool(m.get("promptRequired")),
                         "name": f"{lay['name']} · {m['name']}",
@@ -713,7 +722,7 @@ def _combos_prop() -> list[dict[str, Any]]:
                         "mode": mid, "modeName": str(m["name"]), "group": f"{mid}.{lay['id']}",
                         "groupName": f"{lay['name']}·{m['name']}", "subGroup": "",
                         "ink": ink, "ref": ref, "ratio": "16:9", "size": "1536 × 864",
-                        "aspect": lay["aspect"], "wf": WF_T2I if mid == "t2i" else WF_I2I,
+                        "aspect": lay["aspect"], "wf": WF_OF[PROP]["t2i"] if mid == "t2i" else WF_OF[PROP]["i2i"],
                         "style": str(m.get("style", "none")), "promptRequired": True,
                         "name": f"{lay['name']} · {m['name']}",
                     })

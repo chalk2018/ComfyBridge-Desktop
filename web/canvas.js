@@ -44,7 +44,7 @@
      image / video / audio = 只收这一类；any = 图片 / 视频 / 音频都收（参考生视频） */
   var REF_KIND = {
     t2i: 'none', imagegen: 'image',
-    sheetchar: 'none', sheetchar_i2i: 'image',
+    sheetchar: 'none', sheetchar_lock: 'image', sheetchar_style: 'image',
     sheetscene: 'none', sheetscene_i2i: 'image', sheetscene_expand: 'image',
     sheetprop: 'none', sheetprop_i2i: 'image', board: 'image',
     t2v: 'none', fl2v: 'image', videogen: 'any', board2v: 'image',
@@ -285,7 +285,9 @@
       style: n.style || '', styleCustom: true, styleText: n.styleText || '',
       grades: (func && func.grades) || [], grade: n.grade || '',
       placeholder: '描述画面；接了素材可以用 @ 引用',
-      show: { upload: false, template: false, seeFull: false, hints: false, kbd: false, emptyHint: false },
+      // 和创作台图片生成的图生图一致：隐藏「风格」行（模板入口也不放），
+      // 只留画法/线稿/档位。参考图靠连线接入，所以上传也关掉。
+      show: { upload: false, template: false, style: false, seeFull: false, hints: false, kbd: false, emptyHint: false },
       editorAttrs: 'data-prompt="1"',
     });
   }
@@ -370,9 +372,9 @@
     var kind = kindOf(n), f = funcFor(kind);
     if (f.gradesFrom !== 'combo') return f.grades || [];
     var c = cfgOf(n);
-    // 角色设定图：文生图永远按 ref=none 查；图生图按当前参考方式查
-    if (kind === 'sheetchar' || kind === 'sheetchar_i2i') {
-      var ref = kind === 'sheetchar_i2i' ? (c.ref || 'lock') : 'none';
+    // 角色设定图三项子功能各自固定参考方式：文生图 none / 锁定同角色 lock / 只借画风 style
+    if (kind === 'sheetchar' || kind === 'sheetchar_lock' || kind === 'sheetchar_style') {
+      var ref = kind === 'sheetchar_lock' ? 'lock' : kind === 'sheetchar_style' ? 'style' : 'none';
       var sc = (typeof sheetCombos === 'function' ? sheetCombos() : []).filter(function (x) {
         return x.layout === c.layout && x.ink === (c.ink || 'color') && x.ref === ref;
       })[0];
@@ -534,27 +536,30 @@
       placeholder: '描述画面：主体 + 构图 + 光线 + 氛围',
     }, n));
   }
-  /* 角色设定图：文生图节点不接参考，图生图节点接 1 张参考（锁定同角色 / 只借画风）。
-     两者共用同一条版式 × 画法 × 参考 组合的档位表。 */
+  /* 角色设定图：和创作台一致，三项子功能各是一个独立节点，参考方式由节点类型固定
+     （文生图 none / 锁定同角色 lock / 只借画风 style），节点内不再切「参考」。
+     三者共用同一条版式 × 画法 × 参考 组合的档位表。 */
   function sheetInput(n) {
     var kind = kindOf(n), lib = typeof sheetLib === 'function' ? sheetLib() : {};
     var layouts = lib.layouts || [];
-    var c = cfgOf(n), i2i = kind === 'sheetchar_i2i';
-    if (!i2i) c.ref = 'none';
-    // 图生图没接参考时也先把参考方式摆出来（默认锁定同角色），接上就是它
-    if (i2i && !c.ref) c.ref = 'lock';
+    var c = cfgOf(n);
+    var ref = kind === 'sheetchar_lock' ? 'lock' : kind === 'sheetchar_style' ? 'style' : 'none';
+    var i2i = ref !== 'none';
+    c.ref = ref;                       // 节点类型即参考方式，不让旧配置里的 ref 影响提交
     var rr = i2i ? refsRow(n) : { refs: [], html: '' };
     var before = layoutBar(n, layouts) + inkBar(n, lib);
     if (i2i) {
-      before += cseg('ref', c.ref, [{ v: 'lock', label: '锁定同角色' }, { v: 'style', label: '只借画风' }], '参考',
-        c.ref === 'style' ? '图 1 只借画风笔触' : '图 1 就是这个人');
-      before += rr.html;
+      // 和创作台子功能说明同一句话，让用户一眼知道这个节点怎么用参考图
+      before += '<div class="sheetbar"><span class="slb">参考</span><span class="tiny muted">'
+        + (ref === 'style' ? '图 1 只借画风笔触，人物照文字新写' : '图 1 就是这个人：不换人、不改性别')
+        + '</span></div>' + rr.html;
     }
     return GenUI.genInput(withBase({
       before: before,
-      after: gradeBar(n, gradesFor(n)) + styleBars(n, lib),
+      // 文生图没有参考图，画风靠风格下拉；图生图两项画风来自参考图，不显示风格。
+      after: gradeBar(n, gradesFor(n)) + (i2i ? '' : styleBars(n, lib)),
       prompt: n.prompt || '', refs: rr.refs,
-      placeholder: i2i ? '角色描述（可留空，留空就按参考图还原这个角色）'
+      placeholder: i2i ? '角色描述（可留空）：只做图片转换时不用写，直接生成即可'
         : '角色描述：年龄身份 + 脸型五官 + 发型发色 + 服装分件 + 2~3 个标志物',
     }, n));
   }
@@ -665,7 +670,7 @@
     if (kind === 'imagegen') return imageInputFor(n);
     if (kind === 'videogen') return videoInputFor(n);
     if (kind === 't2i') return t2iInput(n);
-    if (kind === 'sheetchar' || kind === 'sheetchar_i2i') return sheetInput(n);
+    if (kind === 'sheetchar' || kind === 'sheetchar_lock' || kind === 'sheetchar_style') return sheetInput(n);
     if (kind === 'sheetscene' || kind === 'sheetscene_i2i' || kind === 'sheetscene_expand') return extInput(n, 'scene');
     if (kind === 'sheetprop' || kind === 'sheetprop_i2i') return extInput(n, 'prop');
     if (kind === 'board') return boardInput(n);
@@ -687,17 +692,25 @@
       // 图生图节点沿用 1.05 的字段（ink/style/styleText 直接挂在节点上），
       // 其它图片类节点统一用 cfg；两者最终都变成同一份 ImageStylePayload。
       var st = kind === 'imagegen' ? n : c;
-      body.image = {
-        ink: st.ink || 'color', lineStyle: st.lineStyle || '',
-        style: st.style || '', styleCustom: st.styleCustom !== false, styleText: st.styleText || '',
-      };
-    } else if (kind === 'sheetchar' || kind === 'sheetchar_i2i') {
-      var i2i = kind === 'sheetchar_i2i';
+      // 画布「图片-参考生图」和创作台图生图是同一个能力：界面隐藏了风格行，
+      // 提交也得按 imgPayload 的图生图口径——只保留画法/线稿，风格字段清空。
+      // 否则节点里残留的旧风格文字会被服务端 compose 进提示词，和创作台出图不一致。
+      body.image = kind === 'imagegen'
+        ? { ink: st.ink || 'color', lineStyle: st.ink === 'line' ? (st.lineStyle || '') : null,
+            styleCustom: true, style: '', styleText: '' }
+        : { ink: st.ink || 'color', lineStyle: st.lineStyle || '',
+            style: st.style || '', styleCustom: st.styleCustom !== false, styleText: st.styleText || '' };
+    } else if (kind === 'sheetchar' || kind === 'sheetchar_lock' || kind === 'sheetchar_style') {
+      // 参考方式由节点类型固定，和创作台三项子功能走同一条提交链路
+      var ref = kind === 'sheetchar_lock' ? 'lock' : kind === 'sheetchar_style' ? 'style' : 'none';
       body.sheet = {
         layout: c.layout, character: prompt,
-        style: c.style || '', styleCustom: c.styleCustom !== false, styleText: c.styleText || '',
+        // 文生图没有参考图，风格由风格下拉决定；图生图两项画风靠参考图，不提交风格
+        style: ref === 'none' ? (c.style || '') : '',
+        styleCustom: ref === 'none' ? (c.styleCustom !== false) : false,
+        styleText: ref === 'none' ? (c.styleText || '') : '',
         ink: c.ink || 'color', lineStyle: c.lineStyle || '',
-        ref: i2i ? (c.ref || 'lock') : 'none', grade: n.grade || '',
+        ref: ref, grade: n.grade || '',
       };
     } else if (kind === 'sheetscene' || kind === 'sheetscene_i2i' || kind === 'sheetscene_expand'
       || kind === 'sheetprop' || kind === 'sheetprop_i2i') {
@@ -846,6 +859,10 @@
     btn.onclick = function (ev) { ev.stopPropagation(); cutEdge(CS.scissor); };
     CS.stage.appendChild(btn);
   }
+  // 需求6：给画布节点的输入块加移动端「收起/展开」把手（复用 app.js 的全局注入逻辑）
+  function foldNodeBoxes() {
+    if (typeof window.enhanceFoldHandles === 'function') window.enhanceFoldHandles();
+  }
   function paintAll() {
     if (!CS.world) return;
     var nodes = (CS.project && CS.project.nodes) || [];
@@ -861,6 +878,7 @@
     paintLinks();
     updateBar();
     syncAssetSizes();
+    foldNodeBoxes();
   }
   function repaintNode(n) {
     var old = $q('.cnode[data-id="' + n.id + '"]', CS.world);
@@ -870,6 +888,7 @@
     old.replaceWith(box.firstChild);
     paintLinks();
     syncAssetSizes();
+    foldNodeBoxes();
   }
 
   /* 资产卡右下角的尺寸角标：结果块的尺寸是任务给的，素材得自己量（图片看 naturalSize，
@@ -1196,7 +1215,7 @@
     // 提交体和创作台 /api/tasks 完全同一套结构化输入（见 taskBody）
     var body = taskBody(n);
     // 图生图 / 扩图 / 首尾帧必须有参考图：没接素材直接提醒，别让后端白白拒一次
-    var needsRef = kind === 'sheetchar_i2i' || kind === 'sheetscene_i2i'
+    var needsRef = kind === 'sheetchar_lock' || kind === 'sheetchar_style' || kind === 'sheetscene_i2i'
       || kind === 'sheetscene_expand' || kind === 'sheetprop_i2i' || kind === 'fl2v';
     if (needsRef && !body.inputs.length) {
       tip(kind === 'fl2v' ? '先在左侧「首帧」接一张图' : '先在左侧上传位接一张参考图');
@@ -1215,7 +1234,7 @@
     }
     // 允许「零描述」的情况：故事板逐格可留空、扩图只靠参考图、图生图纯转换
     var noPromptOk = kind === 'board' || kind === 'board2v'
-      || kind === 'sheetchar_i2i' || kind === 'sheetscene_expand'
+      || kind === 'sheetchar_lock' || kind === 'sheetchar_style' || kind === 'sheetscene_expand'
       || (kind === 'sheetprop_i2i' && body.inputs.length);
     if (!body.prompt && !body.inputs.length && !noPromptOk) {
       tip('写点描述，或者先接一个素材再生成'); return;
@@ -1699,6 +1718,13 @@
       }
       return;
     }
+    // 图生图节点的「线稿风格句」下拉（GenUI inkRow 的 data-cline）：和创作台 imgLine.onchange
+    // 一样写回节点。之前画布这边没处理，选 G1–G4 存不住、提交永远是默认线稿。
+    if (t.matches('[data-cline]')) {
+      var cardL = t.closest && t.closest('.cnode'), nL = cardL && nodeById(cardL.getAttribute('data-id'));
+      if (nL) { nL.lineStyle = t.value; repaintNode(nL); saveSoon(); }
+      return;
+    }
     // 子功能节点的下拉（风格预设 / 线稿风格句）
     if (t.matches('[data-csel]') && !t.matches('[data-cdur="num"]')) {
       var card3 = t.closest && t.closest('.cnode');
@@ -1907,20 +1933,27 @@
     return await openProject(res.data.id);
   }
 
-  /* 1.04 → 1.05 的旧画布兼容：
+  /* 旧画布兼容：
      - 场景 / 道具的「文生图·图生图·扩图」原来是同一个节点靠 cfg.mode 切换，现在拆成三个节点
-     - 角色设定图原来一个节点兼文生图 / 图生图，现在拆开：有连线的老节点算图生图
+     - 角色设定图原来是「文生图 + 一个图生图节点内切参考」，现在和创作台一致拆成三项：
+       老图生图节点按它保存的 cfg.ref 归到锁定 / 只借画风；老「文生图」节点接了线的也算图生图
      - 多连接点节点（场景图生图/扩图 4 位、首尾帧 2 位）的老连线没有槽位，按顺序补 */
   function migrateProject(p) {
     var edges = p.edges || [];
-    var hollow = ['文生图', '图生图', '图片生成', '视频生成', '角色设定图', '场景设定图', '道具设定图',
+    var hollow = ['文生图', '图生图', '图片生成', '视频生成', '角色设定图', '角色设定图-图生图',
+      '场景设定图', '道具设定图',
       '文生视频', '首尾帧生视频', '参考生视频', '故事板生视频', '音乐生成', '参考生成音乐', '语音生成', '声音克隆'];
     p.nodes.forEach(function (n) {
       var c = n.cfg || {};
       if (n.kind === 'sheetscene' && c.mode === 'i2i') n.kind = 'sheetscene_i2i';
       if (n.kind === 'sheetscene' && c.mode === 'expand') n.kind = 'sheetscene_expand';
       if (n.kind === 'sheetprop' && c.mode === 'i2i') n.kind = 'sheetprop_i2i';
-      if (n.kind === 'sheetchar' && edges.some(function (e) { return e.to === n.id; })) n.kind = 'sheetchar_i2i';
+      // 老图生图节点 → 按原参考方式归到两个新节点之一（默认锁定同角色）
+      if (n.kind === 'sheetchar_i2i') n.kind = c.ref === 'style' ? 'sheetchar_style' : 'sheetchar_lock';
+      // 更老的版本：一个「角色设定图」节点靠连线区分文生图 / 图生图
+      if (n.kind === 'sheetchar' && edges.some(function (e) { return e.to === n.id; })) {
+        n.kind = c.ref === 'style' ? 'sheetchar_style' : 'sheetchar_lock';
+      }
       if (c && c.mode) delete c.mode;
       var f = funcFor(n.kind);
       if (f.name && (!n.title || hollow.indexOf(n.title) >= 0)) n.title = f.name;

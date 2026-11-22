@@ -211,6 +211,35 @@
     "field": "switch",
     "value": true
   },
+  "prompt_enhance": {
+    "node": "459_484",
+    "field": "switch",
+    "value": true,
+    "unless_any": [
+      "设定图",
+      "设定表",
+      "三视图",
+      "多视图",
+      "多视角",
+      "全身面板",
+      "面板组成",
+      "等分",
+      "分镜",
+      "故事板",
+      "画布",
+      "版式",
+      "character sheet",
+      "model sheet",
+      "turnaround",
+      "reference sheet"
+    ],
+    "system_prompt_append": {
+      "node": "459_479",
+      "field": "value",
+      "before": "The user's edit instruction to rewrite is:",
+      "text": "\n\n## CRITICAL — WHEN STYLE/COLOR TRANSFER IS REQUESTED (highest priority)\nWhen the user explicitly asks a subject's colors, palette, material or rendering style to follow another image (e.g. 配色和风格都要沿用<image1>, match the color/style of the other image, recolor to match), those attributes are EDIT TARGETS, not identity.\n- In that case preserve only structural identity: facial features, hairstyle, garment cut/shape, pose, accessory types. NEVER say \"keep all appearance/colors unchanged\" and NEVER list the original colors as things to preserve.\n- State affirmatively and forcefully: the subject's color palette, material and rendering style are REPLACED by the source image's, and name that source's concrete colors. Identity = structure/shape only; color and rendering style come from the source image.\n- Never give contradictory instructions that both preserve the original colors and change them to the source's. When a color/style transfer is requested, the source image's look wins. Also keep the subject's face/pose from the subject image (do not swap in a different person from the canvas image).\n\n\n## DEFAULT — MULTI-IMAGE SUBJECT-IN-SCENE COMPOSITING (when the user is silent on color)\nWhen multiple images are given AND the user's instruction is essentially PLACING a subject from one image INTO the scene / environment / setting of another image (e.g. 把<image2>的角色放进<image1>的场景, 角色坐在<image1>中的王座上, place / put / insert / composite the subject into the other image's setting), AND the user has NOT explicitly asked to keep the subject's original colors NOR explicitly asked to recolor / match a specific image, then this is a scene-compositing task rather than a color-preservation task:\n- By DEFAULT, the placed subject's color palette, material and rendering style are REPLACED by the destination scene image's look — not merely relit. Read the destination scene's concrete dominant colors, light color/direction and rendering medium from the image, NAME those concrete colors, and state affirmatively that the subject's clothing, skin and hair colors are changed to those scene colors so the subject reads as originally belonging to that environment. Do not leave the subject in its original palette.\n- Preserve only the subject's STRUCTURAL identity: facial identity, hairstyle, garment cut/shape, pose, accessory types. The subject's original color palette and rendering medium are NOT locked identity in this scenario — adapt them to the destination scene.\n- Leave the destination scene's own composition, architecture, background and lighting unchanged.\n- Do NOT turn the placed subject away from the viewer unless the user asked for it; a subject inserted into a scene should face the viewer / camera naturally so it reads as the hero of the composition.\n\n## HARD EXCEPTIONS — do NOT apply the default harmonizing above\nIf the user explicitly asks any of the following, obey the user literally and do NOT blend the subject's colors into the destination scene:\n- Keep / preserve / do not change the subject's original colors, palette or appearance (保持原配色 / 颜色不变 / 沿用自身颜色 / 不要改颜色 / 保留原本的颜色).\n- Extract / isolate / cut out / separate a specific object or person from a complex image (提取 / 拆出 / 抠出 / 分离 / 只保留某物 / 把某物拆出来), even when other images are present — the extracted subject keeps its exact original look.\n- A line-art / black-and-white-only / pure-sketch result (线稿 / 黑白 / 不上色 / 单色), where no color transfer applies at all.\n- A reference sheet / character sheet / model sheet / turnaround / layout / storyboard (设定图 / 三视图 / 多视图 / 分镜 / 版式) — these are not subject-in-scene compositing.\nIn these exception cases, treat the user-named attributes as fixed and leave everything else at input fidelity.\n"
+    }
+  },
   "class_types": {
     "459_451": "UNETLoader",
     "459_453": "CLIPLoader",

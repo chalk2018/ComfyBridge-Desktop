@@ -24,6 +24,7 @@ from .promptlib import SheetError, library as sheet_library
 from .services import service
 from .state import state
 from . import audiolib, canvas, imagestylelib, videolib
+from .prompttemplates import router as prompt_templates_router
 
 WEB_DIR = ROOT / "web"
 logger = logging.getLogger("comfybridge.api")
@@ -268,8 +269,10 @@ async def lifespan(_app: FastAPI):
         pass
 
 
-app = FastAPI(title="ComfyBridge", version="1.01", lifespan=lifespan)
+app = FastAPI(title="ComfyBridge", version="1.06", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+# 1.06：提示词模板库独立 router，不改任务/工作流/画布那套状态
+app.include_router(prompt_templates_router)
 # 右栏任务累积多了以后 /api/state 会到几 MB，每秒轮询一次没有压缩会很卡（浏览器甚至会被拖死）
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 _STATE_CACHE: dict[str, Any] = {"at": 0.0, "body": None}
@@ -325,15 +328,11 @@ def _prepare_sheet(
     layout = sheet_library.layout(payload.layout)
     cid = combos.combo_id(str(layout["id"]), payload.ink, ref_mode)
     info = combos.meta(cid)
-    wf_name, _why = pick_workflow(cap, len(refs))
-    if not wf_name:
-        raise SheetError("这个能力还没配置工作流")
-    if wf_name != info["wf"]:
-        # 组合推出的工作流和 config 的规则对不上：宁可报错，也别拿参考生图跑文生图组合
-        raise SheetError(
-            f"组合「{info['name']}」要用「{info['wf']}」，但当前规则挑到「{wf_name}」，"
-            "请检查能力里的工作流规则"
-        )
+    # 1.07：三种子功能各有独立工作流，组合已经算出该走哪条；
+    # cap.rules 仍按参考图张数做通用兜底，但设定图以组合配方为准。
+    wf_name = info["wf"]
+    if wf_name not in (cap.get("workflows") or []):
+        raise SheetError(f"能力里没有配置工作流「{wf_name}」，请先回管理台补上")
     grade_name = (payload.grade or combos.MASTER).strip() or combos.MASTER
     grade = combos.find_grade(cid, grade_name)
     if not grade:
@@ -530,7 +529,15 @@ def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tu
     brief = ""
     video_info: dict[str, Any] | None = None
     audio_info: dict[str, Any] | None = None
+    # 「基于上一条」要把用户原话和画法/线稿选项整条带回。服务端 job.prompt 存的是
+    # compose 之后的成片提示词（含线稿前缀/尾缀），直接回填会二次拼装、把旧线稿句
+    # 写死在开头（用户报的「4 个线稿选项切换无效」）。所以另存一份拼装前的原话和
+    # 结构化 image，供 refine 精确复原。只对图片生成能力生效，别的能力是 None。
+    raw_prompt: str | None = None
+    image_info: dict[str, Any] | None = None
     if body.image is not None and body.capId == "image.generate":
+        raw_prompt = body.prompt
+        image_info = body.image.model_dump()
         # 需求2：画法 / 风格从「图片生成通用模板」取（主体无关），和角色设定图库分开。
         prompt = compose_image_prompt(prompt, body.image)
     if body.video is not None:
@@ -625,7 +632,7 @@ def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tu
     accepted, job_id, reason = service.submit_normal(
         body.capId, prompt, grade, body.refs, wf=wf, sheet=sheet_info, brief=brief,
         params=params, tag=tag, video=video_info, audio=audio_info,
-        archive_folder=archive_folder)
+        image=image_info, raw_prompt=raw_prompt, archive_folder=archive_folder)
     return accepted, job_id, reason
 
 

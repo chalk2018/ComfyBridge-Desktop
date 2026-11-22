@@ -140,6 +140,9 @@ class AppState:
             "editingWfIndex": 0,
             "gOpen": 0,
             "draft": {"name": "", "values": {}},
+            # 1.06 提示词模板库：浮动小窗开关与位置（只在创作台显示）
+            "promptDock": False,
+            "promptDockPos": None,
         }
         self.refs = RefStore()
         self.comfy_online = False

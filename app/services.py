@@ -266,7 +266,7 @@ class TaskService:
         with state.lock:
             for key in ("capId", "route", "adminPage", "galleryFilter", "wizardSeen",
                         "drafts", "editingWfIndex", "gOpen", "draft",
-                        "railMin", "drawerMin"):
+                        "railMin", "drawerMin", "promptDock", "promptDockPos"):
                 if key in patch:
                     state.ui[key] = patch[key]
         state.persist()
@@ -420,6 +420,7 @@ class TaskService:
         brief: str = "", params: dict[str, Any] | None = None,
         tag: str | None = None, archive_folder: str | None = None,
         video: dict[str, Any] | None = None, audio: dict[str, Any] | None = None,
+        image: dict[str, Any] | None = None, raw_prompt: str | None = None,
     ) -> tuple[bool, str, str]:
         """发送 / 再来一张 / 重试：新开一张卡，忙了只提示。返回 (ok, job_id, reason)。
 
@@ -508,6 +509,13 @@ class TaskService:
             job["video"] = copy.deepcopy(video)
         if audio:
             job["audio"] = copy.deepcopy(audio)
+        if image is not None:
+            # 图片生成的画法/线稿/风格整条存下来，「基于上一条」才能把选项带回来。
+            job["image"] = copy.deepcopy(image)
+            # prompt 字段是 compose 后的成片提示词（带线稿前缀/尾缀），回填会二次拼装；
+            # rawPrompt 是用户原话，refine 优先用它。老的 job 没这个字段，前端会回退到 prompt。
+            if raw_prompt is not None:
+                job["rawPrompt"] = raw_prompt
         if params is not None:
             # 参数跟着任务走：换档重跑、再来一张都要拿回同一份覆盖，不能靠名字重查
             job["params"] = copy.deepcopy(params)
@@ -605,6 +613,7 @@ class TaskService:
             # 「再来一张」也要留在画布目录里，不能因为重跑又回到「图片生成」
             archive_folder=job.get("archiveFolder") or None,
             video=job.get("video"), audio=job.get("audio"),
+            image=job.get("image"), raw_prompt=job.get("rawPrompt"),
         )
 
     def cancel(self, run_id: str) -> bool:

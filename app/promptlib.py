@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,32 @@ SLOT_VARS = "vars"
 
 MAX_CHARACTER = 1200
 MAX_STYLE = 400
+
+# 黑白线稿：从角色描述里剥离颜色词。用户写「黑色长直发 / 浅蓝色开衫」是给彩色版用的，
+# 黑白版把这些词带进去，模型仍会照着上色（实测 W6 残留蓝/棕/红）。这里只删明确的
+# 颜色表达，保留形体、材质、配件等非颜色信息；彩色版与彩铅版一律不经过这个函数。
+# 长词在前，避免「浅棕色」被「棕色」先吃掉一半。
+COLOR_TOKENS = [
+    "米白色", "乳白色", "象牙白", "雪白色", "藕粉色", "裸粉色", "豆沙色", "雾霾蓝",
+    "卡其色", "咖啡色", "巧克力色", "亚麻色", "驼色", "栗色",
+    "深棕色", "浅棕色", "棕红色", "棕黄色", "浅蓝色", "深蓝色", "天蓝色", "湖蓝色",
+    "宝蓝色", "藏蓝色", "靛蓝色", "蔚蓝色", "墨绿色", "草绿色", "军绿色", "橄榄绿",
+    "酒红色", "枣红色", "玫红色", "桃红色", "粉红色", "橘红色", "橘黄色", "鹅黄色",
+    "金黄色", "土黄色", "银灰色", "烟灰色", "铅灰色", "炭灰色", "米灰色", "银白色",
+    "乌黑色", "漆黑色", "墨黑色", "朱红色", "赤红色",
+    "黑色", "白色", "红色", "蓝色", "绿色", "黄色", "紫色", "橙色", "粉色", "灰色",
+    "棕色", "褐色", "金色", "银色", "青色", "赤色", "朱色",
+]
+COLOR_RE = re.compile("(?:" + "|".join(re.escape(w) for w in sorted(COLOR_TOKENS, key=len, reverse=True)) + r")(?:的)?")
+
+
+def strip_color_words(text: str) -> str:
+    """通用剥离中文颜色词，供黑白线稿使用；不改动传入的原文。"""
+    out = COLOR_RE.sub("", str(text or ""))
+    # 清掉剥离后留下的空修饰：「、，」连续、行首多余标点
+    out = re.sub(r"[、，]{2,}", "、", out)
+    out = re.sub(r"(?:^|[、，])\s*(?=[、，。])", "", out)
+    return out.strip()
 
 # 提示词库缺这两个新字段时的兜底模板（老版本库文件也能正常拼装）
 DEFAULT_LINE_OVERLAY = (
@@ -141,12 +168,20 @@ class SheetLibrary:
         return text
 
     def line_style(self, line_style: str | None) -> dict[str, Any]:
-        """线稿风格句；不传就用第一条（针管笔）。"""
+        """线稿风格句；不传就用第一条（彩铅线稿）。
+
+        1.07 把旧的 W1~W4 四种黑白线稿收敛为 W5 彩铅 / W6 黑白两种。
+        历史任务与草稿里可能还存着 W1~W4，静默映射到黑白线稿，
+        避免「再来一张」因为找不到旧风格而报错；新界面只显示 W5/W6。
+        """
         items = self.load()["line_styles"]
-        if not line_style:
+        old_alias = {"W1": "W6", "W2": "W6", "W3": "W6", "W4": "W6"}
+        want = str(line_style or "").strip()
+        want = old_alias.get(want, want)
+        if not want:
             return items[0]
         for item in items:
-            if item["id"] == line_style or item["name"] == line_style:
+            if item["id"] == want or item["name"] == want:
                 return item
         raise SheetError(f"没有这个线稿风格：{line_style}")
 
@@ -191,8 +226,8 @@ class SheetLibrary:
         Args:
             layout_id: 版式 id（A 四视图横排 / B 四宫格 / C 单张全身）
             character: 角色行正文（年龄身份 + 五官 + 发型发色 + 服装分件 + 标志物）
-            style: 风格预设名，或一句自写风格
-            ink: color 彩色 / line 线稿（风格行整行换成线稿句，另起一行带画风的造型气质）
+            style: 兼容旧调用保留；1.06 起角色设定图不再注入任何固定风格句
+            ink: color 彩色 / line 线稿（线稿句仍由「画法」决定，与风格无关）
             ref: none 无参考 / lock 锁定同角色（R1 插在角色行前）/ style 只借画风（R2 提到最前）
             line_style: 线稿风格句 id（W1~W4），仅 ink=line 时生效
             allow_empty_character: 图生图纯转换场景（单人图转四视图 / 彩色转线稿）允许不写角色行
@@ -216,25 +251,43 @@ class SheetLibrary:
             raise SheetError("参考方式只能是 无参考图 / 锁定同角色 / 只借画风")
 
         blocks = lib["blocks"]
-        # 线稿：风格行整行换成线稿句，画风另起一行只借造型气质；
-        # 彩色：风格行用风格预设 / 自写句
+        # 风格注入按参考方式分：
+        # - 文生图（ref=none）：本来就没有参考图，画风靠「风格」下拉，恢复原样注入；
+        # - 图生图（ref=lock/style）：画风来自参考图，不注入固定风格句，避免写死画风。
+        # 用户自己写进角色描述的任何画风始终原样保留，两种路径都不覆盖它。
+        style_line = ""
         extra_line = ""
+        suffix = ""
+        monochrome = False
         if ink == "line":
-            style_line = self.line_style(line_style)["text"]
-            extra_line = self.line_style_overlay(lib, style)
-        else:
+            line_item = self.line_style(line_style)
+            style_line = line_item["text"]
+            # 黑白线稿：连用户描述里的颜色词一起剥掉，别让模型照着词上色。
+            # 彩铅线稿 / 彩色模式绝不走这条路。
+            monochrome = (
+                bool(line_item.get("monochrome"))
+                or str(line_item.get("id", "")) == "W6"
+                or "黑白" in str(line_item.get("name", ""))
+            )
+            if monochrome and character:
+                character = strip_color_words(character)
+            # 线稿 + 锁定同角色：保留原先行尾的「线条风格跟图 1 一致」约束，
+            # 这是画法配方的一部分，不是「风格」下拉的内容。
+            if ref == "lock":
+                suffix = "，整体线条风格与图 1 保持一致，画风与图 1 保持一致"
+            # 文生图线稿：恢复原来的 overlay，把「风格」下拉翻译成只借造型/线条气质的一行
+            if ref == "none":
+                extra_line = self.line_style_overlay(lib, style)
+        elif ref == "none":
+            # 文生图彩色：恢复原来的风格句（预设命中用预设句，否则用自写句）
             style_line = self.style_text(style)
             if len(style_line) > MAX_STYLE:
                 raise SheetError("风格描述太长了，一两句就够")
-
-        # 参考图声明：lock 只影响「风格行尾巴」，style 还要提到最前面
-        suffix = ""
-        if ref == "lock":
-            suffix = ("，整体线条风格与图 1 保持一致，画风与图 1 保持一致"
-                      if ink == "line" else "，画风与图 1 保持一致")
         # 图生图纯转换场景（allow_empty_character）不写角色行，避免空着「角色：」干扰画面；
         # 画幅/版式/参考声明仍由其它段落照常拼进去。
-        variables = (f"角色：{character}\n" if character else "") + f"风格：{style_line}{suffix}"
+        variables = (f"角色：{character}\n" if character else "")
+        if style_line:
+            variables += f"风格：{style_line}{suffix}"
         if extra_line:
             variables += "\n" + extra_line
 
@@ -283,7 +336,8 @@ class SheetLibrary:
         bits = [layout["name"], ink_name]
         if ref_name:
             bits.append(ref_name)
-        if style and style not in bits:
+        # 文生图的风格进标题；图生图画风来自参考图，不显示一个并未生效的画风
+        if not ref_name and style and style not in bits:
             bits.append(str(style))
         return " · ".join(bits + ([head] if head else []))
 

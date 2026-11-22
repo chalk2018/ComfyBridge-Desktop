@@ -106,6 +106,18 @@ select.input{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg 
 .topbar{position:sticky;top:0;z-index:50}
 /* 「未连接」的短文案只在手机上用，桌面上照旧显示整句 */
 .topbar .health .txt-short{display:none}
+/* 顶栏「提示词模板」开关：和提示词速取窗共用一个状态 */
+.pt-top-switch{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 9px 0 7px;border:1px solid var(--line);
+  border-radius:9px;background:#fff;color:var(--ink2);font-size:12px;white-space:nowrap;cursor:pointer;flex:0 0 auto}
+.pt-top-switch:hover{border-color:var(--accent)}
+.pt-top-switch .pts-track{position:relative;width:30px;height:17px;border-radius:10px;background:#cfd6e2;transition:background .16s;flex:0 0 30px}
+.pt-top-switch .pts-knob{position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(20,30,50,.25);display:flex;align-items:center;justify-content:center;transition:transform .16s}
+.pt-top-switch .pts-knob svg{display:none;width:9px;height:9px;color:#5f6b7a}
+.pt-top-switch .pts-label{line-height:1}
+.pt-top-switch.on .pts-track{background:var(--accent)}
+.pt-top-switch.on .pts-knob{transform:translateX(13px)}
+.pt-top-switch.on .pts-label{color:var(--accent);font-weight:600}
 .studio{flex:1;display:grid;--railw:224px;--draww:232px;grid-template-columns:var(--railw) minmax(0,1fr) var(--draww);align-items:start;transition:grid-template-columns .16s}
 .rail{background:#fafbfe;border-right:1px solid var(--line);padding:12px 10px 24px;position:sticky;top:52px;align-self:start;max-height:calc(100vh - 52px);overflow-y:auto}
 .rail .group{font-size:11px;font-weight:700;color:var(--ink3);padding:10px 8px 6px;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center}
@@ -786,10 +798,13 @@ audio{width:100%;height:34px}
   /* 菜单按钮移到最左（豆包那种摆法），logo 跟着排第二 */
   .topbar .navbtn{order:-2}
   .topbar .brand{order:-1}
-  /* 健康状态单独居中：绝对定位到中轴，两侧按钮各占一边，互不挤压 */
-  .topbar .health{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;
-    padding:3px 8px;gap:4px;font-size:10.5px;flex:0 0 auto;max-width:calc(100% - 176px);
+  /* 健康状态：不再绝对居中。新增「提示词模板」开关后右侧有 4 个按钮，
+     绝对居中会压到第 1 个（任务）图标；改为跟随 flex 排布，spacer 挤在它和按钮之间。 */
+  .topbar .health{position:static;transform:none;margin:0;
+    padding:3px 8px;gap:4px;font-size:10.5px;flex:0 1 auto;min-width:0;max-width:calc(100% - 250px);
     white-space:nowrap;overflow:hidden}
+  /* 4 个右侧按钮固定、健康胶囊可收缩，中轴留给 spacer 吸收，互不遮挡 */
+  .topbar .spacer{flex:1 1 auto;min-width:0}
   .topbar .health .txt{overflow:hidden;text-overflow:ellipsis}
   /* 手机上「ComfyUI 未连接，请先启动」太长，会把中轴撑歪；只留三个字 */
   .topbar .health .txt{display:none}
@@ -803,6 +818,13 @@ audio{width:100%;height:34px}
   .topbar .health .hstat.busy .hsd{background:var(--amber)}
   .topbar .health.off .hstat{display:none}
   .topbar .spacer{flex:1;min-width:0}
+  /* 提示词模板开关：手机上只留开关本体，图标做进滑块里 */
+  .topbar .pt-top-switch{width:34px;height:34px;padding:0;justify-content:center;border-color:transparent;background:transparent;border-radius:10px}
+  .topbar .pt-top-switch .pts-label{display:none}
+  .topbar .pt-top-switch .pts-track{width:34px;height:20px;flex-basis:34px}
+  .topbar .pt-top-switch .pts-knob{width:16px;height:16px}
+  .topbar .pt-top-switch .pts-knob svg{display:block;width:10px;height:10px}
+  .topbar .pt-top-switch.on .pts-knob{transform:translateX(14px)}
   .sheetbtn,.navbtn{display:inline-flex}
 
   /* ---------- 左抽屉：创作台的能力 / 管理台的菜单（豆包那种侧边抽屉） ---------- */
@@ -1014,9 +1036,11 @@ audio{width:100%;height:34px}
 .segx{font-style:normal;font-size:9.5px;color:var(--ink4);margin-left:5px}
 .segb.on .segx{color:var(--accent)}
 /* 风格等下拉：必须和旁边的自定义输入框(.segtext)一样高。
-   基类 select.input 是 36px 且优先级更高，这里用 .input.segsel 提高优先级盖掉它。 */
-.input.segsel,select.segsel{height:26px;width:auto;min-width:132px;max-width:260px;font-size:12px;padding:0 8px;flex:0 0 auto}
-.segtext{height:26px;font-size:12px;padding:0 8px;flex:1 1 200px;min-width:140px;width:auto}
+   promptlib.css 在后加载且有全局 `.input{height:34px}`（无命名空间），
+   同特异性下会盖掉本页 26px，导致「下拉矮、输入框高」。这里统一用
+   `.input.xxx` 双类选择器提高特异性（0,2,0 > 0,1,0），保证两者恒等高。 */
+.input.segsel,select.segsel{height:26px;width:auto;min-width:132px;max-width:260px;font-size:12px;padding:0 26px 0 8px;flex:0 0 auto}
+.input.segtext{height:26px;font-size:12px;padding:0 8px;flex:1 1 200px;min-width:140px;width:auto}
 .sheetchar{width:100%;border:0;outline:none;resize:vertical;font:inherit;font-size:13.5px;line-height:1.65;
   min-height:68px;max-height:200px;padding:7px 3px;background:transparent;color:var(--ink)}
 .sheetchar::placeholder{color:var(--ink4)}
@@ -1052,7 +1076,7 @@ audio{width:100%;height:34px}
 
 @media (max-width:820px){
   .sheetbar{gap:6px}
-  .input.segsel,select.segsel,.segtext{height:28px}
+  .input.segsel,select.segsel,.input.segtext{height:28px}
   .sheetchar{min-height:60px}
   .style-row{flex-wrap:wrap}
   .style-row .sname{width:100%}
@@ -1160,7 +1184,7 @@ audio{width:100%;height:34px}
 /* 需求6：视频时长——数值框(左) + 滑条(右)，实时同步，框里精度 0.01 */
 .vdurbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
 .vdurbar::-webkit-scrollbar{display:none}
-.vdur-num{width:74px;flex:0 0 auto;height:28px;text-align:center;font-variant-numeric:tabular-nums}
+.input.vdur-num{width:74px;flex:0 0 auto;height:28px;text-align:center;font-variant-numeric:tabular-nums}
 .vdur-unit{flex:0 0 auto}
 .vdur-range{flex:1 1 130px;min-width:110px;max-width:280px;accent-color:var(--accent);height:24px;cursor:pointer}
 .vdur-meta{flex:0 0 auto;white-space:nowrap;margin-left:auto}
@@ -1290,12 +1314,100 @@ select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
 .imgstyle .vopt{padding:2px 4px}
 .input.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
 .input.vsmall.grow{flex:1;min-width:160px;padding-right:8px}
+
+/* 收起把手默认（桌面端）不显示；移动端在下方 media 块内打开 */
+.fold-handle{display:none}
+
+/* ================================================================
+   移动端统一布局（需求 3/4/5/6）—— 仅 max-width:820px 生效，桌面端不受影响
+   ================================================================ */
+@media (max-width:820px){
+  /* --- 需求3：压缩空状态欢迎区（视频/音频页顶部那块✨标题+说明的大片空白）---
+     .chat-scroll 是 flex:1，.empty 原本 padding:60px + 内联 padding-top:36px 且垂直居中，
+     移动端会把整个聊天区撑成一大片空白。改成贴顶、小内边距、不居中。 */
+  .chat-scroll .empty{padding:16px 12px 12px !important;justify-content:flex-start !important;gap:8px}
+  .chat-scroll .empty>div[style*="font-size:34"]{font-size:26px !important;line-height:1.2}
+
+  /* --- 需求5：所有分段切换控件统一到最小高度 24px ---
+     桌面最小的是 .segb=24px；移动端 856/859 行却把 grade/modepick 提到 28px。
+     这里用 !important 统一拉回 24px，覆盖所有同类分段按钮。 */
+  .segb,.grade,.modepick button,.vopt,.imgstyle .vopt,
+  .composer .seg .segb,.sheetbar .seg .segb,.ext-seg .segb{
+    height:24px !important;min-height:24px !important;line-height:22px !important;
+    padding:0 8px !important;font-size:11.5px !important;
+  }
+  .seg,.modepick,.imgstyle .vopt{padding:2px !important}
+
+  /* --- 需求4：所有页面移动端「输入部分」统一高度 + 内容超出内部滚动 ---
+     参照「视频生成」页移动端：描述编辑区固定为约 4 行高，内容多了在编辑区内部出现滚动条。
+     .editor 是 contenteditable 描述区（图片/视频/设定图/画布节点通用）；
+     .sheetchar / .extText / #extText 是设定图的 textarea 描述区；
+     .board-text 是故事板描述区。统一固定高度 + overflow-y:auto。
+     —— 高度基准：视频页那个「刚好好放几行、超出滚动」的观感，取 96px。 */
+  .composer .inputbox .editor,
+  .cnode .inputbox .editor,
+  .inputbox .editor{
+    height:96px !important;min-height:96px !important;max-height:96px !important;
+    overflow-y:auto !important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  /* textarea 描述区同样处理 */
+  .inputbox textarea.sheetchar,
+  .inputbox textarea#extText,
+  .inputbox .board-text,
+  .inputbox textarea{
+    height:96px !important;min-height:96px !important;max-height:96px !important;
+    overflow-y:auto !important;resize:none;-webkit-overflow-scrolling:touch;
+  }
+  /* 输入区整体限高：参数行 + 96px 编辑区 + 底部栏，内容多的行区（如「已引用」长提示）内部滚动 */
+  .composer{max-height:min(52dvh,420px)}
+  .composer .inputbox .sheetbody{max-height:min(46dvh,360px)}
+
+  /* 统一编辑区滚动条样式（像截图里那种细滚动条） */
+  .inputbox .editor::-webkit-scrollbar,
+  .inputbox textarea::-webkit-scrollbar,
+  .sheetbody::-webkit-scrollbar{width:4px}
+  .inputbox .editor::-webkit-scrollbar-thumb,
+  .inputbox textarea::-webkit-scrollbar-thumb,
+  .sheetbody::-webkit-scrollbar-thumb{background:rgba(120,132,152,.5);border-radius:4px}
+
+  /* --- 需求6：移动端输入区「收起/展开」把手 --- */
+  .fold-handle{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;
+    border:0;background:transparent;color:var(--ink3);font-size:11px;line-height:1;
+    padding:5px 0 7px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .fold-handle .fold-bar{display:block;width:34px;height:3px;border-radius:3px;background:#c7d0de}
+  .fold-handle .fold-txt{font-size:10.5px}
+  /* 折叠态：隐藏中间编辑内容，仅留把手与底部工具栏，卡片收缩到内容高度 */
+  .inputbox.folded .sheetbody{display:none !important}
+  .inputbox.folded{padding-bottom:6px;height:auto !important;max-height:none !important}
+  .inputbox.folded .foot{border-top:0;margin-top:0;padding-top:2px}
+
+  /* --- 修复横向溢出：flex 列子项默认 min-width:auto 会被宽内容撑破视口 ---
+     视频页 7 个模式按钮总宽 600px+，把 .composer-inner 从 390 撑到 443，
+     导致整个输入卡片、编辑器、发送按钮整体右移出屏。让所有中间层可收缩。 */
+  .composer-inner,.parambar,.vparambar,.vmodes,.grades,.sheetbar,.vdurbar,
+  .composer .inputbox,.composer .inputbox .sheetbody{min-width:0;max-width:100%}
+  .composer,.chat{overflow-x:hidden}
+  .vmodes .vmode{flex:0 1 auto;max-width:100%}
+
+  /* --- 需求4：整个输入卡片统一高度 ---
+     所有页面（图片/视频/音频/设定图/故事板）的 .inputbox 固定同一高度，
+     参数行多的内容在 .sheetbody 内部滚动，卡片本身不再因参数行数量而高矮不一。 */
+  .composer .inputbox,
+  .composer.ext .inputbox{height:300px;max-height:300px;min-height:0}
+  .composer .inputbox .sheetbody,
+  .composer.ext .inputbox .sheetbody{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto}
+  /* 画布节点不在 .composer 内，同样统一整个卡片高度 */
+  .cnode .cgen-stack .inputbox{height:300px;max-height:300px;min-height:0}
+  .cnode .cgen-stack .inputbox .sheetbody{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto}
+}
 </style>
 <link rel="stylesheet" href="/static/canvas.css">
+<link rel="stylesheet" href="/static/promptlib.css">
 </head>
 <body>
 <div id="root"></div>
 <script src="/static/app.js"></script>
+<script src="/static/promptlib.js"></script>
 <script src="/static/genui.js"></script>
 <script src="/static/media.js"></script>
 <script src="/static/canvas.js"></script>

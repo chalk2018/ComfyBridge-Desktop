@@ -115,7 +115,7 @@ window.GenUI = (function () {
           return '<option value="' + E(l.id) + '"' + (f.lineStyle === l.id ? ' selected' : '') + '>' + E(l.name) + '</option>';
         }).join('') + '</select>'
         + (on(o, 'hints') ? '<span class="warnhint">线稿别写颜色词 · 画风只借造型</span>' : '');
-    } else if (on(o, 'hints')) {
+    } else if (on(o, 'hints') && on(o, 'style')) {
       extra = '<span class="tiny muted">彩色：风格行用下面的「风格」</span>';
     }
     return '<div class="sheetbar"><span class="slb">画法</span>'
@@ -142,6 +142,8 @@ window.GenUI = (function () {
       + '</div>';
   }
   function styleRow(o) {
+    // 图生图不展示风格行：show.style=false 时整行不渲染。
+    if (!on(o, 'style')) return '';
     var styles = o.styles || [], i2i = o.i2i !== false;
     var custom = i2i || o.styleCustom !== false;
     return '<div class="sheetbar"><span class="slb">风格</span>'
@@ -271,7 +273,7 @@ window.GenUI = (function () {
     }
     foot += '<span style="flex:1"></span>';
     if (on(o, 'kbd')) foot += '<span class="tiny muted kbdhint">Ctrl/⌘ + Enter</span>';
-    foot += '<button class="sendbtn"' + attr(o, 'gen', o.target || '1') + ' title="生成"'
+    foot += '<button class="sendbtn"' + idAttr(o, 'send') + ' ' + attr(o, 'gen', o.target || '1') + ' title="生成"'
       + ((o.sendDisabled === undefined ? empty : o.sendDisabled) ? ' disabled' : '') + '>↑</button>';
     foot += '</div>';
     return '<div class="inputbox sheetbox"' + idAttr(o, 'box') + '>' + body + foot + '</div>';

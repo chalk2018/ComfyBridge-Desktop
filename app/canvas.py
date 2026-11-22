@@ -602,7 +602,9 @@ NODE_FUNCS: tuple[tuple[str, str, str, str, str, str, str, str, str], ...] = (
     ("t2i", "图片生成-文生图", "🖌", "图片", "image.generate", "文生图", "image", "", "wf"),
     ("imagegen", "图片生成-图生图", "🖼", "图片", "image.generate", "参考生图", "image", "", "wf"),
     ("sheetchar", "角色设定图-文生图", "👤", "图片", "sheet.character", "", "image", "", "combo"),
-    ("sheetchar_i2i", "角色设定图-图生图", "👥", "图片", "sheet.character", "", "image", "i2i", "combo"),
+    # 和创作台一致：图生图拆成「锁定同角色 / 只借画风」两个独立子功能，节点不再内部切参考方式
+    ("sheetchar_lock", "角色设定图-图生图-锁定同角色", "👥", "图片", "sheet.character", "", "image", "lock", "combo"),
+    ("sheetchar_style", "角色设定图-图生图-只借画风", "🎨", "图片", "sheet.character", "", "image", "style", "combo"),
     ("sheetscene", "场景设定图-文生图", "🏞", "图片", "sheet.scene", "", "image", "", "combo"),
     ("sheetscene_i2i", "场景设定图-图生图", "🌅", "图片", "sheet.scene", "", "image", "i2i", "combo"),
     ("sheetscene_expand", "场景设定图-扩图", "🔍", "图片", "sheet.scene", "", "image", "expand", "combo"),
@@ -621,8 +623,9 @@ NODE_FUNCS: tuple[tuple[str, str, str, str, str, str, str, str, str], ...] = (
 FUNC_IDS = {row[0] for row in NODE_FUNCS}
 # 一个子功能拆成多个节点（角色/场景/道具的 文生图·图生图·扩图）
 # 时，节点 id 的前缀才是它对应的子功能
-FUNC_FAMILY = {"sheetchar_i2i": "sheetchar", "sheetscene_i2i": "sheetscene",
-               "sheetscene_expand": "sheetscene", "sheetprop_i2i": "sheetprop"}
+FUNC_FAMILY = {"sheetchar_lock": "sheetchar", "sheetchar_style": "sheetchar",
+               "sheetscene_i2i": "sheetscene", "sheetscene_expand": "sheetscene",
+               "sheetprop_i2i": "sheetprop"}
 
 
 def _wf_grades(wf: str) -> list[dict[str, Any]]:
