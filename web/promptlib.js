@@ -17,7 +17,7 @@
 
   const PT = {
     templates: [], tags: [], loaded: false, loading: false,
-    filters: { q: '', cats: [], tags: [] },  // 分类/标签都多选：命中任一即显示（空数组=全部）
+    filters: { q: '', cats: [], tags: [], notTags: [], tagMode: 'all' },  // 多标签默认全部满足；notTags=命中任一即隐藏
     selected: new Set(),                     // 管理台批量删除勾选的模板 id
     drafts: new Map(),           // id / __new_xxx -> 可编辑副本
     expanded: new Set(),         // 小窗里展开的卡片
@@ -49,6 +49,237 @@
   function Q(sel, root) { return (root || document).querySelector(sel); }
   function QA(sel, root) { return [...(root || document).querySelectorAll(sel)]; }
 
+  /* ------------------------------------------------------------ 参考素材
+   * 一条模板可以挂图片 / 视频 / 音频：缩略图排在提示词框上面，点开是 16:9 的查看窗。
+   * 素材本体存在成果目录的「提示词模板库」里，md 只记文件名。
+   */
+  const MEDIA_KINDS = [
+    { id: 'image', name: '图片' },
+    { id: 'video', name: '视频' },
+    { id: 'audio', name: '音频' },
+  ];
+  const MAX_MEDIA = 20;
+  const MEDIA_API = API + '/media';
+  const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const ICON_DL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+
+  function kindName(k) { const x = MEDIA_KINDS.find(v => v.id === k); return x ? x.name : '素材'; }
+  function mediaUrl(m) { return MEDIA_API + '/' + encodeURIComponent(m.file); }
+  function mediaDlUrl(m) {
+    return mediaUrl(m) + '?download=1&name=' + encodeURIComponent(m.name || m.file);
+  }
+  // 序号按「同一种素材」单独排：第 1 个视频、第 2 个视频，和图片的 1 号互不影响
+  function mediaNo(d, m) {
+    const same = (d.media || []).filter(x => x.kind === m.kind);
+    return same.findIndex(x => x.id === m.id) + 1;
+  }
+
+  function thumbInner(m) {
+    if (m.kind === 'image') return `<img src="${E(mediaUrl(m))}" alt="" loading="lazy">`;
+    if (m.kind === 'video') return `<span class="pt-thumb-ico" data-vsrc="${E(mediaUrl(m))}">▶</span>`;
+    return `<span class="pt-thumb-ico">♪</span>`;
+  }
+
+  function mediaRowHtml(d, compact) {
+    const list = d.media || [];
+    const sfx = compact ? ' sm' : '';
+    if (!list.length) {
+      // 没有素材时只留一行淡淡的提示 + 上传口，不占卡片高度也不显得空
+      return `<span class="pt-media-tip${sfx}">参考素材：图片 / 视频 / 音频</span>
+        <button type="button" class="pt-madd empty${sfx}" data-madd title="上传图片 / 视频 / 音频">＋ 上传</button>`;
+    }
+    const thumbs = list.map(m => {
+      const tip = E(m.name) + (m.duration ? ' · ' + Math.round(m.duration) + ' 秒' : '');
+      return `<div class="pt-thumb${compact ? ' sm' : ''}" data-mid="${E(m.id)}" role="button" tabindex="0" title="${tip}">
+        <div class="pt-thumb-body">${thumbInner(m)}</div>
+        <i class="pt-thumb-kind">${kindName(m.kind)}</i>
+        <b class="pt-thumb-num">${mediaNo(d, m)}</b>
+        <button type="button" class="pt-thumb-x" data-mdel="${E(m.id)}" title="移除这个素材">×</button>
+      </div>`;
+    }).join('');
+    return thumbs + `<button type="button" class="pt-madd${compact ? ' sm' : ''}" data-madd
+      title="上传图片 / 视频 / 音频">＋</button>`;
+  }
+
+  // 视频缩略图：抓一帧画到 canvas 上，抓不到就留着 ▶ 图标（不支持解码也不难看）
+  function paintVideoThumbs(root) {
+    QA('[data-vsrc]', root).forEach(ico => {
+      const box = ico.parentElement;
+      if (!box || box.dataset.painted) return;
+      box.dataset.painted = '1';
+      const v = document.createElement('video');
+      v.preload = 'auto'; v.muted = true; v.playsInline = true;
+      let done = false;
+      const stop = () => { try { v.removeAttribute('src'); v.load(); } catch (_) { } };
+      const fail = () => { done = true; stop(); };
+      v.addEventListener('error', fail);
+      v.addEventListener('loadeddata', () => {
+        try { v.currentTime = Math.min(0.2, (v.duration || 1) / 2); } catch (_) { draw(); }
+      });
+      v.addEventListener('seeked', draw);
+      function draw() {
+        if (done) return;
+        done = true;
+        try {
+          const w = 176, h = Math.max(1, Math.round(w * (v.videoHeight || 9) / (v.videoWidth || 16)));
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(v, 0, 0, w, h);
+          const img = new Image();
+          img.src = c.toDataURL('image/jpeg', 0.72);
+          img.alt = ''; img.className = 'pt-thumb-canvas';
+          box.appendChild(img);
+        } catch (_) { /* 画不出来就保留图标 */ }
+        stop();
+      }
+      setTimeout(() => { if (!done) fail(); }, 4000);
+      v.src = ico.dataset.vsrc;
+    });
+  }
+
+  function bindMediaRow(row, d, redraw) {
+    QA('.pt-thumb', row).forEach(el => {
+      const open = e => {
+        if (e && e.target.closest('[data-mdel]')) return;
+        const m = (d.media || []).find(x => x.id === el.dataset.mid);
+        if (m) openMediaViewer(m);
+      };
+      el.onclick = open;
+      el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    });
+    QA('[data-mdel]', row).forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      d.media = (d.media || []).filter(x => x.id !== b.dataset.mdel);
+      redraw();
+    });
+    const add = Q('[data-madd]', row);
+    if (add) add.onclick = e => {
+      e.stopPropagation();
+      pickMediaFiles(files => addMedia(files, d, redraw));
+    };
+    paintVideoThumbs(row);
+  }
+
+  let mediaInput = null;
+  function pickMediaFiles(cb) {
+    if (!mediaInput) {
+      mediaInput = document.createElement('input');
+      mediaInput.type = 'file';
+      mediaInput.id = 'ptMediaInput';
+      mediaInput.multiple = true;
+      mediaInput.accept = 'image/*,video/*,audio/*';
+      mediaInput.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+      document.body.appendChild(mediaInput);
+      mediaInput.addEventListener('change', () => {
+        const files = [...(mediaInput.files || [])];
+        mediaInput.value = '';
+        const job = mediaInput._cb;
+        mediaInput._cb = null;
+        if (files.length && job) job(files);
+      });
+    }
+    mediaInput._cb = cb;
+    mediaInput.click();
+  }
+
+  async function addMedia(files, d, redraw) {
+    let ok = 0;
+    for (const f of files) {
+      if ((d.media || []).length >= MAX_MEDIA) { T(`一个模板最多 ${MAX_MEDIA} 个素材`); break; }
+      const fd = new FormData();
+      fd.append('file', f);
+      const r = await A(MEDIA_API, { form: fd });
+      if (!r.ok || !r.data) { T(r.reason || `「${f.name}」没传上去`); continue; }
+      d.media = [...(d.media || []), r.data];
+      // 记下这次草稿自己传的素材：卡片没保存就丢掉时，要把这些文件一起清掉
+      d.uploads = [...(d.uploads || []), r.data.file];
+      ok++;
+    }
+    if (ok) { T(`已添加 ${ok} 个素材，点保存写进卡片`); if (redraw) redraw(); }
+    return ok;
+  }
+
+  /* ------------------------------------------------------------ 素材查看窗（16:9） */
+  let viewer = null;
+  function closeViewer() {
+    if (!viewer) return;
+    QA('video,audio', viewer).forEach(el => { try { el.pause(); } catch (_) { } });
+    viewer.remove(); viewer = null;
+    document.removeEventListener('keydown', onViewerKey, true);
+  }
+  function onViewerKey(e) {
+    if (e.key === 'Escape') { e.stopPropagation(); closeViewer(); }
+  }
+  function openMediaViewer(m) {
+    closeViewer();
+    const url = mediaUrl(m);
+    let body = '';
+    if (m.kind === 'image') {
+      body = `<img class="pt-viewer-img" src="${E(url)}" alt="${E(m.name)}">`;
+    } else if (m.kind === 'video') {
+      body = `<video class="pt-viewer-video" src="${E(url)}" controls autoplay playsinline></video>`;
+    } else {
+      body = `<div class="pt-viewer-audio"><div class="pt-viewer-audio-ico">♪</div>
+        <div class="pt-viewer-audio-name">${E(m.name)}${m.duration ? ' · ' + Math.round(m.duration) + ' 秒' : ''}</div>
+        <audio src="${E(url)}" controls autoplay></audio></div>`;
+    }
+    const copyBtn = m.kind === 'image'
+      ? `<button type="button" data-vcopy title="复制图片">${ICON_COPY}</button>` : '';
+    const el = document.createElement('div');
+    el.className = 'pt-viewer';
+    // 文件名放左上角（关闭按钮右边）：视频/音频的原生控件都压在窗口底部，
+    // 名字压在那儿会挡住播放按钮
+    const nameTag = m.kind === 'audio' ? '' :
+      `<div class="pt-viewer-name"><i>${kindName(m.kind)}</i>${E(m.name)}</div>`;
+    el.innerHTML = `<div class="pt-viewer-box">
+      <button type="button" class="pt-viewer-close" data-vclose title="关闭">✕</button>
+      ${nameTag}
+      <div class="pt-viewer-tools">${copyBtn}
+        <button type="button" data-vdl title="下载">${ICON_DL}</button></div>
+      ${body}
+    </div>`;
+    document.body.appendChild(el);
+    viewer = el;
+    el.onclick = e => { if (e.target === el) closeViewer(); };
+    Q('[data-vclose]', el).onclick = closeViewer;
+    Q('[data-vdl]', el).onclick = () => downloadMedia(m);
+    const cp = Q('[data-vcopy]', el);
+    if (cp) cp.onclick = () => copyMediaImage(m);
+    document.addEventListener('keydown', onViewerKey, true);
+  }
+
+  function downloadMedia(m) {
+    const a = document.createElement('a');
+    a.href = mediaDlUrl(m);
+    a.download = m.name || m.file;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function copyMediaImage(m) {
+    try {
+      if (!navigator.clipboard || typeof window.ClipboardItem === 'undefined') {
+        throw new Error('这个浏览器不支持写剪贴板');
+      }
+      const png = typeof imageToPngBlob === 'function'
+        ? await imageToPngBlob(mediaUrl(m))
+        : await (await fetch(mediaUrl(m), { cache: 'no-store' })).blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      T('图片已复制到剪贴板');
+    } catch (err) {
+      T('复制失败：' + ((err && err.message) || err) + '，可以改用下载');
+    }
+  }
+
+  // 卡片没保存就被移除时，把这次自己传上去、还没被任何模板引用的文件删掉
+  async function dropOrphanUploads(d) {
+    const files = (d.uploads || []).filter(Boolean);
+    d.uploads = [];
+    for (const f of files) {
+      try { await A(MEDIA_API + '/' + encodeURIComponent(f), { method: 'DELETE' }); } catch (_) { /* 删不掉就留着，不影响主流程 */ }
+    }
+  }
+
   function ensureLoaded() {
     if (PT.loaded || PT.loading) return;
     PT.loading = true;
@@ -57,6 +288,7 @@
       if (!r.ok) { T(r.reason || '提示词模板库读取失败'); return; }
       PT.templates = (r.data || {}).templates || [];
       PT.tags = (r.data || {}).tags || [];
+      PT.mediaDir = (r.data || {}).mediaDir || '';
       PT.loaded = true;
       refreshAll();
     }).catch(() => { PT.loading = false; T('提示词模板库读取失败'); });
@@ -66,24 +298,31 @@
   function draftFor(t) {
     let d = PT.drafts.get(t.id);
     if (!d) {
-      d = { id: t.id, title: t.title, content: t.content, category: t.category, tags: [...(t.tags || [])], isNew: false };
+      d = {
+        id: t.id, title: t.title, content: t.content, category: t.category,
+        tags: [...(t.tags || [])], media: (t.media || []).map(m => ({ ...m })),
+        uploads: [], isNew: false,
+      };
       PT.drafts.set(t.id, d);
     }
     return d;
   }
   function newDraft() {
     const id = '__new_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const d = { id, title: '', content: '', category: '', tags: [], isNew: true };
+    const d = { id, title: '', content: '', category: '', tags: [], media: [], uploads: [], isNew: true };
     PT.drafts.set(id, d);
     return d;
   }
   function dirty(d) {
     if (!d) return false;
-    if (d.isNew) return !!(d.title.trim() || d.content.trim() || d.category || d.tags.length);
+    const media = JSON.stringify((d.media || []).map(m => [m.id, m.file]));
+    if (d.isNew) return !!(d.title.trim() || d.content.trim() || d.category || d.tags.length
+      || (d.media || []).length);
     const t = PT.templates.find(x => x.id === d.id);
     if (!t) return true;
+    const old = JSON.stringify((t.media || []).map(m => [m.id, m.file]));
     return d.title !== t.title || d.content !== t.content || d.category !== t.category
-      || JSON.stringify(d.tags) !== JSON.stringify(t.tags || []);
+      || JSON.stringify(d.tags) !== JSON.stringify(t.tags || []) || media !== old;
   }
   function allRows() {
     const news = [...PT.drafts.values()].filter(d => d.isNew);
@@ -94,8 +333,14 @@
     const q = (PT.filters.q || '').trim().toLowerCase();
     return allRows().filter(d => {
       if (PT.filters.cats.length && !PT.filters.cats.includes(d.category)) return false;
-      if (PT.filters.tags.length && !PT.filters.tags.some(id => (d.tags || []).includes(id))) return false;
-      if (q && !(d.title.toLowerCase().includes(q) || d.content.toLowerCase().includes(q))) return false;
+      if (PT.filters.tags.length) {
+        const has = id => (d.tags || []).includes(id);
+        const hit = (PT.filters.tagMode === 'any') ? PT.filters.tags.some(has) : PT.filters.tags.every(has);
+        if (!hit) return false;
+      }
+      if ((PT.filters.notTags || []).some(id => (d.tags || []).includes(id))) return false;
+      const tagHit = q && (d.tags || []).some(id => (tagById(id)?.name || '').toLowerCase().includes(q));
+      if (q && !(d.title.toLowerCase().includes(q) || d.content.toLowerCase().includes(q) || tagHit)) return false;
       return true;
     });
   }
@@ -106,7 +351,14 @@
     if (!d.category) { T('请先选择分类'); return; }
     if (!d.title.trim()) { T('标题不能为空'); return; }
     if ((d.tags || []).length > MAX_TAGS) { T(`最多 ${MAX_TAGS} 个标签`); return; }
-    const payload = { title: d.title, content: d.content, category: d.category, tags: d.tags };
+    if ((d.media || []).length > MAX_MEDIA) { T(`最多 ${MAX_MEDIA} 个素材`); return; }
+    const payload = {
+      title: d.title, content: d.content, category: d.category, tags: d.tags,
+      media: (d.media || []).map(m => ({
+        id: m.id, kind: m.kind, name: m.name, file: m.file, size: m.size,
+        ...(m.duration ? { duration: m.duration } : {}),
+      })),
+    };
     const r = d.isNew
       ? await A(API, { body: payload })
       : await A(API + '/item/' + encodeURIComponent(id), { method: 'PUT', body: payload });
@@ -114,6 +366,7 @@
     const t = r.data;
     const i = PT.templates.findIndex(x => x.id === t.id);
     if (i >= 0) PT.templates[i] = t; else PT.templates.unshift(t);
+    d.uploads = [];              // 已经写进卡片，这些素材不再算「孤儿」
     PT.drafts.delete(id);
     T('已保存');
     refreshAll();
@@ -127,10 +380,29 @@
     Q('#ptDelYes', m).onclick = () => { CM(); onOk(); };
   }
 
+  // 标签管理里的删除确认：用独立遮罩，不 closeModal，避免把底下的标签管理一起关掉
+  function confirmDelKeep(title, detail, onOk) {
+    const mask = document.createElement('div');
+    mask.className = 'modal-mask'; mask.id = 'mask-confirm';
+    mask.innerHTML = `<div class="modal"><div class="m-head"><h3>${E(title)}</h3><button class="btn ghost sm" data-x>✕</button></div>
+      <div class="m-body"><div style="font-size:13px;line-height:1.8">${E(detail)}</div></div>
+      <div class="m-foot"><button class="btn sm" data-x>取消</button>
+        <button class="btn sm danger" data-yes>确认删除</button></div></div>`;
+    document.body.appendChild(mask);
+    const close = () => mask.remove();
+    QA('[data-x]', mask).forEach(b => b.onclick = close);
+    Q('[data-yes]', mask).onclick = () => { close(); onOk(); };
+    mask.onclick = e => { if (e.target === mask) close(); };
+  }
+
   async function deleteOne(id) {
     const d = PT.drafts.get(id);
-    if (d && d.isNew) { PT.drafts.delete(id); refreshAll(); T('已移除未保存的卡片'); return; }
-    confirmDel('确认删除这个模板？', '删除后无法恢复，对应的 MD 文件内容也会同步移除。', async () => {
+    if (d && d.isNew) {
+      PT.drafts.delete(id); refreshAll(); T('已移除未保存的卡片');
+      dropOrphanUploads(d);
+      return;
+    }
+    confirmDel('确认删除这个模板？', '删除后无法恢复，对应的 MD 文件内容也会同步移除；卡片上的参考素材文件会一起删掉。', async () => {
       const r = await A(API + '/item/' + encodeURIComponent(id), { method: 'DELETE' });
       if (!r.ok) { T(r.reason || '没删成'); return; }
       PT.templates = PT.templates.filter(x => x.id !== id);
@@ -168,25 +440,37 @@
     const pop = document.createElement('div');
     pop.className = 'pt-tagpop';
     pop.innerHTML = `<div class="pt-tagpop-hd">选择标签 <span class="pt-tagpop-num">${(d.tags || []).length}/${MAX_TAGS}</span></div>
-      <div class="pt-tagpop-list">${PT.tags.length ? PT.tags.map(t => `<button type="button" class="pt-tagpop-item" data-tid="${E(t.id)}">
-        <i style="background:${E(t.color)}"></i><span>${E(t.name)}</span><b>${(d.tags || []).includes(t.id) ? '✓' : ''}</b></button>`).join('')
-        : '<div class="pt-empty-sm">还没有标签，先去「标签管理」加几个</div>'}</div>`;
+      <div class="pt-tagpop-q"><input class="input" data-tagpopq placeholder="输入标签名检索…">
+        <button type="button" class="pt-qclear" data-tagpopclear title="清空检索">×</button></div>
+      <div class="pt-tagpop-list"></div>`;
     document.body.appendChild(pop);
+    const qInp = Q('[data-tagpopq]', pop), qClear = Q('[data-tagpopclear]', pop);
+    const render = () => {
+      const kw = (qInp.value || '').trim().toLowerCase();
+      const list = PT.tags.filter(t => !kw || t.name.toLowerCase().includes(kw));
+      Q('.pt-tagpop-list', pop).innerHTML = list.length ? list.map(t => `<button type="button" class="pt-tagpop-item" data-tid="${E(t.id)}">
+        <i style="background:${E(t.color)}"></i><span>${E(t.name)}</span><b>${(d.tags || []).includes(t.id) ? '✓' : ''}</b></button>`).join('')
+        : '<div class="pt-empty-sm">没有匹配的标签</div>';
+      qClear.style.display = kw ? '' : 'none';
+      QA('[data-tid]', pop).forEach(btn => btn.onclick = () => {
+        const id = btn.dataset.tid;
+        const i = (d.tags || []).indexOf(id);
+        if (i >= 0) d.tags.splice(i, 1);
+        else {
+          if ((d.tags || []).length >= MAX_TAGS) { T(`最多 ${MAX_TAGS} 个标签`); return; }
+          d.tags.push(id);
+        }
+        QA('[data-tid]', pop).forEach(b => Q('b', b).textContent = (d.tags || []).includes(b.dataset.tid) ? '✓' : '');
+        Q('.pt-tagpop-num', pop).textContent = d.tags.length + '/' + MAX_TAGS;
+        if (after) after();
+      });
+    };
+    render();
+    qInp.oninput = render;
+    qClear.onclick = () => { qInp.value = ''; render(); qInp.focus(); };
     const w = pop.offsetWidth || 210, h = pop.offsetHeight || 260;
     pop.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
     pop.style.top = (r.bottom + h + 12 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
-    QA('[data-tid]', pop).forEach(btn => btn.onclick = () => {
-      const id = btn.dataset.tid;
-      const i = (d.tags || []).indexOf(id);
-      if (i >= 0) d.tags.splice(i, 1);
-      else {
-        if ((d.tags || []).length >= MAX_TAGS) { T(`最多 ${MAX_TAGS} 个标签`); return; }
-        d.tags.push(id);
-      }
-      QA('[data-tid]', pop).forEach(b => Q('b', b).textContent = (d.tags || []).includes(b.dataset.tid) ? '✓' : '');
-      Q('.pt-tagpop-num', pop).textContent = d.tags.length + '/' + MAX_TAGS;
-      if (after) after();
-    });
     tagPop = pop;
     document.addEventListener('pointerdown', onPopOutside, true);
   }
@@ -210,56 +494,119 @@
   /* ------------------------------------------------------------ 标签管理 */
   function openTagManager() {
     ensureLoaded();
+    const sel = PT.tagMgrSel || (PT.tagMgrSel = new Set());
     const html = `<div class="m-head"><h3>标签管理</h3><button class="btn ghost sm" data-close>✕</button></div>
-      <div class="m-body pt-tagmgr"><div class="tiny muted" style="margin-bottom:12px">标签保存在 标签.md。颜色互相不重复，最多给一个模板挂 ${MAX_TAGS} 个标签。</div>
+      <div class="m-body pt-tagmgr"><div class="tiny muted" style="margin-bottom:12px">标签保存在 标签.md。颜色互相不重复，最多给一个模板挂 ${MAX_TAGS} 个标签。改完名称或颜色后，点右侧 ✓ 保存。</div>
+        <div class="pt-tagmgr-q"><input class="input" id="ptTagMgrQ" placeholder="输入标签名检索…" value="${E(PT.tagMgrQ || '')}">
+          <button type="button" class="pt-qclear" id="ptTagMgrQClear" title="清空检索">×</button></div>
+        <div class="pt-tagmgr-bulkbar"><label><input type="checkbox" id="ptTagMgrAll"> 全选当前结果</label>
+          <span id="ptTagMgrSelInfo" class="tiny muted">已选 0 个</span></div>
         <div id="ptTagList" class="pt-tagmgr-list"></div>
         <div class="pt-tagmgr-add"><input class="input" id="ptNewTagName" placeholder="新标签名称" maxlength="16">
           <input type="color" id="ptNewTagColor" value="#2f6bff" title="标签颜色" class="pt-color">
           <button class="btn primary sm" id="ptNewTagBtn">添加</button></div></div>
       <div class="m-foot"><span class="tiny muted" style="flex:1">初始标签：角色 / 场景 / 道具 / 故事板 / 首尾帧 / 角色替换 / 音乐复刻 / 声音克隆</span>
+        <button class="btn sm danger" id="ptTagBulkDel" disabled>批量删除</button>
         <button class="btn sm" data-close>关闭</button></div>`;
     const m = OM(html, true);
+    const visibleTags = () => {
+      const kw = (PT.tagMgrQ || '').trim().toLowerCase();
+      return PT.tags.filter(t => !kw || t.name.toLowerCase().includes(kw));
+    };
+    const dropLocal = id => {
+      PT.tags = PT.tags.filter(x => x.id !== id);
+      PT.templates.forEach(x => { x.tags = (x.tags || []).filter(y => y !== id); });
+      PT.drafts.forEach(x => { x.tags = (x.tags || []).filter(y => y !== id); });
+      PT.filters.tags = PT.filters.tags.filter(x => x !== id);
+      PT.filters.notTags = PT.filters.notTags.filter(x => x !== id);
+      sel.delete(id);
+    };
+    const updateBulk = () => {
+      const info = Q('#ptTagMgrSelInfo', m), btn = Q('#ptTagBulkDel', m);
+      if (info) info.textContent = `已选 ${sel.size} 个`;
+      if (btn) { btn.disabled = sel.size === 0; btn.textContent = sel.size ? `批量删除（${sel.size}）` : '批量删除'; }
+    };
     const renderList = () => {
-      Q('#ptTagList', m).innerHTML = PT.tags.length ? PT.tags.map(t => `<div class="pt-tagmgr-row">
+      const list = visibleTags();
+      Q('#ptTagList', m).innerHTML = list.length ? list.map(t => `<div class="pt-tagmgr-row" data-id="${E(t.id)}">
+        <input type="checkbox" class="pt-tagmgr-check" data-sel="${E(t.id)}" ${sel.has(t.id) ? 'checked' : ''} title="选中以便批量删除">
         <i style="background:${E(t.color)}"></i>
-        <input class="input pt-tagname" data-tagid="${E(t.id)}" value="${E(t.name)}" maxlength="16">
-        <input type="color" class="pt-color" data-tagcolor="${E(t.id)}" value="${E(t.color)}" title="改颜色">
+        <input class="input pt-tagname" data-tagid="${E(t.id)}" data-oldname="${E(t.name)}" value="${E(t.name)}" maxlength="16">
+        <input type="color" class="pt-color" data-tagcolor="${E(t.id)}" data-oldcolor="${E(t.color)}" value="${E(t.color)}" title="改颜色">
+        <button class="pt-tagmgr-save" data-tagsave="${E(t.id)}" title="保存修改" disabled>✓</button>
         <button class="pt-ico danger" data-tagdel="${E(t.id)}" title="删除标签">✕</button></div>`).join('')
-        : '<div class="pt-empty-sm">还没有标签</div>';
-      QA('[data-tagid]', m).forEach(inp => inp.onchange = async () => {
-        const t = PT.tags.find(x => x.id === inp.dataset.tagid);
-        const color = (Q(`[data-tagcolor="${CSS.escape(inp.dataset.tagid)}"]`, m) || {}).value || t.color;
-        const r = await A(API + '/tags/' + encodeURIComponent(t.id), { method: 'PUT', body: { name: inp.value, color } });
-        if (!r.ok) { T(r.reason || '没改成'); return; }
-        Object.assign(t, r.data); T('标签已更新'); refreshAll(); renderList();
+        : `<div class="pt-empty-sm">${PT.tags.length ? '没有匹配的标签' : '还没有标签'}</div>`;
+      QA('.pt-tagmgr-row', m).forEach(row => {
+        const id = row.dataset.id;
+        const nameInp = Q('.pt-tagname', row), colorInp = Q('.pt-color', row), save = Q('[data-tagsave]', row);
+        const sync = () => {
+          const changed = nameInp.value.trim() !== nameInp.dataset.oldname
+            || colorInp.value.toLowerCase() !== colorInp.dataset.oldcolor.toLowerCase();
+          save.disabled = !changed;
+          save.classList.toggle('ready', changed);
+        };
+        nameInp.oninput = sync; colorInp.oninput = sync;
+        save.onclick = async () => {
+          const name = nameInp.value.trim();
+          if (!name) { T('标签名不能为空'); return; }
+          const r = await A(API + '/tags/' + encodeURIComponent(id), { method: 'PUT', body: { name, color: colorInp.value } });
+          if (!r.ok) { T(r.reason || '没改成'); return; }
+          const t = PT.tags.find(x => x.id === id);
+          Object.assign(t, r.data);
+          nameInp.dataset.oldname = r.data.name; colorInp.dataset.oldcolor = r.data.color;
+          Q('i', row).style.background = r.data.color;
+          sync(); T('标签已更新'); refreshAll();
+        };
+        Q('[data-tagdel]', row).onclick = () => {
+          const t = PT.tags.find(x => x.id === id);
+          confirmDelKeep('是否删除标签「' + t.name + '」？', '删除后无法恢复，这个标签会从所有模板卡片上一起移除。', async () => {
+            const r = await A(API + '/tags/' + encodeURIComponent(id), { method: 'DELETE' });
+            if (!r.ok) { T(r.reason || '没删成'); return; }
+            dropLocal(id); T('标签已删除'); refreshAll(); renderList();
+          });
+        };
+        const chk = Q('[data-sel]', row);
+        chk.onchange = () => { chk.checked ? sel.add(id) : sel.delete(id); updateBulk(); };
       });
-      QA('[data-tagcolor]', m).forEach(inp => inp.onchange = async () => {
-        const t = PT.tags.find(x => x.id === inp.dataset.tagcolor);
-        const name = (Q(`[data-tagid="${CSS.escape(t.id)}"]`, m) || {}).value || t.name;
-        const r = await A(API + '/tags/' + encodeURIComponent(t.id), { method: 'PUT', body: { name, color: inp.value } });
-        if (!r.ok) { T(r.reason || '没改成'); renderList(); return; }
-        Object.assign(t, r.data); T('标签已更新'); refreshAll(); renderList();
-      });
-      QA('[data-tagdel]', m).forEach(b => b.onclick = () => {
-        const t = PT.tags.find(x => x.id === b.dataset.tagdel);
-        confirmDel('删除标签「' + t.name + '」？', '这个标签会从所有模板卡片上一起移除。', async () => {
-          const r = await A(API + '/tags/' + encodeURIComponent(t.id), { method: 'DELETE' });
-          if (!r.ok) { T(r.reason || '没删成'); return; }
-          PT.tags = PT.tags.filter(x => x.id !== t.id);
-          PT.templates.forEach(x => { x.tags = (x.tags || []).filter(y => y !== t.id); });
-          PT.drafts.forEach(x => { x.tags = (x.tags || []).filter(y => y !== t.id); });
-          PT.filters.tags = PT.filters.tags.filter(id => id !== t.id);
-          T('标签已删除'); refreshAll(); openTagManager();
-        });
-      });
+      const all = Q('#ptTagMgrAll', m), vis = visibleTags();
+      if (all) {
+        all.checked = vis.length > 0 && vis.every(t => sel.has(t.id));
+        all.indeterminate = vis.some(t => sel.has(t.id)) && !all.checked;
+      }
+      updateBulk();
     };
     renderList();
+    Q('#ptTagMgrAll', m).onchange = e => {
+      visibleTags().forEach(t => e.target.checked ? sel.add(t.id) : sel.delete(t.id));
+      renderList();
+    };
+    Q('#ptTagBulkDel', m).onclick = () => {
+      if (!sel.size) return;
+      const ids = [...sel];
+      const names = ids.map(id => (PT.tags.find(t => t.id === id) || {}).name).filter(Boolean);
+      confirmDelKeep('是否删除这 ' + ids.length + ' 个标签？', names.join('、') + ' —— 删除后无法恢复，会从所有模板卡片上一起移除。', async () => {
+        let done = 0;
+        for (const id of ids) {
+          const r = await A(API + '/tags/' + encodeURIComponent(id), { method: 'DELETE' });
+          if (r.ok) { dropLocal(id); done++; }
+        }
+        T(`已删除 ${done} 个标签`); refreshAll(); renderList();
+      });
+    };
+    const qClear = Q('#ptTagMgrQClear', m);
+    const syncClear = () => { qClear.style.display = (PT.tagMgrQ || '').trim() ? '' : 'none'; };
+    Q('#ptTagMgrQ', m).oninput = e => { PT.tagMgrQ = e.target.value; syncClear(); renderList(); };
+    qClear.onclick = () => {
+      PT.tagMgrQ = ''; Q('#ptTagMgrQ', m).value = ''; syncClear(); renderList(); Q('#ptTagMgrQ', m).focus();
+    };
+    syncClear();
     Q('#ptNewTagBtn', m).onclick = async () => {
       const name = Q('#ptNewTagName', m).value.trim();
       if (!name) { T('先写标签名'); return; }
       const r = await A(API + '/tags', { body: { name, color: Q('#ptNewTagColor', m).value } });
       if (!r.ok) { T(r.reason || '没加成'); return; }
       PT.tags.push(r.data); Q('#ptNewTagName', m).value = '';
+      PT.tagMgrQ = ''; Q('#ptTagMgrQ', m).value = ''; syncClear();   // 清掉检索，保证新标签立即可见
       T('标签已添加'); refreshAll(); renderList();
     };
   }
@@ -270,7 +617,7 @@
     return `<div class="pt-page">
       <div class="pt-head">
         <div class="pt-head-t"><h2>提示词模板库</h2>
-          <div class="sub">图片 / 视频 / 音频的提示词集中管理。支持新增、修改、删除、查询、查看与拷贝。</div></div>
+          <div class="sub">图片 / 视频 / 音频的提示词集中管理。带参考素材的模板存「-含参」那份，素材本体放在成果目录下的「提示词模板库」文件夹。</div></div>
         <div class="pt-head-a">
           <button class="btn sm" id="ptTagMgr">标签管理</button>
           <button class="btn primary sm" id="ptAdd">＋ 新增模板</button>
@@ -290,7 +637,8 @@
         <button type="button" class="btn sm danger" id="ptBulkDel" disabled>删除所选</button>
         <span class="pt-bulk-hint">勾选后批量删除；筛选后「全选」只作用于当前筛选结果</span>
       </div>
-      <div class="pt-path">数据文件：<code>data/prompt_templates/图片.md</code> · <code>视频.md</code> · <code>音频.md</code> · <code>标签.md</code></div>
+      <div class="pt-path">数据文件：<code>data/prompt_templates/图片.md</code> · <code>图片-含参.md</code> · <code>视频.md</code> · <code>视频-含参.md</code> · <code>音频.md</code> · <code>音频-含参.md</code> · <code>标签.md</code>
+        <br>参考素材：<code class="pt-media-dir">${E(PT.mediaDir || '（读取中…）')}</code></div>
       <div class="pt-grid" id="ptGrid">${PT.loaded ? '' : '<div class="pt-loading">正在读取模板…</div>'}</div>
     </div>`;
   }
@@ -310,6 +658,7 @@
         </div>
       </div>
       <div class="pt-tags">${tagRowHtml(d, false)}</div>
+      <div class="pt-media" data-mrow>${mediaRowHtml(d, false)}</div>
       <textarea class="input pt-content" data-f="content" rows="3" placeholder="在这里写提示词模板内容…">${E(d.content)}</textarea>
       <div class="pt-card-foot">
         <span class="pt-updated">${d.isNew ? '未保存的新卡片' : '更新于 ' + E((t && t.updated) || '—')}</span>
@@ -340,6 +689,15 @@
     Q('[data-save]', card).onclick = () => saveOne(d.id);
     Q('[data-del]', card).onclick = () => deleteOne(d.id);
     Q('[data-copy]', card).onclick = () => copyText(d.content);
+    const bindMedia = () => {
+      const row = Q('[data-mrow]', card);
+      bindMediaRow(row, d, () => {
+        row.innerHTML = mediaRowHtml(d, false);
+        bindMedia();
+        Q('.pt-save', card).disabled = !dirty(d);
+      });
+    };
+    bindMedia();
     const bindTags = () => {
       const row = Q('.pt-tags', card);
       bindTagRow(row, d, () => {
@@ -390,6 +748,8 @@
       });
       PT.shown += next.length;
       Q('#ptCount', document).textContent = `已显示 ${PT.shown} / ${rows.length} 条`;
+      // 加载条上的数字跟着一起走，别停在上一批
+      sentinel.textContent = `向下滚动加载更多 · 已显示 ${PT.shown} / ${rows.length}`;
       if (PT.shown >= rows.length) { sentinel.remove(); PT._io.disconnect(); PT._io = null; }
     }, { rootMargin: '40px' });
     PT._io.observe(sentinel);
@@ -410,8 +770,12 @@
       grid.insertAdjacentHTML('beforeend', `<div id="ptMore" class="pt-more">向下滚动加载更多 · 已显示 ${slice.length} / ${rows.length}</div>`);
     }
     if (!slice.length) {
+      const multiAnd = PT.filters.tags.length > 1 && PT.filters.tagMode !== 'any';
+      const tip = !PT.loaded ? '稍等一下'
+        : multiAnd ? '没有同时满足所有标签的模板，可在标签弹层左下角切换为「任一即可」。'
+        : '换个搜索词，或者点右上角「＋ 新增模板」。';
       grid.insertAdjacentHTML('beforeend', `<div class="pt-empty"><div class="pt-empty-ico">✎</div><b>${PT.loaded ? '没有匹配的模板' : '正在读取模板…'}</b>
-         <span>${PT.loaded ? '换个搜索词，或者点右上角「＋ 新增模板」。' : '稍等一下'}</span></div>`);
+         <span>${tip}</span></div>`);
     }
     Q('#ptCount', document).textContent = rows.length > slice.length
       ? `已显示 ${slice.length} / ${rows.length} 条` : `共 ${rows.length} 条`;
@@ -426,15 +790,24 @@
   // 多选筛选按钮上显示的当前条件（命中几个 / 名称）
   function filterSummary(kind) {
     const ids = PT.filters[kind];
-    if (!ids.length) return kind === 'cats' ? '全部分类' : '全部标签';
-    if (kind === 'cats') return ids.map(id => (CATS.find(c => c.id === id) || {}).name || id).join('、');
-    return ids.slice(0, 2).map(id => (tagById(id) || {}).name || id).join('、') + (ids.length > 2 ? ` +${ids.length - 2}` : '');
+    if (kind === 'cats') return ids.length ? ids.map(id => (CATS.find(c => c.id === id) || {}).name || id).join('、') : '全部分类';
+    const exc = PT.filters.notTags || [];
+    if (!ids.length && !exc.length) return '全部标签';
+    const fmt = arr => arr.slice(0, 2).map(id => (tagById(id) || {}).name || id).join('、')
+      + (arr.length > 2 ? ` +${arr.length - 2}` : '');
+    const mode = ids.length > 1 ? (PT.filters.tagMode === 'any' ? '（任一）' : '（全部）') : '';
+    if (!exc.length) return fmt(ids) + mode;
+    if (!ids.length) return '不含 ' + fmt(exc);
+    return fmt(ids) + mode + ' · 不含 ' + fmt(exc);
   }
   function updateToolbarMeta() {
     const cc = Q('#ptCatCur'); if (cc) cc.textContent = filterSummary('cats');
     const tc = Q('#ptTagCur'); if (tc) tc.textContent = filterSummary('tags');
     Q('#ptCatFilter')?.classList.toggle('on', PT.filters.cats.length > 0);
-    Q('#ptTagFilter')?.classList.toggle('on', PT.filters.tags.length > 0);
+    Q('#ptTagFilter')?.classList.toggle('on', PT.filters.tags.length > 0 || PT.filters.notTags.length > 0);
+    // 素材目录要等数据回来才知道，页面骨架先占位，拿到后回填
+    const md = Q('.pt-media-dir');
+    if (md && PT.mediaDir && md.textContent !== PT.mediaDir) md.textContent = PT.mediaDir;
   }
 
   // 批量删除条：全选/半选状态 + 已选数量 + 删除按钮可用性
@@ -470,7 +843,11 @@
         PT.templates = PT.templates.filter(x => !ids.includes(x.id));
         ids.forEach(id => { PT.drafts.delete(id); PT.expanded.delete(id); });
       }
-      newIds.forEach(id => PT.drafts.delete(id));
+      newIds.forEach(id => {
+        const nd = PT.drafts.get(id);
+        PT.drafts.delete(id);
+        if (nd) dropOrphanUploads(nd);
+      });
       PT.selected.clear();
       T(`已删除 ${done + newIds.length} 条`);
       refreshAll();
@@ -490,7 +867,7 @@
     refreshAdminGrid(); updateToolbarMeta();
     const add = Q('#ptAdd');
     if (add) add.onclick = () => {
-      PT.filters = { q: '', cats: [], tags: [] };
+      PT.filters = { q: '', cats: [], tags: [], notTags: [], tagMode: 'all' };
       const q = Q('#ptQ'); if (q) q.value = '';
       newDraft(); refreshAll();
       const first = Q('.pt-card.is-new .pt-title'); if (first) first.focus();
@@ -527,42 +904,69 @@
     closeAdminFilter();
     const pop = document.createElement('div');
     pop.className = 'pt-tagfilter-pop';
-    pop.innerHTML = `<div class="pt-tagfilter-hd">${kind === 'cats' ? '按分类筛选（可多选）' : '按标签筛选（可多选）'}
+    pop.innerHTML = `<div class="pt-tagfilter-hd">${kind === 'cats' ? '按分类筛选（可多选）' : '按标签筛选（左键包含 · ⊘ 排除）'}
         <button type="button" data-afclose>✕</button></div>
+      <div class="pt-tagfilter-search"><input class="input" data-afq placeholder="${kind === 'cats' ? '查找分类…' : '查找标签…'}"></div>
       <div class="pt-tagfilter-list"></div>
-      <div class="pt-tagfilter-ft"><button type="button" class="btn sm" data-afclear>清空</button>
+      <div class="pt-tagfilter-ft">${kind === 'tags' ? '<button type="button" class="pt-tagfilter-mode" data-afmode></button>' : ''}
+        <button type="button" class="btn sm" data-afclear>清空</button>
         <button type="button" class="btn primary sm" data-afdone>完成</button></div>`;
     document.body.appendChild(pop);
     adminFilterPop = pop;
     const renderItems = () => {
       const list = Q('.pt-tagfilter-list', pop);
-      const items = kind === 'cats'
+      const kw = (Q('[data-afq]', pop)?.value || '').trim().toLowerCase();
+      const items = (kind === 'cats'
         ? CATS.map(c => ({ id: c.id, name: c.name, color: '#2f6bff' }))
-        : PT.tags.map(t => ({ id: t.id, name: t.name, color: t.color }));
-      const cur = PT.filters[kind];
+        : PT.tags.map(t => ({ id: t.id, name: t.name, color: t.color })))
+        .filter(x => !kw || x.name.toLowerCase().includes(kw));
+      const cur = PT.filters[kind], exc = PT.filters.notTags || [];
       const top = list.scrollTop;
-      list.innerHTML = items.map(x => `<button type="button" class="pt-tagfilter-item${cur.includes(x.id) ? ' on' : ''}"
-        data-afid="${E(x.id)}" style="--chip:${E(x.color)}"><i></i><span>${E(x.name)}</span><b>${cur.includes(x.id) ? '✓' : ''}</b></button>`).join('')
-        || '<div class="pt-empty-sm">还没有标签，先去「标签管理」加几个</div>';
+      list.innerHTML = items.map(x => {
+        const on = cur.includes(x.id), no = kind === 'tags' && exc.includes(x.id);
+        return `<div class="pt-tagfilter-item${on ? ' on' : ''}${no ? ' no' : ''}" style="--chip:${E(x.color)}">
+          <button type="button" class="pt-tagfilter-main" data-afid="${E(x.id)}"><i></i><span>${E(x.name)}</span><b>${on ? '✓' : no ? '⊘' : ''}</b></button>
+          ${kind === 'tags' ? `<button type="button" class="pt-tagfilter-ex" data-afno="${E(x.id)}" title="排除这个标签">⊘</button>` : ''}</div>`;
+      }).join('') || '<div class="pt-empty-sm">没有匹配的项目</div>';
       list.scrollTop = top;
       QA('[data-afid]', pop).forEach(b => b.onclick = () => {
         const id = b.dataset.afid, i = cur.indexOf(id);
         if (i >= 0) cur.splice(i, 1); else cur.push(id);
+        if (kind === 'tags') { const j = exc.indexOf(id); if (j >= 0) exc.splice(j, 1); }
         renderItems(); updateToolbarMeta();
         if (PT.dock.el && !PT.dock.el.hidden) { renderDockTools(); renderDockList(true); }
       });
-      Q('[data-afdone]', pop).textContent = cur.length ? `完成（${cur.length}）` : '完成';
+      QA('[data-afno]', pop).forEach(b => b.onclick = () => {
+        const id = b.dataset.afno, j = exc.indexOf(id);
+        if (j >= 0) exc.splice(j, 1); else exc.push(id);
+        const i = cur.indexOf(id); if (i >= 0) cur.splice(i, 1);
+        renderItems(); updateToolbarMeta();
+        if (PT.dock.el && !PT.dock.el.hidden) { renderDockTools(); renderDockList(true); }
+      });
+      const n = cur.length + (kind === 'tags' ? exc.length : 0);
+      Q('[data-afdone]', pop).textContent = n ? `完成（${n}）` : '完成';
+      const mb = Q('[data-afmode]', pop);
+      if (mb) mb.textContent = PT.filters.tagMode === 'any' ? '任一即可' : '全部满足';
     };
     renderItems();
+    Q('[data-afq]', pop).oninput = renderItems;
     const r = anchor.getBoundingClientRect();
     const w = pop.offsetWidth || 216, h = pop.offsetHeight || 260;
     pop.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
     pop.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
     Q('[data-afclose]', pop).onclick = closeAdminFilter;
     Q('[data-afdone]', pop).onclick = () => { closeAdminFilter(); resetAdminPaging(); };
+    const modeBtn = Q('[data-afmode]', pop);
+    if (modeBtn) modeBtn.onclick = () => {
+      PT.filters.tagMode = PT.filters.tagMode === 'any' ? 'all' : 'any';
+      renderItems(); updateToolbarMeta(); resetAdminPaging();
+      if (PT.dock.el && !PT.dock.el.hidden) { renderDockTools(); renderDockList(true); }
+    };
     Q('[data-afclear]', pop).onclick = () => {
       PT.filters[kind] = [];
+      if (kind === 'tags') PT.filters.notTags = [];
       renderItems(); updateToolbarMeta(); resetAdminPaging();
+      if (PT.dock.el && !PT.dock.el.hidden) { renderDockTools(); renderDockList(true); }
     };
     setTimeout(() => document.addEventListener('pointerdown', onAdminFilterOutside, true), 0);
   }
@@ -680,18 +1084,19 @@
   // 按钮上显示的已选标签：最多 2 个彩色 chip，超出用 +N 表示，hover 出 tip 看全部
   function tagFilterCurHtml() {
     const tags = PT.filters.tags.map(tagById).filter(Boolean);
-    if (!tags.length) return '<span class="pt-tagfilter-all">全部</span>';
-    const shown = tags.slice(0, 2).map(t =>
-      `<span class="pt-tagfilter-chip" style="--chip:${E(t.color)}">${E(t.name)}</span>`).join('');
-    return shown + (tags.length > 2 ? `<span class="pt-tagfilter-more">+${tags.length - 2}</span>` : '');
+    const exc = (PT.filters.notTags || []).map(tagById).filter(Boolean);
+    if (!tags.length && !exc.length) return '<span class="pt-tagfilter-all">全部</span>';
+    const chip = (t, no) => `<span class="pt-tagfilter-chip${no ? ' no' : ''}" style="--chip:${E(t.color)}">${no ? '⊘ ' : ''}${E(t.name)}</span>`;
+    const all = tags.map(t => chip(t, false)).concat(exc.map(t => chip(t, true)));
+    return all.slice(0, 2).join('') + (all.length > 2 ? `<span class="pt-tagfilter-more">+${all.length - 2}</span>` : '');
   }
   function renderDockTools() {
     const el = PT.dock.el, box = Q('.pt-dock-tools', el); if (!box) return;
     closeTagTip();
-    box.innerHTML = `<div class="pt-dock-search"><span>⌕</span><input id="ptDockQ" placeholder="搜标题 / 内容" value="${E(PT.filters.q)}"></div>
+    box.innerHTML = `<div class="pt-dock-search"><span>⌕</span><input id="ptDockQ" placeholder="搜标题 / 内容 / 标签" value="${E(PT.filters.q)}"></div>
       <div class="pt-dock-cats"><button type="button" class="pt-dchip${PT.filters.cats.length === 0 ? ' on' : ''}" data-dcat="">全部</button>
         ${CATS.map(c => `<button type="button" class="pt-dchip${PT.filters.cats.includes(c.id) ? ' on' : ''}" data-dcat="${c.id}">${c.name}</button>`).join('')}</div>
-      <button type="button" class="pt-tagfilter-btn${PT.filters.tags.length ? ' on' : ''}" data-dtagfilter>
+      <button type="button" class="pt-tagfilter-btn${PT.filters.tags.length || PT.filters.notTags.length ? ' on' : ''}" data-dtagfilter>
         <span class="pt-tagfilter-label">标签筛选</span>
         <span class="pt-tagfilter-cur">${tagFilterCurHtml()}</span>
         <span class="pt-tagfilter-caret">▾</span></button>
@@ -722,12 +1127,14 @@
   function showTagTip(e) {
     closeTagTip();
     const tags = PT.filters.tags.map(tagById).filter(Boolean);
-    if (!tags.length) return;
+    const exc = (PT.filters.notTags || []).map(tagById).filter(Boolean);
+    if (!tags.length && !exc.length) return;
     const anchor = e.currentTarget;
     const tip = document.createElement('div');
     tip.className = 'pt-tag-tip';
-    tip.innerHTML = `<div class="pt-tag-tip-hd">已选标签 · ${tags.length} 个</div>
-      <div class="pt-tag-tip-list">${tags.map(t => `<span class="pt-tag-tip-chip" style="--chip:${E(t.color)}">${E(t.name)}</span>`).join('')}</div>`;
+    tip.innerHTML = `<div class="pt-tag-tip-hd">包含 ${tags.length} 个${exc.length ? ` · 排除 ${exc.length} 个` : ''}</div>
+      <div class="pt-tag-tip-list">${tags.map(t => `<span class="pt-tag-tip-chip" style="--chip:${E(t.color)}">${E(t.name)}</span>`).join('')}
+      ${exc.map(t => `<span class="pt-tag-tip-chip no" style="--chip:${E(t.color)}">⊘ ${E(t.name)}</span>`).join('')}</div>`;
     document.body.appendChild(tip);
     const r = anchor.getBoundingClientRect();
     tip.style.left = Math.max(8, Math.min(r.left, innerWidth - tip.offsetWidth - 8)) + 'px';
@@ -744,55 +1151,85 @@
     if (tagFilterPop && !tagFilterPop.contains(e.target) && !e.target.closest('[data-dtagfilter]')) closeTagFilter();
   }
   function tagFilterItemHtml(t) {
-    const on = t.id === '' ? PT.filters.tags.length === 0 : PT.filters.tags.includes(t.id);
-    return `<button type="button" class="pt-tagfilter-item${on ? ' on' : ''}" data-tfid="${E(t.id)}" style="--chip:${E(t.color)}">
-      <i></i><span>${E(t.name)}</span><b>${on ? '✓' : ''}</b></button>`;
+    const on = t.id === '' ? !PT.filters.tags.length && !PT.filters.notTags.length : PT.filters.tags.includes(t.id);
+    const no = t.id !== '' && PT.filters.notTags.includes(t.id);
+    return `<div class="pt-tagfilter-item${on ? ' on' : ''}${no ? ' no' : ''}" style="--chip:${E(t.color)}">
+      <button type="button" class="pt-tagfilter-main" data-tfid="${E(t.id)}"><i></i><span>${E(t.name)}</span><b>${on ? '✓' : no ? '⊘' : ''}</b></button>
+      ${t.id === '' ? '' : `<button type="button" class="pt-tagfilter-ex" data-tfno="${E(t.id)}" title="排除这个标签">⊘</button>`}</div>`;
   }
   function syncTagFilterPop() {
     if (!tagFilterPop) return;
     const list = Q('.pt-tagfilter-list', tagFilterPop);
     if (list) {
+      const kw = (Q('[data-tfq]', tagFilterPop)?.value || '').trim().toLowerCase();
+      const all = [{ id: '', name: '全部标签', color: '#9aa5b1' }].concat(PT.tags)
+        .filter(t => !t.id || !kw || t.name.toLowerCase().includes(kw));
       const top = list.scrollTop;   // 多选时保留滚动位置，别选一个就跳回顶部
-      list.innerHTML = [{ id: '', name: '全部标签', color: '#9aa5b1' }].concat(PT.tags).map(tagFilterItemHtml).join('');
+      list.innerHTML = all.map(tagFilterItemHtml).join('')
+        || '<div class="pt-empty-sm">没有匹配的标签</div>';
       list.scrollTop = top;
     }
     QA('[data-tfid]', tagFilterPop).forEach(b => b.onclick = toggleTagFilterItem);
+    QA('[data-tfno]', tagFilterPop).forEach(b => b.onclick = toggleTagFilterEx);
+    const n = PT.filters.tags.length + PT.filters.notTags.length;
     const done = Q('[data-tfdone]', tagFilterPop);
-    if (done) done.textContent = PT.filters.tags.length ? `完成（${PT.filters.tags.length}）` : '完成';
+    if (done) done.textContent = n ? `完成（${n}）` : '完成';
+    const mb = Q('[data-tfmode]', tagFilterPop);
+    if (mb) mb.textContent = PT.filters.tagMode === 'any' ? '任一即可' : '全部满足';
   }
   function toggleTagFilterItem(e) {
     const id = e.currentTarget.dataset.tfid;
-    if (id === '') PT.filters.tags = [];
+    if (id === '') { PT.filters.tags = []; PT.filters.notTags = []; }
     else {
       const i = PT.filters.tags.indexOf(id);
       if (i >= 0) PT.filters.tags.splice(i, 1); else PT.filters.tags.push(id);
+      const j = PT.filters.notTags.indexOf(id); if (j >= 0) PT.filters.notTags.splice(j, 1);
     }
     syncTagFilterPop();          // 只重画弹层内容，不关闭 —— 可以连续多选
     renderDockTools(); renderDockList(true); updateToolbarMeta();
+  }
+  function toggleTagFilterEx(e) {
+    const id = e.currentTarget.dataset.tfno;
+    const j = PT.filters.notTags.indexOf(id);
+    if (j >= 0) PT.filters.notTags.splice(j, 1); else PT.filters.notTags.push(id);
+    const i = PT.filters.tags.indexOf(id); if (i >= 0) PT.filters.tags.splice(i, 1);
+    syncTagFilterPop(); renderDockTools(); renderDockList(true); updateToolbarMeta();
   }
   function openTagFilter(anchor) {
     closeTagFilter();
     const pop = document.createElement('div');
     pop.className = 'pt-tagfilter-pop';
-    pop.innerHTML = `<div class="pt-tagfilter-hd">按标签筛选（可多选） <button type="button" data-tfclose>✕</button></div>
+    pop.innerHTML = `<div class="pt-tagfilter-hd">按标签筛选（左键包含 · ⊘ 排除） <button type="button" data-tfclose>✕</button></div>
+      <div class="pt-tagfilter-search"><input class="input" data-tfq placeholder="查找标签…"></div>
       <div class="pt-tagfilter-list"></div>
-      <div class="pt-tagfilter-ft"><button type="button" class="btn sm" data-tfclear>清空</button>
+      <div class="pt-tagfilter-ft"><button type="button" class="pt-tagfilter-mode" data-tfmode></button>
+        <button type="button" class="btn sm" data-tfclear>清空</button>
         <button type="button" class="btn primary sm" data-tfdone>完成</button></div>`;
     document.body.appendChild(pop);
     tagFilterPop = pop;              // 必须先赋值：syncTagFilterPop 依赖它
     syncTagFilterPop();
+    Q('[data-tfq]', pop).oninput = syncTagFilterPop;
     const r = anchor.getBoundingClientRect();
     const w = pop.offsetWidth || 220, h = pop.offsetHeight || 260;
     pop.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
     pop.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
     Q('[data-tfclose]', pop).onclick = closeTagFilter;
     Q('[data-tfdone]', pop).onclick = closeTagFilter;
-    Q('[data-tfclear]', pop).onclick = () => { PT.filters.tags = []; syncTagFilterPop(); renderDockTools(); renderDockList(true); updateToolbarMeta(); };
+    Q('[data-tfmode]', pop).onclick = () => {
+      PT.filters.tagMode = PT.filters.tagMode === 'any' ? 'all' : 'any';
+      syncTagFilterPop(); renderDockTools(); renderDockList(true); updateToolbarMeta();
+      const c = Q('#ptTagCur'); if (c) c.textContent = filterSummary('tags');
+    };
+    Q('[data-tfclear]', pop).onclick = () => { PT.filters.tags = []; PT.filters.notTags = []; syncTagFilterPop(); renderDockTools(); renderDockList(true); updateToolbarMeta(); };
     setTimeout(() => document.addEventListener('pointerdown', onTagFilterOutside, true), 0);
   }
 
   function dockCardHtml(d) {
     const open = PT.expanded.has(d.id);
+    const media = (d.media || []).length
+      ? `<div class="pt-dcard-media">${d.media.map(m => `<div class="pt-dthumb" data-mid="${E(m.id)}" role="button"
+          tabindex="0" title="${E(m.name)} · 点击查看">${thumbInner(m)}<i>${kindName(m.kind)}</i><b>${mediaNo(d, m)}</b></div>`).join('')}</div>`
+      : '';
     return `<div class="pt-dcard${open ? ' open' : ''}" data-id="${E(d.id)}">
       <div class="pt-dcard-hd">
         <i class="pt-dot" style="background:${d.category === 'video' ? '#7c6bd6' : d.category === 'audio' ? '#2fa36b' : '#2f6bff'}"></i>
@@ -803,6 +1240,7 @@
           <button type="button" data-ddel title="删除">✕</button>
         </span></div>
       <div class="pt-dcard-meta">${catName(d.category)} · ${(d.tags || []).map(id => { const t = tagById(id); return t ? `<em style="--chip:${E(t.color)}">${E(t.name)}</em>` : ''; }).join('')}</div>
+      ${media}
       <div class="pt-dcard-body" data-dbody>${E(d.content || '（还没有内容）')}</div>
     </div>`;
   }
@@ -812,6 +1250,14 @@
     Q('[data-dcopy]', card).onclick = e => { e.stopPropagation(); copyText(d.content); };
     Q('[data-dedit]', card).onclick = e => { e.stopPropagation(); openDockEditor(d.id); };
     Q('[data-ddel]', card).onclick = e => { e.stopPropagation(); deleteOne(d.id); };
+    QA('.pt-dthumb', card).forEach(el => {
+      el.onclick = e => {
+        e.stopPropagation();
+        const m = (d.media || []).find(x => x.id === el.dataset.mid);
+        if (m) openMediaViewer(m);
+      };
+    });
+    paintVideoThumbs(card);
     Q('.pt-dcard-hd', card).onclick = e => {
       if (e.target.closest('button')) return;
       if (PT.expanded.has(d.id)) PT.expanded.delete(d.id); else PT.expanded.add(d.id);
@@ -871,6 +1317,8 @@
         <label>标题</label><input class="input" data-ed-f="title" value="${E(d.title)}" placeholder="给模板起个名字" maxlength="80">
         <label>分类 <span class="pt-req">必选</span></label><select class="input" data-ed-f="category">${catOpts}</select>
         <label>标签 <span class="pt-req">最多 ${MAX_TAGS} 个</span></label><div class="pt-ed-tags">${tagRowHtml(d, true)}</div>
+        <label>参考素材 <span class="pt-req">图片 / 视频 / 音频，最多 ${MAX_MEDIA} 个</span></label>
+        <div class="pt-media sm" data-mrow>${mediaRowHtml(d, true)}</div>
         <label>提示词内容</label><textarea class="input" data-ed-f="content" rows="4" placeholder="在这里写提示词…">${E(d.content)}</textarea>
         <button type="button" class="btn danger sm pt-ed-del" data-ed-del>${d.isNew ? '移除这张卡片' : '删除这个模板'}</button>
       </div>`;
@@ -883,6 +1331,15 @@
       syncSave();
     };
     bindTagRow(Q('.pt-ed-tags', editor), d, () => { rebuildTags(); syncSave(); });
+    const bindMedia = () => {
+      const row = Q('[data-mrow]', editor);
+      bindMediaRow(row, d, () => {
+        row.innerHTML = mediaRowHtml(d, true);
+        bindMedia();
+        syncSave();
+      });
+    };
+    bindMedia();
     Q('[data-ed-back]', editor).onclick = closeDockEditor;
     Q('.pt-ed-save', editor).onclick = async () => { await saveOne(d.id); if (!PT.drafts.has(d.id)) closeDockEditor(); };
     Q('[data-ed-del]', editor).onclick = () => { closeDockEditor(); deleteOne(d.id); };
@@ -929,7 +1386,12 @@
     }
     closeTagPop();
   });
-  document.addEventListener('scroll', closeTagPop, true);
+  function onDocScroll(e) {
+    // 浮层内部列表滚动（滚轮 / 拖拽滚动条）不能把浮层关掉；只有页面本身滚动时才收起。
+    if (tagPop && e.target instanceof Node && tagPop.contains(e.target)) return;
+    closeTagPop();
+  }
+  document.addEventListener('scroll', onDocScroll, true);
 
   window.PromptLib = {
     viewAdmin, bindAdmin, syncDock, setDockEnabled,

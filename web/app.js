@@ -4280,7 +4280,9 @@ function pageService() {
         <div class="hint">固定是输出目录下的 ComfyBridgeOutput，自动生成，不用填。</div></div>
       <div class="field"><label>成品会这样放</label><div class="path-tree mono">
         <div><span class="d">output/</span></div><div>&nbsp;├─ <span class="d">ComfyBridgeOutput/</span></div>
-        <div>&nbsp;│&nbsp;&nbsp; ├─ <span class="d">图片生成/</span></div><div>&nbsp;├─ <span class="muted">（原有的其他文件）</span></div>
+        <div>&nbsp;│&nbsp;&nbsp; ├─ <span class="d">图片生成/</span></div>
+        <div>&nbsp;│&nbsp;&nbsp; ├─ <span class="d">提示词模板库/</span> <span class="muted">（模板卡片的参考图片 / 视频 / 音频）</span></div>
+        <div>&nbsp;├─ <span class="muted">（原有的其他文件）</span></div>
       </div></div>
       <div class="tiny muted" style="line-height:1.85">子目录按能力自动建。生成成功后自动移进来；万一移不进去，图照样给你。</div>
     </div>

@@ -1,12 +1,14 @@
-# 依赖与缓存（不入库）
-.venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+
+# 大体积 / 可再生成
 .cache/
 node_modules/
 *.log
 
-# data：目录结构保留（.gitkeep 占位），文件不入库
+# data：目录结构保留（.gitkeep 占位），里面的文件不入库
 data/uploads/*
 !data/uploads/.gitkeep
 data/trash/*
@@ -14,14 +16,14 @@ data/trash/*
 data/tasks/state.json
 data/tasks/records.jsonl
 data/refs.json
+data/E2E成品/*
 
-# 调试出图产物（体积大，且运行时不依赖；refs 参考图保留）
+# 调试出图 / 冒烟产物
 _dev/prompt_lab/out/
 _dev/prompt_lab/board/out/
-_dev/*.log
-
-# 冒烟测试产物（代码与文档均未引用）
 _dev/smoke/
-
-# 无引用的大体积参考数据
 _reference/oi_all.json
+
+# 素材库源文件与抓取缓存（体积大，运行时不依赖）
+_dev/collect/media/
+_dev/collect/html/

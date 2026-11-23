@@ -18,6 +18,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -144,8 +145,10 @@ def _fresh_profile_and_port() -> tuple[Path, int]:
     context」）。配置目录里塞了磁盘缓存，顺便也就没有旧 app.js 的问题了。
     """
     port = 9223 + (os.getpid() % 60)
-    profile = PROFILE.parent / f"{PROFILE.name}-{port}"
-    shutil.rmtree(profile, ignore_errors=True)
+    # 端口会复用（同一进程号段），再加一段随机后缀，避免每次都去删上一轮那份大缓存
+    profile = PROFILE.parent / f"{PROFILE.name}-{port}-{uuid.uuid4().hex[:6]}"
+    if profile.exists():
+        shutil.rmtree(profile, ignore_errors=True)
     profile.mkdir(parents=True, exist_ok=True)
     return profile, port
 
