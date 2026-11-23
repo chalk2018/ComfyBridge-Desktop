@@ -27,3 +27,18 @@ _reference/oi_all.json
 # 素材库源文件与抓取缓存（体积大，运行时不依赖）
 _dev/collect/media/
 _dev/collect/html/
+
+# _dev：只保留脚本 / JSON 用例 / prompt_lab/refs，截图、探测产物、备份不入库
+_dev/dedup_probe/
+_dev/dedup_probe2/
+_dev/dedup_probe3/
+_dev/docshots/
+_dev/_docshots/
+_dev/shots/
+_dev/_shots500/
+_dev/_shots107/
+_dev/backup_before_param_tag/
+_dev/backup_pre500/
+_dev/_backup_107/
+_dev/*.png
+_dev/*.html
