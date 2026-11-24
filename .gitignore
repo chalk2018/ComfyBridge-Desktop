@@ -42,3 +42,6 @@ _dev/backup_pre500/
 _dev/_backup_107/
 _dev/*.png
 _dev/*.html
+
+# 文件备份
+_dev/backup/

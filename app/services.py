@@ -341,14 +341,17 @@ class TaskService:
         return self._resolve_refs(ref_ids)
 
     def video_opt(self, job: dict[str, Any], grade: str) -> dict[str, Any]:
-        """任务上记的视频参数 + 这一档 → 真正提交的出片参数。
+        """这一档 → 真正提交的出片参数（视频四模式共用）。
 
-        档位负责「这套比例/分辨率/步数」，任务上的显式选择优先（用户在页面上
-        把比例从 16:9 改成 9:16 之后，换档重跑也不该被档位改回去）。
+        比例/分辨率/步数只由档位表决定：页面早已不在画面上单独选这三项
+        （web/media.js 的 videoForm 注释与提交体都只从档位对象取 ratio/res/steps），
+        档位名 grade 是唯一真源。旧实现把任务首次保存的 ratio/res/steps 作为显式
+        参数传进去、压过新档位，导致「加入队列生成」换档时新档位被旧值盖掉，
+        ComfyUI 命中执行缓存瞬间返回旧片。现一律按档位名解析，队列换档才会真正
+        换参数；时长 duration/length 不属于档位，仍从任务读取。
         """
         v = job.get("video") or {}
-        opt = videolib.opts(str(v.get("mode") or "ref2v"), grade,
-                            v.get("ratio"), v.get("res"), v.get("steps"))
+        opt = videolib.opts(str(v.get("mode") or "ref2v"), grade)
         # 需求6：创作台时长输入框（4~15 秒，精度 0.01）为准，换算成 H3 的帧数。
         # H3 约 24fps；老草稿没有 duration 时沿用 length / 默认 124 帧。
         dur = v.get("duration")
