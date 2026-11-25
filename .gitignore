@@ -1,51 +1,39 @@
-﻿# Python
+# ===== 通用 =====
 __pycache__/
 *.py[cod]
+*.log
+.cache/
 .venv/
 
-# 大体积 / 可再生成
-.cache/
-node_modules/
-*.log
-
+# ===== 项目本体：ComfyBridge-Desktop/ =====
 # data：目录结构保留（.gitkeep 占位），里面的文件不入库
-data/uploads/*
-!data/uploads/.gitkeep
-data/trash/*
-!data/trash/.gitkeep
-data/tasks/state.json
-data/tasks/records.jsonl
-data/refs.json
-data/E2E成品/*
+ComfyBridge-Desktop/data/uploads/*
+!ComfyBridge-Desktop/data/uploads/.gitkeep
+ComfyBridge-Desktop/data/trash/*
+!ComfyBridge-Desktop/data/trash/.gitkeep
+ComfyBridge-Desktop/data/E2E成品/*
+ComfyBridge-Desktop/data/tasks/state.json
+ComfyBridge-Desktop/data/tasks/records.jsonl
+ComfyBridge-Desktop/data/refs.json
 
-# 调试出图 / 冒烟产物
-_dev/prompt_lab/out/
-_dev/prompt_lab/board/out/
-_dev/smoke/
-_reference/oi_all.json
-
-# 素材库源文件与抓取缓存（体积大，运行时不依赖）
-_dev/collect/media/
-_dev/collect/html/
-
-# _dev：只保留脚本 / JSON 用例 / prompt_lab/refs，截图、探测产物、备份不入库
-_dev/dedup_probe/
-_dev/dedup_probe2/
-_dev/dedup_probe3/
-_dev/docshots/
-_dev/_docshots/
-_dev/shots/
-_dev/_shots500/
-_dev/_shots107/
-_dev/backup_before_param_tag/
-_dev/backup_pre500/
-_dev/_backup_107/
-_dev/*.png
-_dev/*.html
-
-# 文件备份
-_dev/backup/
-
-# 调试截图
-_dev/zoom/
-
+# 调试出图 / 冒烟 / 素材库源文件 / 截图 / 备份
+ComfyBridge-Desktop/_dev/prompt_lab/out/
+ComfyBridge-Desktop/_dev/prompt_lab/board/out/
+ComfyBridge-Desktop/_dev/smoke/
+ComfyBridge-Desktop/_dev/collect/media/
+ComfyBridge-Desktop/_dev/collect/html/
+ComfyBridge-Desktop/_dev/dedup_probe/
+ComfyBridge-Desktop/_dev/dedup_probe2/
+ComfyBridge-Desktop/_dev/dedup_probe3/
+ComfyBridge-Desktop/_dev/docshots/
+ComfyBridge-Desktop/_dev/_docshots/
+ComfyBridge-Desktop/_dev/shots/
+ComfyBridge-Desktop/_dev/_shots500/
+ComfyBridge-Desktop/_dev/_shots107/
+ComfyBridge-Desktop/_dev/zoom/
+ComfyBridge-Desktop/_dev/backup/
+ComfyBridge-Desktop/_dev/backup_before_param_tag/
+ComfyBridge-Desktop/_dev/backup_pre500/
+ComfyBridge-Desktop/_dev/_backup_107/
+ComfyBridge-Desktop/tests/_sheet_full_out/*
+!ComfyBridge-Desktop/tests/_sheet_full_out/*.py

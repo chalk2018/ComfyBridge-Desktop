@@ -1,7 +1,0 @@
-[
-  {"id":"Q-T2I-默认","kind":"queue","from_case":"SMOKE-T2I","grade":"默认","title":"加入队列生成·默认档（应与原图一致）"},
-  {"id":"Q-T2I-快速","kind":"queue","from_case":"SMOKE-T2I","grade":"快速","title":"加入队列生成·快速档（同种子，尺寸变小）"},
-  {"id":"Q-T2I-精细","kind":"queue","from_case":"SMOKE-T2I","grade":"精细","title":"加入队列生成·精细档（同种子，尺寸变大）"},
-  {"id":"A-T2I-1","kind":"again","from_case":"SMOKE-T2I","title":"再来一张·第 1 次（应换新种子）"},
-  {"id":"A-T2I-2","kind":"again","from_case":"A-T2I-1","title":"再来一张·第 2 次（继续换新种子）"}
-]
