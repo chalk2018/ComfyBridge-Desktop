@@ -2,11 +2,18 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F5F3EE">
 <title>ComfyBridge</title>
 <link rel="icon" href="/static/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/logo-32.png">
-<link rel="apple-touch-icon" href="/static/logo-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/logo-touch-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="application-name" content="ComfyBridge">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ComfyBridge">
 <style>
 /* ============ ComfyBridge 页面样式 ============ */
 :root{
@@ -1407,6 +1414,7 @@ select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
 </style>
 <link rel="stylesheet" href="/static/canvas.css">
 <link rel="stylesheet" href="/static/promptlib.css">
+<link rel="stylesheet" href="/static/aurora.css">
 </head>
 <body>
 <div id="root"></div>
@@ -1415,5 +1423,6 @@ select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
 <script src="/static/genui.js"></script>
 <script src="/static/media.js"></script>
 <script src="/static/canvas.js"></script>
+<script src="/static/pwa.js"></script>
 </body>
 </html>

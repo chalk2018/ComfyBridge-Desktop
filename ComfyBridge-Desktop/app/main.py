@@ -504,6 +504,21 @@ async def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
 
 
+# PWA：清单与 Service Worker 必须挂在根路径，安装后作用域才能覆盖整个应用
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def pwa_manifest() -> FileResponse:
+    return FileResponse(WEB_DIR / "manifest.webmanifest",
+                        media_type="application/manifest+json",
+                        headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def pwa_service_worker() -> FileResponse:
+    return FileResponse(WEB_DIR / "sw.js",
+                        media_type="application/javascript; charset=utf-8",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
 # ---------------------------------------------------------------- 状态与 UI
 @app.get("/api/state")
 async def api_state() -> Response:
