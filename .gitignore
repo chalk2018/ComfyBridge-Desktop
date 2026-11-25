@@ -12,6 +12,7 @@ ComfyBridge-Desktop/data/uploads/*
 ComfyBridge-Desktop/data/trash/*
 !ComfyBridge-Desktop/data/trash/.gitkeep
 ComfyBridge-Desktop/data/E2E成品/*
+!ComfyBridge-Desktop/data/E2E成品/.gitkeep
 ComfyBridge-Desktop/data/tasks/state.json
 ComfyBridge-Desktop/data/tasks/records.jsonl
 ComfyBridge-Desktop/data/refs.json
