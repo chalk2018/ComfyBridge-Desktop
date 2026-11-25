@@ -40,3 +40,9 @@ ComfyBridge-Desktop/_dev/_backup_107/
 ComfyBridge-Desktop/tests/_sheet_full_out/*
 !ComfyBridge-Desktop/tests/_sheet_full_out/*.py
 
+
+# ===== 本机证书（mkcert 生成，含私钥，绝不入库）=====
+ComfyBridge-Desktop/certs/*.pem
+ComfyBridge-Desktop/certs/*.key
+ComfyBridge-Desktop/certs/*.crt
+ComfyBridge-Desktop/certs/*.pfx
