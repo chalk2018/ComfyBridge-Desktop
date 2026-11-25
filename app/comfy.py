@@ -86,9 +86,12 @@ class ComfyClient:
         return False, {"error": str(last)}
 
     def queue_state(self) -> dict[str, Any]:
-        """读取 ComfyUI 自己的执行队列（running + pending），用于忙闲判定。"""
+        """读取 ComfyUI 自己的执行队列（running + pending），用于忙闲判定。
+
+        队列数据只在 /queue 上；/prompt 只回一个 exec_info.queue_remaining。
+        """
         try:
-            resp = self._client.get(self._url("/prompt"), timeout=5.0)
+            resp = self._client.get(self._url("/queue"), timeout=5.0)
             resp.raise_for_status()
             data = resp.json()
             running = data.get("queue_running", []) or []
@@ -167,16 +170,21 @@ class ComfyClient:
             return None
 
     def delete(self, prompt_id: str) -> None:
-        """从 ComfyUI 队列里撤掉一条任务。"""
+        """从 ComfyUI 的待跑队列里撤掉一条任务（已经开跑的得用 interrupt）。"""
         try:
-            self._client.post(self._url("/prompt"), json={"delete": [prompt_id]}, timeout=10.0)
+            self._client.post(self._url("/queue"), json={"delete": [prompt_id]}, timeout=10.0)
         except Exception:  # noqa: BLE001
             logger.debug("delete prompt failed", exc_info=True)
 
-    def interrupt(self) -> None:
-        """停止 ComfyUI 当前正在跑的任务。"""
+    def interrupt(self, prompt_id: str = "") -> None:
+        """停掉 ComfyUI 正在执行的任务。
+
+        带 prompt_id 时 ComfyUI 只打断这一条（没在跑就自动跳过），
+        不会误伤别人的任务。
+        """
         try:
-            self._client.post(self._url("/interrupt"), timeout=10.0)
+            body = {"prompt_id": prompt_id} if prompt_id else {}
+            self._client.post(self._url("/interrupt"), json=body, timeout=10.0)
         except Exception:  # noqa: BLE001
             logger.debug("interrupt failed", exc_info=True)
 

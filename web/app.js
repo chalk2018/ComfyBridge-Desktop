@@ -235,6 +235,12 @@ function loadDraft() {
     UI.imgForm = { ...(UI.imgForm || {}), ...d.image };
     imgForm();
   }
+  // 视频生成扩展：子功能 / 档位 / 宽高比 / 参考模式 / 时长都在 UI.veFunc，
+  // 不跟着普通 UI.params.grade 走。不存草稿的话切走再切回来就退回默认档。
+  if (isVideoExtCap(currentCap()) && d.videoExt && typeof d.videoExt === 'object') {
+    UI.veFunc = { ...(UI.veFunc || {}), ...d.videoExt };
+    veFunc();   // 按当前配置校验 func / grade / ratio / mode，缺的补默认值
+  }
 }
 function currentDraftText() {
   const out = { prompt: serializeEditor(), refs: UI.refs.map(r => ({ id: r.id, kind: r.kind || 'image', name: r.name })),
@@ -254,6 +260,7 @@ function currentDraftText() {
   if (isVideoCap(currentCap())) out.video = { ...videoForm(), cells: [...videoForm().cells] };
   if (isAudioCap(currentCap())) out.audio = { ...audioForm() };
   if (currentCap() && currentCap().id === 'image.generate') out.image = { ...imgForm() };
+  if (isVideoExtCap(currentCap())) out.videoExt = { ...(UI.veFunc || {}) };
   return out;
 }
 function saveDraft(extra = {}) {
@@ -299,7 +306,7 @@ function sheetForm() {
   const f = UI.sheetForm = UI.sheetForm || {};
   // 需求 #6：每次进入页面默认选「自定义…」风格。f.style 仍保留第一预设作为兜底，
   // 这样即使用户不填自定义句，sheetStyleValue() 也能回退到合法风格、不会提交空风格句。
-  const defs = { layout: '', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '', styleCustom: true, refChips: [] };
+  const defs = { layout: '', ink: 'color', lineStyle: '', ref: 'lock', grade: '', character: '', style: '', styleText: '', styleCustom: true };
   Object.keys(defs).forEach(k => { if (f[k] === undefined || f[k] === null) f[k] = defs[k]; });
   const layouts = sheetLayouts();
   if (layouts.length && !layouts.some(l => l.id === f.layout)) f.layout = layouts[0].id;
@@ -441,13 +448,7 @@ function viewSheetComposer(cap) {
           value="${esc(f.styleText)}" ${customStyle ? '' : 'style="display:none"'}>
         <span class="tiny muted">${f.ink === 'line' ? '线稿：画风只借造型比例与线条气质，不上色' : '彩色：决定「风格」那一行的画风'}</span>
       </div>` : ''}
-      ${i2i ? `<div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
-      <div class="refquoted" id="sheetQuoted"><span class="slb">已引用</span>
-        ${(f.refChips || []).map(rid => {
-          const ref = UI.refs.find(r => r.id === rid); const slot = UI.refs.findIndex(r => r.id === rid) + 1;
-          return ref ? `<span class="qchipimg" data-ref="${esc(rid)}"><img src="${refUrl(rid)}" alt="图${slot}"><b>图${slot}</b><span class="x" data-unquote="${esc(rid)}" title="取消引用">✕</span></span>` : '';
-        }).join('')}
-        <span class="tiny muted">点参考图上的 @ 引用到这里；生成时按上方选中的子功能使用</span></div>` : ''}
+      ${i2i ? refSlotsHTML(cap) : ''}
       <textarea class="sheetchar" id="sheetChar" rows="3" placeholder="${i2i ? '角色描述（可留空）：只做图片转换时不用写，直接生成即可' : '角色描述：年龄身份 + 脸型五官 + 发型发色 + 服装分件（上衣/下装/外套/鞋）+ 2~3 个标志物'}">${esc(f.character)}</textarea>
       <div class="sheetbar">
         <span class="slb">档位</span>
@@ -463,7 +464,7 @@ function viewSheetComposer(cap) {
       ${UI.sheetOpen ? `<div class="pvbox" id="sheetPv">${sheetPreviewHTML()}</div>` : ''}
       </div>
       <div class="foot">
-        ${i2i ? '<button class="btn ghost sm" id="addRef">＋ 上传</button>' : '<span class="tiny muted">切到「图生图」可上传参考图</span>'}
+        ${i2i ? '' : '<span class="tiny muted">切到「图生图」可上传参考图</span>'}
         <button class="btn ghost sm" id="sheetPvBtn">${UI.sheetOpen ? '收起提示词' : '看完整提示词'}</button>
         ${UI.sheetOpen ? '<button class="btn ghost sm" id="sheetCopy">复制</button>' : ''}
         <span class="tiny muted" id="emptyHint" style="${empty ? '' : 'display:none'}">写点角色描述再发送</span>
@@ -557,12 +558,7 @@ function bindSheetComposer() {
   };
   const stx = $('#sheetStyleText');
   if (stx) stx.oninput = () => { UI.sheetForm.styleText = stx.value; scheduleDraft(); };
-  // 已引用参考图 chip 条：点 ✕ 取消引用（只影响 chip 展示，参考图本体仍在 refs 里）
-  $$('[data-unquote]').forEach(el => el.onclick = () => {
-    const f = sheetForm();
-    f.refChips = (f.refChips || []).filter(x => x !== el.dataset.unquote);
-    refreshComposer();
-  });
+  // 已引用参考图 chip 条已并进 .vslot 方块行，@ 直接往角色描述里插 [图 N] 令牌
   const ch = $('#sheetChar');
   if (ch) {
     ch.oninput = () => {
@@ -788,7 +784,7 @@ function viewExtSheetComposer(cap) {
     ? `<div class="sheetbar"><span class="slb">参考图</span><span class="tiny muted">${UI.mode === 'expand' ? '参考图必传；全景 / 鸟瞰 / 草图只作位置参考' : '至少一张；全景 / 鸟瞰 / 草图按相对位置理解'}</span></div>
        <div class="ext-slots">${['ref', 'pano', 'bird', 'sketch'].filter(s => !extSlotDisabled(UI.mode, f.layout, s)).map(extSlotHTML).join('')}</div>` : '';
   const propRefRow = kind === 'prop' && i2i
-    ? `<div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
+    ? `${refSlotsHTML(cap)}
        <div class="sheetbar"><span class="slb">参考</span>
         <div class="seg" role="group" aria-label="参考方式">
           <button class="segb ${f.ref === 'none' ? 'on' : ''}" data-ext-ref="none">无参考图</button>
@@ -833,7 +829,6 @@ function viewExtSheetComposer(cap) {
       ${UI.extOpen ? `<div class="pvbox" id="extPv">${extPreviewHTML()}</div>` : ''}
       </div>
       <div class="foot">
-        ${kind === 'prop' && i2i ? '<button class="btn ghost sm" id="addRef">＋ 上传</button>' : ''}
         ${kind === 'scene' && UI.mode !== 't2i' ? '<span class="tiny muted ext-foot-hint">在上方四个槽位里上传参考图</span>' : ''}
         <button class="btn ghost sm" id="extPvBtn">${UI.extOpen ? '收起提示词' : '看完整提示词'}</button>
         ${UI.extOpen ? '<button class="btn ghost sm" id="extCopy">复制</button>' : ''}
@@ -1089,8 +1084,8 @@ function viewBoardComposer(cap) {
         ${f.ink === 'line' ? `<select class="input segsel" id="boardLine" title="线稿风格句">
           ${lineStyles.map(s => `<option value="${esc(s.id)}" ${s.id === f.lineStyle ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>`
           : '<span class="tiny muted">彩色：统一电影质感</span>'}</div>
-      <div class="refs" id="refsRow">${UI.refs.map(refThumbHTML).join('')}</div>
-      <div class="sheetbar"><span class="slb">参考图</span><span class="tiny muted">最多 ${cap.maxRefs || 6} 张，可不传；在格描述里写「图 1」即锁定该图角色</span></div>
+      ${refSlotsHTML(cap)}
+      <div class="sheetbar"><span class="slb">参考图</span><span class="tiny muted">最多 ${cap.maxRefs || 6} 张，可不传；点参考图上的 @ 在格描述里插入「[图 1]」即锁定该图角色</span></div>
       <div class="board-wrap">
         <div class="board-grid cols${cols}" role="group" aria-label="选择宫格">${cellsHTML}</div>
         <div class="board-side">
@@ -1108,7 +1103,6 @@ function viewBoardComposer(cap) {
       ${UI.boardOpen ? `<div class="pvbox" id="boardPv">${boardPreviewHTML()}</div>` : ''}
       </div>
       <div class="foot">
-        <button class="btn ghost sm" id="addRef">＋ 上传参考图</button>
         <button class="btn ghost sm" id="boardPvBtn">${UI.boardOpen ? '收起提示词' : '看完整提示词'}</button>
         ${UI.boardOpen ? '<button class="btn ghost sm" id="boardCopy">复制</button>' : ''}
         <span class="tiny muted" id="emptyHint" style="${canSend ? 'display:none' : ''}">至少写一格的画面描述</span>
@@ -1220,13 +1214,18 @@ function currentGrades(cap) { return gradesForWorkflow(cap, currentWorkflowName(
    images.image_N 输入、以及 Qwen-Image 2.1 提示词规范一致）。编辑器只在界面上把令牌渲染成
    带缩略图的小 chip；真正提交时才序列化回 <imageN>。N = 该参考图在当前 UI.refs 中的序号 +1。 */
 const IMAGE_TOKEN = /<image(\d+)>/g;
-function refChipHTML(id, slot) {
-  return `<span class="refchip" contenteditable="false" data-ref="${id}" title="第 ${slot} 张参考图"><img src="${refUrl(id)}" alt="参考图${slot}"><b>图片 ${slot}</b><span class="x" data-rmchip title="移除引用">✕</span></span>`;
-}
+/* 界面上的引用令牌和视频 / 音频页同一种写法：[图 N]。
+   图片生成的 ComfyUI 侧仍要 <imageN>，只在提交那一刻翻译过去。 */
+const REF_TOKEN = /\[图\s*(\d+)\]/g;
 function editorInnerHTML(text) {
-  // 把纯文本里的 <imageN> 还原成可编辑的缩略图 chip（和画布共用同一份实现）
-  return GenUI.editorHTML(text, UI.refs);
+  // 老草稿里存的是 <imageN>：渲染成 [图 N] 文本，和视频页的引用令牌同一形态
+  return String(text || '').split(/(<image\d+>)/g).map(p => {
+    const m = p.match(/^<image(\d+)>$/);
+    return m ? `[图 ${m[1]}]` : esc(p).replace(/\n/g, '<br>');
+  }).join('');
 }
+/* 界面令牌 [图 N] → ComfyUI 的 <imageN>（图片生成专用；视频 / 音频在服务端各翻各的） */
+function toImageTokens(s) { return String(s || '').replace(REF_TOKEN, '<image$1>'); }
 function serializeEditor() {
   const el = $('#promptInput');
   if (!el) return UI.prompt || '';
@@ -1261,25 +1260,37 @@ function onEditorInput() {
   const box = $('#inputbox'); if (box) box.classList.remove('err');
   saveDraft();
 }
-async function insertRefChip(refId) {
+function insertImageToken(refId) {
   const el = $('#promptInput'); if (!el) return;
+  const idx = UI.refs.findIndex(r => r.id === refId) + 1; if (idx <= 0) return;
+  const token = `[图 ${idx}]`;
   el.focus();
-  const slot = (UI.refs.findIndex(r => r.id === refId) + 1) || UI.refs.length || 1;
-  const chip = document.createElement('span');
-  chip.className = 'refchip'; chip.contentEditable = 'false'; chip.dataset.ref = refId;
-  chip.innerHTML = `<img src="${refUrl(refId)}" alt="参考图${slot}"><b>图片 ${slot}</b><span class="x" data-rmchip title="移除引用">✕</span>`;
   const sel = window.getSelection();
-  let range;
   if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
-    range = sel.getRangeAt(0); range.deleteContents();
+    const range = sel.getRangeAt(0); range.deleteContents();
+    range.insertNode(document.createTextNode(token));
+    range.collapse(false);
+    sel.removeAllRanges(); sel.addRange(range);
   } else {
-    range = document.createRange(); range.selectNodeContents(el); range.collapse(false);
+    el.textContent = (el.textContent || '') + token;
   }
-  range.insertNode(chip);
-  const space = document.createTextNode(' '); chip.after(space);
-  const r2 = document.createRange(); r2.setStart(space, 1); r2.collapse(true);
-  sel.removeAllRanges(); sel.addRange(r2);
   onEditorInput();
+  toast(`已插入「${token}」`);
+}
+/* textarea 版：把「[图 N]」插到光标处；apply 负责同步表单状态 */
+function insertTokenIntoField(sel, token, apply) {
+  const el = $(sel);
+  if (!el) { if (apply) apply(token); return; }
+  const cur = el.value || '';
+  const a = el.selectionStart == null ? cur.length : el.selectionStart;
+  const b = el.selectionEnd == null ? a : el.selectionEnd;
+  const next = cur.slice(0, a) + token + cur.slice(b);
+  el.value = next;
+  if (apply) apply(next);
+  el.focus();
+  try { el.setSelectionRange(a + token.length, a + token.length); } catch (_) {}
+  scheduleDraft();
+  toast(`已插入「${token}」`);
 }
 
 function gradeParams(wf, g) {
@@ -1768,12 +1779,20 @@ const fmtTime = (t) => t ? new Date(t).toLocaleTimeString('zh-CN', { hour: '2-di
 const elapsed = (t) => { const s = Math.max(0, Math.floor((Date.now() - (t || Date.now())) / 1000)); return s >= 60 ? `${Math.floor(s / 60)} 分 ${s % 60} 秒` : `${s} 秒`; };
 
 /* ------------------------------------------------------------ 输入区 */
-function refThumbHTML(r) {
-  const idx = UI.refs.findIndex(x => x.id === r.id);
-  return `<div class="ref-thumb">
-    <img src="${refUrl(r.id)}" alt="参考图${idx + 1}">
-    <button class="at" data-refat="${r.id}" title="引用到文字里（@）" aria-label="引用到文字">@</button>
-    <button class="x" data-rmref="${r.id}" title="移除这张参考图">✕</button></div>`;
+/* 引用参考图统一成视频 / 音频页那套 .vslot 方块：
+   缩略图 + 底部「图 N」+ 右上 ✕ + 右下 @ + 左上 [图 N] 令牌。
+   图片生成 / 角色设定图 / 道具设定图 / 宫格分镜故事板共用这一份，
+   点 @ 往描述里插的也是同一种 [图 N] 文本令牌。 */
+function refSlotsHTML(cap, opts = {}) {
+  const list = opts.refs || UI.refs || [];
+  const max = opts.max || (cap && cap.maxRefs) || 6;
+  const tiles = list.map((r, i) => GenUI.vRefSlot({
+    label: '图' + (i + 1), kind: 'image',
+    ref: { id: r.id, src: refUrl(r.id) }, idx: i + 1, upload: false,
+    acts: { vat: 'data-refat', vrm: 'data-rmref' },
+  })).join('');
+  const add = list.length < max ? '<div class="vadds"><button class="vadd" id="addRef" data-vup="image">＋ 图片</button></div>' : '';
+  return `<div class="vslots" id="refsRow">${tiles}${add}</div>`;
 }
 function viewComposer() {
   const cap = currentCap(), usable = cap && capUsable(cap) && cap.enabled;
@@ -1788,6 +1807,7 @@ function viewComposer() {
   if (isBoardCap(cap)) return viewBoardComposer(cap);
   // 1.04 视频生成（四种模式）与音频生成（四个功能）：表单在 media.js
   if (isVideoCap(cap)) return viewVideoComposer(cap);
+  if (isVideoExtCap(cap)) return viewVideoExtComposer(cap);
   if (isAudioCap(cap)) return viewAudioComposer(cap);
   const grades = currentGrades(cap), curGrade = grades.find(g => g.name === UI.params.grade) || grades[0] || null;
   const i2i = UI.mode === 'i2i';
@@ -1807,8 +1827,10 @@ function viewComposer() {
       <span class="scope-hint"></span>
     </div>
     ${GenUI.imageInput({
-      // 图生图不显示风格行；设定图模板属于管理台功能，创作台不放入口
-      show: { style: !i2i, template: false },
+      // 图生图不显示风格行；设定图模板属于管理台功能，创作台不放入口。
+      // 参考图行换成视频页那套 .vslot 方块，上传入口也在方块行里（＋ 图片）。
+      show: { style: !i2i, template: false, upload: false },
+      slots: i2i ? refSlotsHTML(cap) : '',
       refs: UI.refs.map(r => ({ id: r.id, kind: r.kind || 'image', name: r.name,
         src: r.kind === 'video' ? refUrl(r.id) : refUrl(r.id) })),
       prompt: UI.prompt, i2i,
@@ -1890,6 +1912,22 @@ function stripComposedPrompt(p) {
     if (nl >= 0) s = s.slice(nl + 1);
   }
   return s;
+}
+/* 视频 / 音频老任务没有 rawPrompt：剥掉 compose 固定拼上的句子，别让它们被写死。
+   新任务服务端已存原话，这里只服务历史任务，且只剥我们自己的固定句。 */
+function stripVideoComposedPrompt(p) {
+  if (typeof p !== 'string' || !p) return p;
+  let s = p.replace(/<Picture 1> 是本片的首帧（视频从这里开始）。\s*/g, '')
+    .replace(/<Picture 2> 是本片的尾帧（视频在这里结束）。\s*/g, '')
+    .replace(/尾帧不做限制，按提示词自然发展。\s*/g, '')
+    .replace(/生成一段带环境声与配乐的短视频。\s*/g, '')
+    .replace(/\s*画面里不要出现字幕、水印、台标或任何文字。\s*/g, '')
+    .replace(/\[(图|视频|音频)\s*\d+\]/g, m => m); // 界面令牌保持原样
+  return s.trim();
+}
+function stripAudioComposedPrompt(p) {
+  if (typeof p !== 'string' || !p) return p;
+  return p.replace(/。成品音乐，带人声与伴奏，结尾自然收尾，不要突然截断。\s*$/g, '').trim();
 }
 /* 需求1：和角色设定图一样给出「看完整提示词」。预览与提交共用服务端 compose_image_prompt，
    前端不自己拼一份，免得通用模板改了以后两边显示不一致。 */
@@ -2276,17 +2314,6 @@ function bindStudio() {
       const text = cd ? cd.getData('text/plain') : '';              // contenteditable 默认带样式粘贴，转纯文本
       document.execCommand('insertText', false, text);
     };
-    // 行内 chip 的 ✕ 用事件委托：chip 是运行时插入的（insertRefChip 不会重绑），逐元素绑定会漏绑新插入的那个
-    t.onclick = e => {
-      const x = e.target.closest && e.target.closest('[data-rmchip]'); if (!x) return;
-      e.stopPropagation();
-      const chip = x.closest('.refchip'); if (!chip) return;
-      const id = chip.dataset.ref;
-      chip.remove();
-      if (id) UI.refs = UI.refs.filter(r => r.id !== id);
-      UI.prompt = serializeEditor();          // DOM 已变，显式重算（程序化点击时编辑器未必聚焦，refreshComposer 不会自动序列化）
-      saveDraft(); refreshComposer();
-    };
   }
   const add = $('#addRef'); if (add) add.onclick = openFilePicker;
   const refBtn = $('#refBtn'); if (refBtn) refBtn.onclick = openFilePicker;
@@ -2304,32 +2331,28 @@ function bindStudio() {
   });
   $$('[data-refat]').forEach(el => el.onclick = e => {
     e.stopPropagation();
-    // 设定图：@ = 把这张参考图引用进「已引用」条（图生图靠 ref 模式 + refs 数组生效，
-    // 不塞 <imageN> 令牌）；图片生成：@ = 往 prompt 编辑器插 chip（走 <imageN>）。
+    const id = el.dataset.refat;
+    const idx = UI.refs.findIndex(r => r.id === id) + 1;
+    if (idx <= 0) return;
+    const token = `[图 ${idx}]`;
+    // 四个页面的引用方式统一成视频 / 音频页：@ 往描述里插同一种「[图 N]」文本令牌
     if (isSheetCap(currentCap())) {
-      UI.sheetForm = UI.sheetForm || {};
-      UI.sheetForm.refChips = UI.sheetForm.refChips || [];
-      if (!UI.sheetForm.refChips.includes(el.dataset.refat)) UI.sheetForm.refChips.push(el.dataset.refat);
+      insertTokenIntoField('#sheetChar', token, v => { UI.sheetForm.character = v; UI.sheetPreview = null; });
       refreshComposer();
-      toast('已引用到输入框，生成时按「参考」方式使用');
+      return;
+    }
+    if (isExtSheetCap(currentCap()) && extKindOf(currentCap()) === 'prop') {
+      insertTokenIntoField('#extText', token, v => { UI.extForm.text = v; UI.extPreview = null; });
+      refreshComposer();
       return;
     }
     if (isBoardCap(currentCap())) {
-      const f = boardForm(), idx = UI.refs.findIndex(r => r.id === el.dataset.refat) + 1;
-      const token = `图 ${idx}`;
-      const input = $('#boardCellInput');
-      if (input) {
-        const cur = input.value, p = input.selectionStart ?? cur.length;
-        f.cells[f.sel] = cur.slice(0, p) + token + cur.slice(input.selectionEnd ?? p);
-        input.value = f.cells[f.sel];
-        input.focus();
-        try { input.setSelectionRange(p + token.length, p + token.length); } catch (_) {}
-      } else f.cells[f.sel] = String(f.cells[f.sel] || '') + token;
-      UI.boardPreview = null; saveDraft();
-      toast(`已在第 ${f.sel + 1} 格写入「${token}」`);
+      const f = boardForm();
+      insertTokenIntoField('#boardCellInput', token, v => { f.cells[f.sel] = v; });
+      UI.boardPreview = null;
       return;
     }
-    insertRefChip(el.dataset.refat);
+    insertImageToken(id);
   });
   $$('[data-grade]').forEach(el => el.onclick = () => {
     UI.params.grade = el.dataset.grade; saveDraft(); refreshComposer();
@@ -2353,12 +2376,62 @@ function bindStudio() {
     let refs = [], missed = 0;
     if ((j.refs || []).length) {
       const res = await api('/api/tasks/' + j.id + '/refs', { body: {} });
-      refs = ((res.ok && res.data && res.data.refs) || []).map(r => ({ id: r.id, kind: 'image', name: r.name }));
+      // kind 必须跟着带回来：视频 / 音频参考「基于上一条」后还得到各自的槽位，
+      // 全写成 image 会被接到 LoadImage 上，缩略图也全变成图片。
+      refs = ((res.ok && res.data && res.data.refs) || []).map(r => ({ id: r.id, kind: r.kind || 'image', name: r.name }));
       missed = (j.refs || []).length - refs.length;
     }
     UI.refs = refs;
     UI.mode = refs.length ? 'i2i' : 't2i';          // 图没带回来就退回文生图，免得卡在「图生图没有参考图」发不出去
-    if (j.sheet) {
+    if (j.cap === 'video.ext' && j.videoExt) {
+      // 视频生成扩展：档位 / 宽高比 / 参考模式 / 时长 / 子功能都存在 job.videoExt，
+      // 不能落到普通 UI.params.grade 上（那是工作流档位，与扩展档位不是一回事）。
+      const ve = j.videoExt, fl = veFuncList();
+      const func = fl.find(x => x.id === ve.func) || fl[0] || null;
+      if (func) {
+        UI.veFunc = {
+          ...(UI.veFunc || {}), id: func.id,
+          grade: (func.grades || []).includes(ve.grade) ? ve.grade
+                 : (func.defaultGrade || (func.grades || [])[0] || '默认'),
+          ratio: (func.ratios || []).includes(ve.ratio) ? ve.ratio
+                 : (func.defaultRatio || '16:9'),
+          mode: (func.modes || []).some(m => m.id === ve.mode) ? ve.mode
+                : (func.defaultMode || ((func.modes || [])[0] || {}).id || 'fl2v'),
+          duration: ve.duration != null ? ve.duration : 5.2,
+        };
+        veFunc();   // 校验并补齐缺省字段
+      }
+      // 服务端 job.prompt 是加了「不要出现字幕」后缀的成片提示词；
+      // rawPrompt 才是用户原话，直接拿 job.prompt 回去会二次拼装。
+      UI.prompt = j.rawPrompt || j.prompt || '';
+    } else if (j.cap === 'video.generate' && j.video) {
+      // 视频生成：子模块（t2v/fl2v/ref2v/board）、宫格、格子、时长都存在 job.video，
+      // 不回填就会停在默认模式（用户报的「参考生视频基于上一条，选项卡没切过去」）。
+      const v = j.video || {};
+      const modes = vModeList();
+      const md = modes.find(m => m.id === v.mode);
+      UI.video = { ...(UI.video || {}), ...v,
+        mode: (md && md.enabled !== false) ? v.mode : ((modes.find(m => m.enabled !== false) || {}).id || 't2v') };
+      videoForm();
+      // 档位按「切过去后的模式」取档位表校验，不能用旧能力的光照档位表。
+      const vg = vGrades();
+      UI.params.grade = (vg.find(g => g.name === (j.runs[0] || {}).grade) || vg[0] || {}).name || '默认';
+      // 提示词用 compose 前的原话，避免「生成一段带环境声的短视频…不要出现字幕」被二次拼上。
+      UI.prompt = j.rawPrompt || stripVideoComposedPrompt(j.prompt || '');
+      UI.videoPreview = null;
+    } else if (j.cap && j.cap.startsWith('audio.') && j.audio) {
+      // 音频生成：同视频——模式 / 歌词 / 时长带回，档位按模式取。
+      const a = j.audio || {};
+      const modes = aModeList();
+      const md = modes.find(m => m.id === a.mode);
+      UI.audio = { ...(UI.audio || {}), ...a,
+        mode: md ? a.mode : ((modes[0] || {}).id || 'music') };
+      audioForm();
+      const ag = aGrades();
+      UI.params.grade = (ag.find(g => g.name === (j.runs[0] || {}).grade) || ag[0] || {}).name || '默认';
+      UI.prompt = j.rawPrompt || stripAudioComposedPrompt(j.prompt || '');
+      UI.audioPreview = null;
+    } else if (j.sheet) {
       if ((j.sheet || {}).kind === 'board') {
         const old = j.sheet;
         UI.mode = 'i2i';
@@ -2383,8 +2456,6 @@ function bindStudio() {
         UI.sheetForm = { ...UI.sheetForm, ...j.sheet };
         // 老任务可能没记档位，按它当时用的那一档回填
         if (!UI.sheetForm.grade) UI.sheetForm.grade = (j.runs[0] || {}).grade || '默认';
-        // 参考图重新登记后 id 变了：把新 refs 全部设为「已引用」，缩略图 chip 才能带回来
-        UI.sheetForm.refChips = refs.map(r => r.id);
         UI.sheetPreview = null;
       }
     } else {
@@ -2401,12 +2472,16 @@ function bindStudio() {
       // 图片确实没了（文件被清理）：把 <imageN> 令牌一起去掉，提示词不能留下指空的引用
       UI.prompt = UI.prompt.replace(IMAGE_TOKEN, ' ').replace(/[ \t]{2,}/g, ' ').trim();
     }
-    UI.params.grade = (j.runs[0] || {}).grade || '默认';
-    const g = currentGrades(currentCap());
-    if (g.length && !g.find(x => x.name === UI.params.grade)) UI.params.grade = g[0].name;
+    const veRefined = j.cap === 'video.ext' && j.videoExt;
+    const mediaRefined = (j.cap === 'video.generate' && j.video) || ((j.cap || '').startsWith('audio.') && j.audio);
+    if (!veRefined && !mediaRefined) {
+      UI.params.grade = (j.runs[0] || {}).grade || '默认';
+      const g = currentGrades(currentCap());
+      if (g.length && !g.find(x => x.name === UI.params.grade)) UI.params.grade = g[0].name;
+    }
     const ed = $('#promptInput'); if (ed) ed.innerHTML = editorInnerHTML(UI.prompt);  // 先把回带的文字渲染进编辑器，saveDraft 才序列化到正确内容
     saveDraft(); refreshComposer();
-    toast(missed > 0 ? `文字和档位带过来了，但有 ${missed} 张参考图已被清理` : '已把上一条整条带过来');
+    toast(missed > 0 ? `文字和档位带过来了，但有 ${missed} 个参考素材已被清理` : '已把上一条整条带过来');
   });
   $$('[data-qadd]').forEach(el => el.onclick = () => openQueueModal(el.dataset.qadd));
   $$('[data-qcancel]').forEach(el => el.onclick = async () => {
@@ -2428,6 +2503,12 @@ function bindStudio() {
   bindExtSheetComposer();
   if (isBoardCap(currentCap())) bindBoardComposer();
   if (isVideoCap(currentCap()) || isAudioCap(currentCap())) bindMediaComposer();
+  if (isVideoExtCap(currentCap())) bindVideoExtComposer();
+  // 图片生成 / 设定图 / 宫格：参考图行里的「＋ 图片」方块就是上传入口（和视频页一致）
+  const capNow = currentCap();
+  if (capNow && (capNow.id === 'image.generate' || isSheetCap(capNow) || isExtSheetCap(capNow) || isBoardCap(capNow))) {
+    $$('[data-vup]').forEach(el => el.onclick = () => openFilePicker());
+  }
   // 设定图卡片：正文 800 字，卡片只显示摘要，「看完整提示词」点开看原文
   $$('[data-seefull]').forEach(el => el.onclick = e => {
     e.stopPropagation();
@@ -2562,7 +2643,6 @@ async function submitAction(path, body, successMsg) {
     // 设定图：角色描述跟着清空（和「描述框发完清零」一致），版式/画法/参考方式保持不变
     if (isSheetCap(currentCap())) {
       UI.sheetForm.character = ''; UI.sheetPreview = null;
-      UI.sheetForm.refChips = [];
       const sc = $('#sheetChar'); if (sc) sc.value = '';
     } else if (isExtSheetCap(currentCap())) {
       UI.extForm.text = ''; UI.extForm.refSlots = {}; UI.extPreview = null;
@@ -2593,7 +2673,7 @@ async function doSend() {
   if (!wfObj) { toast('这个能力还没有「' + wf + '」工作流'); return; }
   const grades = wfObj.grades || [];
   const grade = (grades.find(g => g.name === UI.params.grade) || grades[0] || {}).name || '默认';
-  const body = { capId: cap.id, prompt, grade, refs: UI.refs.map(r => r.id), wf };
+  const body = { capId: cap.id, prompt: cap.id === 'image.generate' ? toImageTokens(prompt) : prompt, grade, refs: UI.refs.map(r => r.id), wf };
   // 图片生成：画法 / 风格作为结构化输入交给服务端拼在提示词前面
   if (cap.id === 'image.generate') body.image = imgPayload();
   await submitAction('/api/tasks', body, '');
@@ -2679,13 +2759,16 @@ function openQueueModal(jobId) {
   const combo = cid ? comboPool.find(c => c.id === cid) : null;
   const wf = (cap && (cap.workflows || []).find(w => w.name === base.wf)) || (cap && cap.workflows && cap.workflows[0]) || {};
   // 视频 / 音频的档位按模式存在 S.video / S.audio 里，不在这条工作流的 grades 上
-  const mediaGrades = mediaGradesFor(j);
+  const veGrades = videoExtGradesFor(j);
+  const mediaGrades = veGrades || mediaGradesFor(j);
   const grades = combo ? (combo.grades || []) : (mediaGrades || wf.grades || []);
   if (!grades.length) { toast(cid ? '这个组合还没有档位' : '这个工作流还没有档位'); return; }
   // 确认框默认停在上一张那一档（需求 #22）
   const pick0 = grades.find(g => g.name === base.grade) || grades[0];
   const dnum = doneRuns(j).length, qn = queuedEntries().length, running = runningEntry();
-  const intro = cid
+  const intro = veGrades
+    ? `挑一档换一份工作流（提示词、参考素材、种子和宽高比都跟这张一样）。新的接在<b>成品 ${dnum + 1}</b>。`
+    : cid
     ? `同一个组合（<b>${esc(combo ? combo.name : cid)}</b>）的档位只改参数，提示词、参考图、工作流都一样。种子不变，新的接在<b>成品 ${dnum + 1}</b>。`
     : `挑一档，出同一张的更精细版。种子不变，已有的成品一张不动，新的接在<b>成品 ${dnum + 1}</b>。`;
   const html = `<div class="m-head"><h3>加入队列生成</h3><button class="btn ghost sm" data-close>✕</button></div>
@@ -3889,8 +3972,47 @@ function pageAudioGrades(cap) {
     </div>`;
 }
 
+/* 视频生成扩展的档位表：整页只读。
+   档位 = 独立工作流文件，一档一行；只保留「① 工作流文件」和「已有档位」两块，
+   没有参数节点 / 不用设的节点 / 新增挡位。黄底 = 只能看，不能改。 */
+function pageVideoExtGrades(cap) {
+  if (!cap) return '';
+  const funcs = ((S && S.videoExt) || {}).funcs || [];
+  const curId = UI.videoExtFunc || (funcs[0] || {}).id;
+  const func = funcs.find(x => x.id === curId) || funcs[0] || null;
+  if (!func) return `<div class="spread"><div><h2>档位表</h2><div class="sub">还没配置子功能</div></div></div>`;
+  const grads = func.grades || [];
+  const wfRows = grads.map(g => {
+    const name = `${func.wfPrefix}-${g}`;
+    return `<div class="wffile" style="margin-bottom:6px"><span class="wfname mono">${esc(name)}.json</span><span class="wfauto">只读档</span></div>`;
+  }).join('');
+  const rows = grads.map((g, i) => {
+    const isDef = g === func.defaultGrade;
+    return `<div class="grow" style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;margin-bottom:6px;padding:6px 10px">
+      <div class="grow-hd" style="padding:2px 0"><span class="gnum">${i + 1}</span>
+        <span class="gname-txt" style="font-weight:600">${esc(g)}</span>
+        ${isDef ? '<span class="gdefnote" style="color:#b45309;background:#fef3c7;padding:1px 8px;border-radius:10px;font-size:11px">默认选中</span>' : ''}
+        <span class="gcopy" style="color:#92400e">${esc(func.wfPrefix)}-${esc(g)}.json</span>
+        <span style="flex:1"></span><span class="tiny" style="color:#b45309">🔒 只读</span></div>
+    </div>`;
+  }).join('');
+  return `<div class="spread" style="margin-bottom:6px"><div><h2>档位表</h2><div class="sub">${esc(cap.em)} ${esc(cap.name)} / ${esc(func.name)}</div></div>
+    <div class="row"><button class="btn sm" data-page="caps">← 返回列表</button></div></div>
+    <div class="panel" style="margin:0 0 12px;padding:6px 14px"><div class="sheetbar"><span class="slb">子功能</span>
+      <div class="seg">${funcs.map(x => `<button class="segb ${x.id === func.id ? 'on' : ''}" data-veadmin="${esc(x.id)}">${esc(x.name)}</button>`).join('')}</div></div></div>
+    <div class="glayout" style="display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start">
+      <div class="panel" style="margin:0"><h3>① 工作流文件 <span class="tag gray">${grads.length} 个</span></h3>
+        <div class="tiny muted" style="margin:-2px 0 12px;line-height:1.75">每个档位就是一份独立工作流文件，随版本更新一起交付。只读，不在这里做任何改动。</div>
+        ${wfRows}</div>
+      <div class="panel" style="margin:0"><h3>② 已有档位 <span class="tag">${grads.length} 档</span></h3>
+        <div class="tiny muted" style="margin:-2px 0 10px;line-height:1.75">全部只读，不能改名、不能改参数、不能新增。要扩展档位请等版本更新交付新的工作流文件。</div>
+        ${rows}</div>
+    </div>`;
+}
+
 function pageGrades(cap) {
   if (!cap) return '';
+  if (cap.id === 'video.ext') return pageVideoExtGrades(cap);
   if (cap.id === 'video.generate') return pageVideoGrades(cap);
   const wf = cap.workflows[UI.editingWfIndex] || cap.workflows[0];
   if (!wf) return `<div class="spread" style="margin-bottom:6px"><div><h2>档位表</h2><div class="sub">${esc(cap.em)} ${esc(cap.name)}</div></div>
@@ -4488,6 +4610,12 @@ function bindAdmin() {
   // 它的 data-gdel / data-gedit / data-gval 选择器会连带命中组合页上同名属性的按钮，
   // 把删除、编辑处理器覆盖成旧逻辑（点下去走的是另一套 API，表现就是点了没反应）。
   // 所以这里必须直接 return，不能让旧绑定跑下去。
+  if (UI.adminPage === 'grades' && isVideoExtCap(currentCap())) {
+    $$('[data-veadmin]').forEach(el => el.onclick = () => {
+      UI.videoExtFunc = el.dataset.veadmin; render();
+    });
+    return;
+  }
   if (UI.adminPage === 'grades' && (isSheetCap(currentCap()) || isExtSheetCap(currentCap()) || isBoardCap(currentCap()))) { bindComboGrades(); return; }
   const wf = wfForEditing;
   // 事件必须绑到真正的 checkbox：label 没有 checked 属性，绑在 label 上会永远读到 undefined，

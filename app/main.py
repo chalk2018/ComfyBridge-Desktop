@@ -23,7 +23,7 @@ from .boardlib import BoardError
 from .promptlib import SheetError, library as sheet_library
 from .services import service
 from .state import state
-from . import audiolib, canvas, imagestylelib, videolib
+from . import audiolib, canvas, imagestylelib, videolib, videoext
 from .prompttemplates import router as prompt_templates_router
 
 WEB_DIR = ROOT / "web"
@@ -100,6 +100,15 @@ class VideoPayload(BaseModel):
     cells: list[str] = Field(default_factory=list)
 
 
+class VideoExtPayload(BaseModel):
+    """视频生成扩展的结构化输入：子功能 + 宽高比 + 参考模式（档位走 body.grade）。"""
+
+    func: str = "multiRefFast"
+    ratio: str = "16:9"
+    mode: str = "fl2v"                 # fl2v 首尾帧生成 / ref2v 参考生成
+    duration: float | None = None
+
+
 class AudioPayload(BaseModel):
     """音频生成的结构化输入。"""
 
@@ -159,6 +168,7 @@ class TaskRequest(BaseModel):
     ext: ExtSheetPayload | None = None  # 1.03 场景/道具设定图结构化输入
     board: BoardPayload | None = None   # 1.03 宫格分镜故事板结构化输入
     video: VideoPayload | None = None   # 1.04 视频生成
+    videoExt: VideoExtPayload | None = None  # 视频生成扩展（独立模块）
     audio: AudioPayload | None = None   # 1.04 音频生成
     image: ImageStylePayload | None = None  # 1.04 图片生成的画法 / 风格
     archiveFolder: str | None = None    # 画布传入：成品落到画布自己的目录
@@ -535,12 +545,44 @@ def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tu
     # 结构化 image，供 refine 精确复原。只对图片生成能力生效，别的能力是 None。
     raw_prompt: str | None = None
     image_info: dict[str, Any] | None = None
+    video_ext_info: dict[str, Any] | None = None
+    if body.videoExt is not None and body.capId == videoext.CAP_ID:
+        func = videoext.find_func(body.videoExt.func)
+        if not func:
+            return False, "", "没有这个子功能"
+        gs = videoext.grades(func["id"])
+        if body.grade not in gs:
+            grade = videoext.default_grade(func["id"])
+        ratio = body.videoExt.ratio if body.videoExt.ratio in videoext.RATIOS else videoext.RATIOS[0]
+        kinds = [r.get("kind", "image") for r in service.resolve_refs(body.refs)]
+        images, videos, audios = kinds.count("image"), kinds.count("video"), kinds.count("audio")
+        if images > int(func.get("maxImages", 6)):
+            return False, "", f"最多 {func.get('maxImages', 6)} 张参考图"
+        if videos > int(func.get("maxVideos", 1)):
+            return False, "", f"最多 {func.get('maxVideos', 1)} 段参考视频"
+        if audios > int(func.get("maxAudios", 3)):
+            return False, "", f"最多 {func.get('maxAudios', 3)} 段参考音频"
+        if not body.prompt.strip():
+            return False, "", "写点描述再发送"
+        mode = videoext.norm_mode(func["id"], body.videoExt.mode)
+        video_ext_info = {"func": func["id"], "ratio": ratio, "mode": mode,
+                          "duration": body.videoExt.duration}
+        # 和图片生成同理：job.prompt 是 compose 后的成片提示词，
+        # 「基于上一条」要用用户原话，否则那句「不要出现字幕…」会被重复拼上。
+        raw_prompt = body.prompt
+        prompt = videoext.compose(body.prompt)
+        brief = (f"{func['name']} · {videoext.mode_name(func['id'], mode)} · {ratio} · "
+                 f"{(body.prompt or '').strip()[:40]}")
+        wf = videoext.wf_for(func["id"], grade)
     if body.image is not None and body.capId == "image.generate":
         raw_prompt = body.prompt
         image_info = body.image.model_dump()
         # 需求2：画法 / 风格从「图片生成通用模板」取（主体无关），和角色设定图库分开。
         prompt = compose_image_prompt(prompt, body.image)
-    if body.video is not None:
+    if body.video is not None and video_ext_info is None:
+        # 视频的 prompt 会被 videolib.compose 拼上「首帧声明 / 不要字幕」等前后缀，
+        # 「基于上一条」必须用原话回填，否则二次拼装、写法被写死在开头。
+        raw_prompt = body.prompt
         mode = body.video.mode if body.video.mode in videolib.MODE_IDS else "t2v"
         info = videolib.MODE_IDS[mode]
         if not info.get("enabled"):
@@ -582,6 +624,8 @@ def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tu
                                board={"grid": video_info.get("grid", 4),
                                       "cells": video_info.get("cells", [])})
     if body.audio is not None:
+        # 同视频：compose 会给「音乐」拼收尾句，回填要用用户原话。
+        raw_prompt = body.prompt
         amode = body.audio.mode if body.audio.mode in audiolib.MODE_IDS else "music"
         info = audiolib.MODE_IDS[amode]
         if not info.get("enabled"):
@@ -632,7 +676,8 @@ def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tu
     accepted, job_id, reason = service.submit_normal(
         body.capId, prompt, grade, body.refs, wf=wf, sheet=sheet_info, brief=brief,
         params=params, tag=tag, video=video_info, audio=audio_info,
-        image=image_info, raw_prompt=raw_prompt, archive_folder=archive_folder)
+        image=image_info, raw_prompt=raw_prompt, archive_folder=archive_folder,
+        video_ext=video_ext_info)
     return accepted, job_id, reason
 
 

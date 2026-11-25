@@ -1,0 +1,548 @@
+{
+  "164": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 5
+    }
+  },
+  "191": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 6
+    }
+  },
+  "192": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 7
+    }
+  },
+  "193": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 8
+    }
+  },
+  "194": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 9
+    }
+  },
+  "195": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 10
+    }
+  },
+  "196": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 11
+    }
+  },
+  "197": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 12
+    }
+  },
+  "198": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 13
+    }
+  },
+  "199": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 14
+    }
+  },
+  "200": {
+    "class_type": "DF_Int_to_Float",
+    "inputs": {
+      "Value": 15
+    }
+  },
+  "227": {
+    "class_type": "ShowAnything|Mie",
+    "inputs": {
+      "anything": [
+        "115",
+        1
+      ]
+    }
+  },
+  "226": {
+    "class_type": "ShowAnything|Mie",
+    "inputs": {
+      "anything": [
+        "115",
+        0
+      ]
+    }
+  },
+  "132": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "values.a": [
+        "205",
+        0
+      ],
+      "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+    }
+  },
+  "128": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "119": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "120": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "223": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 1
+    }
+  },
+  "115": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": [
+        "225",
+        0
+      ],
+      "multiple": 32
+    }
+  },
+  "231": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "第2镜_程氏教子分镜画面.jpg"
+    }
+  },
+  "232": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "第2镜_书房道具套装.jpg"
+    }
+  },
+  "233": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "程氏_三视图.jpg"
+    }
+  },
+  "234": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "苏轼_10岁少年_三视图.jpg"
+    }
+  },
+  "222": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 0.4
+    }
+  },
+  "205": {
+    "class_type": "ImpactSwitch",
+    "inputs": {
+      "input1": [
+        "164",
+        0
+      ],
+      "select": 8,
+      "sel_mode": false,
+      "input2": [
+        "191",
+        0
+      ],
+      "input3": [
+        "192",
+        0
+      ],
+      "input4": [
+        "193",
+        0
+      ],
+      "input5": [
+        "194",
+        0
+      ],
+      "input6": [
+        "195",
+        0
+      ],
+      "input7": [
+        "196",
+        0
+      ],
+      "input8": [
+        "197",
+        0
+      ],
+      "input9": [
+        "198",
+        0
+      ],
+      "input10": [
+        "199",
+        0
+      ],
+      "input11": [
+        "200",
+        0
+      ]
+    }
+  },
+  "129": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 316967232247484
+    }
+  },
+  "123": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "res_multistep"
+    }
+  },
+  "125": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "129",
+        0
+      ],
+      "guider": [
+        "126",
+        0
+      ],
+      "sampler": [
+        "123",
+        0
+      ],
+      "sigmas": [
+        "124",
+        0
+      ],
+      "latent_image": [
+        "230",
+        1
+      ]
+    }
+  },
+  "122": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "125",
+        0
+      ],
+      "vae": [
+        "119",
+        0
+      ]
+    }
+  },
+  "121": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "125",
+        0
+      ],
+      "vae": [
+        "120",
+        0
+      ]
+    }
+  },
+  "130": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "122",
+        0
+      ],
+      "audio": [
+        "121",
+        0
+      ],
+      "fps": 24,
+      "bit_depth": 8,
+      "color_space": "sRGB",
+      "codec": "none"
+    }
+  },
+  "230": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "128",
+        0
+      ],
+      "vae": [
+        "119",
+        0
+      ],
+      "audio_vae": [
+        "120",
+        0
+      ],
+      "ref_images.ref_image_0": [
+        "231",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "232",
+        0
+      ],
+      "ref_images.ref_image_2": [
+        "233",
+        0
+      ],
+      "ref_images.ref_image_3": [
+        "234",
+        0
+      ],
+      "prompt": [
+        "250",
+        0
+      ],
+      "width": [
+        "115",
+        0
+      ],
+      "height": [
+        "115",
+        1
+      ],
+      "length": [
+        "132",
+        1
+      ],
+      "ref_image_size": "match"
+    }
+  },
+  "225": {
+    "class_type": "ImpactSwitch",
+    "inputs": {
+      "input1": [
+        "222",
+        0
+      ],
+      "select": 1,
+      "sel_mode": false,
+      "input2": [
+        "223",
+        0
+      ]
+    }
+  },
+  "92": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "130",
+        0
+      ],
+      "filename_prefix": "video/MiniMax_H3",
+      "format": "auto",
+      "format.codec": "auto",
+      "codec": "auto"
+    }
+  },
+  "127": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "135": {
+    "class_type": "PathchSageAttentionKJ",
+    "inputs": {
+      "model": [
+        "127",
+        0
+      ],
+      "sage_attention": "auto",
+      "allow_compile": false
+    }
+  },
+  "274": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "273": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "274",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 1
+    }
+  },
+  "277": {
+    "class_type": "TESpeedMiniMaxH3",
+    "inputs": {
+      "model": [
+        "275",
+        0
+      ],
+      "processing_control_value": 0.12,
+      "processing_percent_1": 0.1,
+      "processing_percent_2": 0.87,
+      "mcs": 2,
+      "device": "auto",
+      "cache_depth": 0.7
+    }
+  },
+  "275": {
+    "class_type": "PathchSageAttentionKJ",
+    "inputs": {
+      "model": [
+        "273",
+        0
+      ],
+      "sage_attention": "auto",
+      "allow_compile": false
+    }
+  },
+  "276": {
+    "class_type": "EasyCache",
+    "inputs": {
+      "model": [
+        "277",
+        0
+      ],
+      "reuse_threshold": 0.22,
+      "start_percent": 0.15,
+      "end_percent": 0.9000000000000001,
+      "verbose": false
+    }
+  },
+  "282": {
+    "class_type": "PathchSageAttentionKJ",
+    "inputs": {
+      "model": [
+        "280",
+        0
+      ],
+      "sage_attention": "auto",
+      "allow_compile": false
+    }
+  },
+  "279": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "281": {
+    "class_type": "TESpeedMiniMaxH3",
+    "inputs": {
+      "model": [
+        "282",
+        0
+      ],
+      "processing_control_value": 0.2,
+      "processing_percent_1": 0.1,
+      "processing_percent_2": 0.8,
+      "mcs": 3,
+      "device": "auto",
+      "cache_depth": 0.55
+    }
+  },
+  "280": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "279",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "strength_model": 1
+    }
+  },
+  "283": {
+    "class_type": "EasyCache",
+    "inputs": {
+      "model": [
+        "281",
+        0
+      ],
+      "reuse_threshold": 0.35,
+      "start_percent": 0.08,
+      "end_percent": 0.95,
+      "verbose": false
+    }
+  },
+  "126": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "136",
+        0
+      ],
+      "conditioning": [
+        "230",
+        0
+      ]
+    }
+  },
+  "124": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "136",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 20,
+      "denoise": 1
+    }
+  },
+  "250": {
+    "class_type": "CR Prompt Text",
+    "inputs": {
+      "prompt": "景别：中景（2s）缓慢推近至程氏 <Picture 3> 面部近景（1s），直接切到小苏轼面<Picture 4>部近景（1s），再切回程氏 <Picture 3>与苏轼 <Picture 4> 同框中景（2s）\n时间：白天\n画面剧情：程氏 <Picture 3> 坐在书案旁，指尖指着书卷给苏轼 <Picture 4> 讲范滂的事迹，讲到范滂与母亲诀别时，程氏 <Picture 3> 语带感慨：<d>[chinese]范滂不畏权贵，虽死犹荣。</d>镜头缓慢推近至程氏 <Picture 3> 面部近景，她目光温柔而坚定。直接切到小苏轼 <Picture 4> 面部近景，他仰着头，眼神明亮坚定，开口问：<d>[chinese]母亲，我长大后如果做范滂那样的人，您会同意吗？</d>镜头切回二人同框中景，程氏<Picture 3>面露赞许，伸手轻抚苏轼<Picture 4> 头顶，颔首应答：<d>[chinese]你能做范滂，我难道不能做范滂的母亲吗？</d>小苏轼 <Picture 4>重重点头，目光中多了一份坚毅。（剧情中的场景发生在 <Picture 1>中，书房道具参照<Picture 2> ）\n"
+    }
+  },
+  "136": {
+    "class_type": "EasyCache",
+    "inputs": {
+      "model": [
+        "135",
+        0
+      ],
+      "reuse_threshold": 0.2,
+      "start_percent": 0.15,
+      "end_percent": 0.9000000000000001,
+      "verbose": false
+    }
+  }
+}

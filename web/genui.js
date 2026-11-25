@@ -170,7 +170,9 @@ window.GenUI = (function () {
     var empty = !String(o.prompt || '').trim();
     var body = '<div class="sheetbody">'
       + inkRow(o)
-      + (i2i ? '<div class="refs"' + idAttr(o, 'refsRow') + '>' + refThumbs(o) + '</div>' : '')
+      // o.slots：调用方给一份 .vslot 素材行（与视频 / 音频页同一套方块）；
+      // 画布节点不传，仍用 .ref-thumb 缩略图行。
+      + (i2i ? (o.slots || '<div class="refs"' + idAttr(o, 'refsRow') + '>' + refThumbs(o) + '</div>') : '')
       + '<div class="editor"' + idAttr(o, 'editor') + (o.editorAttrs ? ' ' + o.editorAttrs : '')
       + ' contenteditable="true" data-ph="' + E(o.placeholder || '') + '">'
       + editorHTML(o.prompt, o.refs) + '</div>'
@@ -350,10 +352,32 @@ window.GenUI = (function () {
   }
 
   /* ------------------------------------------------------------ 结果块（.job 那张卡） */
+  /* 视频生成扩展的结果块，头部除档位外再标出当时用的宽高比和参考模式，
+     方便回头查阅一条成品到底是哪种组合跑出来的。只认 j.videoExt，
+     不碰其他能力的结果块。 */
+  var VE_MODE_FALLBACK = { fl2v: '首尾帧生成', ref2v: '参考生成' };
+  function veExtraChips(j) {
+    var ext = (j && j.videoExt) || null;
+    if (!ext) return '';
+    var out = '';
+    var ratio = ext.ratio;
+    if (ratio) out += '<span class="vechip" title="生成时的宽高比">宽高比 ' + E(ratio) + '</span>';
+    var mid = ext.mode, mname = '';
+    var funcs = (typeof S !== 'undefined' && S && S.videoExt && S.videoExt.funcs) || [];
+    var f = funcs.filter(function (x) { return x.id === ext.func; })[0];
+    if (f && f.modes) {
+      var m = f.modes.filter(function (x) { return x.id === mid; })[0];
+      if (m && m.name) mname = m.name;
+    }
+    if (!mname) mname = VE_MODE_FALLBACK[mid] || mid;
+    if (mname) out += '<span class="vechip" title="生成时的参考模式">参考模式 ' + E(mname) + '</span>';
+    return out;
+  }
   function jobCard(j, o) {
     o = o || {};
     var runs = jobRuns(j), base = runs[0];
     if (!base) return '';
+    var veChips = veExtraChips(j);
     var promptText = j.prompt || '';
     var promptBox = '';
     if (o.prompt !== false) {
@@ -369,7 +393,7 @@ window.GenUI = (function () {
       return '<div class="job" id="' + E(j.id) + '">'
         + '<div class="head"><span class="dot a pulse"></span><b>' + (base.state === 'queued' ? '等待执行' : '生成中') + '</b>'
         + '<span class="wf">· ' + E(jobWfLabel(j)) + '</span><span class="gradechip">' + E(base.grade || '默认') + '</span>'
-        + '<span style="flex:1"></span><span class="tiny muted">' + fmtTime(j.t0) + '</span></div>'
+        + veChips + '<span style="flex:1"></span><span class="tiny muted">' + fmtTime(j.t0) + '</span></div>'
         + '<div class="body">' + promptBox
         + '<div class="tiny muted" data-jobstep="' + E(base.id) + '">' + (base.state === 'queued' ? 'ComfyUI 马上开始' : '正在采样 · ' + step + '/' + (base.total || 8) + ' 步') + '</div>'
         + '<div class="progress"><i data-jobbar="' + E(base.id) + '" style="width:' + pct + '%"></i></div>'
@@ -388,7 +412,7 @@ window.GenUI = (function () {
       var e = base.err || {};
       return '<div class="job fail" id="' + E(j.id) + '">'
         + '<div class="head"><span class="dot r"></span><b>失败</b><span class="wf">· ' + E(jobWfLabel(j)) + '</span>'
-        + '<span class="gradechip">' + E(base.grade || '默认') + '</span><span style="flex:1"></span>'
+        + '<span class="gradechip">' + E(base.grade || '默认') + '</span>' + veChips + '<span style="flex:1"></span>'
         + '<span class="tiny muted">' + E(e.retriable ? '可以再试一次' : '') + '</span></div>'
         + '<div class="body" style="padding-bottom:0">' + promptBox + '</div>'
         + '<div class="errbox" id="err-' + E(j.id) + '"><div>' + E(e.msg || '') + '</div><div class="raw">' + E(e.raw || '') + '</div>'
@@ -408,7 +432,7 @@ window.GenUI = (function () {
     runs.filter(function (r) { return r.t1; }).forEach(function (r) { if (r.t1 > lastT) lastT = r.t1; });
     return '<div class="job done" id="' + E(j.id) + '">'
       + '<div class="head"><span class="dot g"></span><b>已完成</b><span class="wf">· ' + E(jobWfLabel(j)) + '</span>'
-      + '<span class="gradechip">' + E(grades.join(' / ')) + '</span><span style="flex:1"></span>'
+      + '<span class="gradechip">' + E(grades.join(' / ')) + '</span>' + veChips + '<span style="flex:1"></span>'
       + (ps.length ? '<span class="qchip"><span class="dot a pulse"></span>队列 ' + ps.length + ' 个'
         + (running ? ' · 正在出成品 ' + (ds.length + 1) : '') + '</span>' : '')
       + (o.time === false ? '' : '<span class="tiny muted">用时 ' + Math.round((lastT - (j.t0 || lastT)) / 1000) + ' 秒</span>')

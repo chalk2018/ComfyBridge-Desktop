@@ -1,0 +1,103 @@
+{
+  "media": "video",
+  "prompt_targets": [
+    {
+      "node": "250",
+      "field": "prompt"
+    }
+  ],
+  "seed_targets": [
+    {
+      "node": "129",
+      "field": "noise_seed"
+    }
+  ],
+  "output_nodes": [
+    "92"
+  ],
+  "root_load_images": [],
+  "class_types": {
+    "164": "DF_Int_to_Float",
+    "191": "DF_Int_to_Float",
+    "192": "DF_Int_to_Float",
+    "193": "DF_Int_to_Float",
+    "194": "DF_Int_to_Float",
+    "195": "DF_Int_to_Float",
+    "196": "DF_Int_to_Float",
+    "197": "DF_Int_to_Float",
+    "198": "DF_Int_to_Float",
+    "199": "DF_Int_to_Float",
+    "200": "DF_Int_to_Float",
+    "227": "ShowAnything|Mie",
+    "226": "ShowAnything|Mie",
+    "132": "ComfyMathExpression",
+    "128": "CLIPLoader",
+    "119": "VAELoader",
+    "120": "VAELoader",
+    "223": "PrimitiveFloat",
+    "115": "ResolutionSelector",
+    "231": "LoadImage",
+    "232": "LoadImage",
+    "233": "LoadImage",
+    "234": "LoadImage",
+    "222": "PrimitiveFloat",
+    "205": "ImpactSwitch",
+    "129": "RandomNoise",
+    "123": "KSamplerSelect",
+    "125": "SamplerCustomAdvanced",
+    "122": "VAEDecode",
+    "121": "VAEDecodeAudio",
+    "130": "CreateVideo",
+    "230": "MiniMaxH3ReferenceToVideo",
+    "225": "ImpactSwitch",
+    "92": "SaveVideo",
+    "127": "UNETLoader",
+    "135": "PathchSageAttentionKJ",
+    "274": "UNETLoader",
+    "273": "LoraLoaderModelOnly",
+    "277": "TESpeedMiniMaxH3",
+    "275": "PathchSageAttentionKJ",
+    "276": "EasyCache",
+    "282": "PathchSageAttentionKJ",
+    "279": "UNETLoader",
+    "281": "TESpeedMiniMaxH3",
+    "280": "LoraLoaderModelOnly",
+    "283": "EasyCache",
+    "126": "BasicGuider",
+    "124": "BasicScheduler",
+    "250": "CR Prompt Text",
+    "136": "EasyCache"
+  },
+  "video_ext": {
+    "node": "230",
+    "prompt": "250",
+    "prompt_field": "prompt",
+    "ratio_node": "115",
+    "ratio_field": "aspect_ratio",
+    "length_node": "132",
+    "length_select_node": "205",
+    "length_value_node": "164",
+    "seed": "129",
+    "output": "92",
+    "prefix_field": "filename_prefix",
+    "images": [
+      "231",
+      "232",
+      "233",
+      "234",
+      "235",
+      "236"
+    ],
+    "videos": [
+      "251"
+    ],
+    "video_components": [
+      "252"
+    ],
+    "audios": [
+      "247",
+      "248",
+      "249"
+    ]
+  }
+}

@@ -115,6 +115,20 @@ capabilities:
   - 视频生成-首尾帧生视频-h3
   - 视频生成-参考生视频-h3
   - 视频生成-故事板生视频-h3
+- id: video.ext
+  name: 视频生成扩展
+  em: 🎬
+  group: 视频
+  enabled: true
+  media: video
+  desc: 多参极速生视频：图 / 视频 / 音频参考 + 宽高比，每档一份独立工作流
+  maxRefs: 6
+  workflows:
+  - 视频扩展-多参极速生视频-4采480P
+  - 视频扩展-多参极速生视频-8采480P
+  - 视频扩展-多参极速生视频-8采768P
+  - 视频扩展-多参极速生视频-20采480P
+  - 视频扩展-多参极速生视频-20采768P
 - id: canvas.video
   name: 视频生成画布
   em: 🎬
@@ -417,6 +431,61 @@ workflows:
     - name: 默认
       locked: true
       note: 参数由能力页的比例/分辨率/步数决定
+  视频扩展-多参极速生视频-4采480P:
+    file: workflows/视频扩展-多参极速生视频-4采480P.json
+    bridge: workflows/视频扩展-多参极速生视频-4采480P.bridge.json
+    status: ok
+    media: video
+    note: 多参极速生视频 · 4 步加速链 · 480P
+    fields: []
+    grades:
+    - name: 4采480P
+      locked: true
+      note: 独立工作流，参数写死在文件里
+  视频扩展-多参极速生视频-8采480P:
+    file: workflows/视频扩展-多参极速生视频-8采480P.json
+    bridge: workflows/视频扩展-多参极速生视频-8采480P.bridge.json
+    status: ok
+    media: video
+    note: 多参极速生视频 · 8 步加速链 · 480P（默认档）
+    fields: []
+    grades:
+    - name: 8采480P
+      locked: true
+      note: 独立工作流，参数写死在文件里
+  视频扩展-多参极速生视频-8采768P:
+    file: workflows/视频扩展-多参极速生视频-8采768P.json
+    bridge: workflows/视频扩展-多参极速生视频-8采768P.bridge.json
+    status: ok
+    media: video
+    note: 多参极速生视频 · 8 步加速链 · 768P
+    fields: []
+    grades:
+    - name: 8采768P
+      locked: true
+      note: 独立工作流，参数写死在文件里
+  视频扩展-多参极速生视频-20采480P:
+    file: workflows/视频扩展-多参极速生视频-20采480P.json
+    bridge: workflows/视频扩展-多参极速生视频-20采480P.bridge.json
+    status: ok
+    media: video
+    note: 多参极速生视频 · 20 步原模型 · 480P
+    fields: []
+    grades:
+    - name: 20采480P
+      locked: true
+      note: 独立工作流，参数写死在文件里
+  视频扩展-多参极速生视频-20采768P:
+    file: workflows/视频扩展-多参极速生视频-20采768P.json
+    bridge: workflows/视频扩展-多参极速生视频-20采768P.bridge.json
+    status: ok
+    media: video
+    note: 多参极速生视频 · 20 步原模型 · 768P
+    fields: []
+    grades:
+    - name: 20采768P
+      locked: true
+      note: 独立工作流，参数写死在文件里
   音频-音乐生成:
     file: workflows/音频-音乐生成.json
     bridge: workflows/音频-音乐生成.bridge.json
@@ -1074,8 +1143,109 @@ canvasFuncs:
     name: 图片生成-图生图
     wf: 画布-图片生成
     wfRef: 画布-图片生成-参考
+    enabled: true
   video:
     name: 视频生成-参考生视频
     wf: 画布-视频生成
   sheetprop_i2i:
     enabled: true
+  t2i:
+    enabled: true
+  sheetchar:
+    enabled: true
+  sheetchar_style:
+    enabled: true
+  sheetscene_expand:
+    enabled: true
+  sheetprop:
+    enabled: true
+  board:
+    enabled: true
+  board2v:
+    enabled: true
+  music:
+    enabled: true
+  refmusic:
+    enabled: true
+  tts:
+    enabled: true
+  clone:
+    enabled: true
+videoExt:
+  funcs:
+  - id: multiRefFast
+    name: 多参极速生视频
+    desc: 图 / 视频 / 音频作参考，配合提示词生成
+    defaultGrade: 8采480P
+    grades:
+    - 4采480P
+    - 8采480P
+    - 8采768P
+    - 20采480P
+    - 20采768P
+    wfPrefix: 视频扩展-多参极速生视频
+    ratios:
+    - '16:9'
+    - '9:16'
+    defaultRatio: '16:9'
+    maxImages: 6
+    maxVideos: 1
+    maxAudios: 3
+    modes:
+    - id: fl2v
+      name: 首尾帧生成
+    - id: ref2v
+      name: 参考生成
+    defaultMode: fl2v
+    modelNodes:
+      4采480P:
+        unet: '279'
+        lora: '280'
+      8采480P:
+        unet: '274'
+        lora: '273'
+      8采768P:
+        unet: '274'
+        lora: '273'
+      20采480P:
+        unet: '127'
+        lora: null
+      20采768P:
+        unet: '127'
+        lora: null
+    models:
+      4采480P:
+        fl2v:
+          unet: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+          lora: minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors
+        ref2v:
+          unet: minimax_h3_ref2va_pruned_int8_convrot.safetensors
+          lora: minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors
+      8采480P:
+        fl2v:
+          unet: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+          lora: minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors
+        ref2v:
+          unet: minimax_h3_ref2va_pruned_int8_convrot.safetensors
+          lora: minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors
+      8采768P:
+        fl2v:
+          unet: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+          lora: minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors
+        ref2v:
+          unet: minimax_h3_ref2va_pruned_int8_convrot.safetensors
+          lora: minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors
+      20采480P:
+        fl2v:
+          unet: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+          lora: null
+        ref2v:
+          unet: minimax_h3_ref2va_pruned_int8_convrot.safetensors
+          lora: null
+      20采768P:
+        fl2v:
+          unet: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+          lora: null
+        ref2v:
+          unet: minimax_h3_ref2va_pruned_int8_convrot.safetensors
+          lora: null

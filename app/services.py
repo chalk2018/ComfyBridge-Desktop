@@ -28,7 +28,7 @@ from .comfy import ComfyClient, ComfyError, parse_history_error, read_seed_from_
 from .config import CONFIG_PATH, ROOT, ConfigError, config
 from .promptlib import SheetError, library as sheet_library
 from .state import now_ms, state
-from . import audiolib, videolib
+from . import audiolib, videolib, videoext
 from .workflows import WorkflowError, flatten_params, pick_workflow, registry
 
 # 故事板 0 张参考图时给 LoadImage 的占位图文件名（固定名，上传目录里只存一份）
@@ -256,6 +256,8 @@ class TaskService:
                 # 视频 / 音频的模式与档位元数据：创作台、画布、管理台共用一份口径
                 "video": videolib.state_payload(),
                 "audio": audiolib.state_payload(),
+                # 视频生成扩展（独立模块）：子功能/档位全是只读元数据
+                "videoExt": videoext.state_payload(),
                 "health": {"online": state.comfy_online, "comfy": config.service.comfy,
                            "queue": copy.deepcopy(state.comfy_queue)},
                 "seeded": True,
@@ -424,6 +426,7 @@ class TaskService:
         tag: str | None = None, archive_folder: str | None = None,
         video: dict[str, Any] | None = None, audio: dict[str, Any] | None = None,
         image: dict[str, Any] | None = None, raw_prompt: str | None = None,
+        video_ext: dict[str, Any] | None = None,
     ) -> tuple[bool, str, str]:
         """发送 / 再来一张 / 重试：新开一张卡，忙了只提示。返回 (ok, job_id, reason)。
 
@@ -462,7 +465,15 @@ class TaskService:
             except ComfyError:
                 pass
         wf_name: str | None = None
-        if wf and wf in (cap.get("workflows") or []):
+        if video_ext is not None:
+            # 视频生成扩展：档位 = 一份独立工作流文件，直接按子功能+档位选 wf。
+            # 不走 pick_workflow（这个能力没有 rules），也不用参数 overlay / 档位拷贝。
+            try:
+                wf_name = videoext.wf_for(str(video_ext.get("func") or ""), grade)
+            except ValueError as exc:
+                return False, "", str(exc)
+            why, tag = "档位对应工作流", grade
+        elif wf and wf in (cap.get("workflows") or []):
             wf_name = wf
             why = "前端显式选择"
         else:
@@ -470,25 +481,26 @@ class TaskService:
         if not wf_name:
             return False, "", "这种情况还没有配置对应的工作流"
         wf = config.workflow(wf_name) or {}
-        if video or audio:
-            # 视频 / 音频的档位不在 workflows.<name>.grades 里，而是按模式存在
-            # videoGrades / audioGrades：同一套模型换模式就该换一组档位。
-            mode = str((video or audio or {}).get("mode") or "")
-            names = [g["name"] for g in (
-                videolib.grades(mode) if video else audiolib.grades(mode))]
-            if grade not in names:
-                grade = names[0]
-            tag = tag or grade
-        elif params is None:
-            # 图片生成：档位来自 config 的 grades 表，名字不合法就退回第一档
-            grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
-            if grade not in grades:
-                grade = grades[0]
-            tag = tag or grade
-        else:
-            # 角色设定图：档位属于某个组合，名字由 combos 校验过，这里不再改
-            grade = grade or "默认"
-            tag = tag or grade
+        if video_ext is None:
+            if video or audio:
+                # 视频 / 音频的档位不在 workflows.<name>.grades 里，而是按模式存在
+                # videoGrades / audioGrades：同一套模型换模式就该换一组档位。
+                mode = str((video or audio or {}).get("mode") or "")
+                names = [g["name"] for g in (
+                    videolib.grades(mode) if video else audiolib.grades(mode))]
+                if grade not in names:
+                    grade = names[0]
+                tag = tag or grade
+            elif params is None:
+                # 图片生成：档位来自 config 的 grades 表，名字不合法就退回第一档
+                grades = [g["name"] for g in wf.get("grades", [])] or ["默认"]
+                if grade not in grades:
+                    grade = grades[0]
+                tag = tag or grade
+            else:
+                # 角色设定图：档位属于某个组合，名字由 combos 校验过，这里不再改
+                grade = grade or "默认"
+                tag = tag or grade
         ok, reason = self.check_normal(cap_id)
         if not ok:
             return False, "", reason
@@ -501,8 +513,11 @@ class TaskService:
             "refs": [r["id"] for r in refs], "t0": now_ms(), "seed": None, "runs": [],
             # 记下参考图的本地副本：ref id 只活在内存里（重启就没了），
             # 「基于上一条」要能把图片原样带回来，只能靠这些落盘路径重新登记
+            # kind 必须落盘：视频 / 音频参考在「基于上一条」「再来一张」时
+            # 要重新登记，丢了 kind 就会全被当成图片接进 LoadImage 槽。
             "refsInfo": [
-                {"path": r.get("path", ""), "name": r.get("name", "")} for r in refs
+                {"path": r.get("path", ""), "name": r.get("name", ""),
+                 "kind": r.get("kind", "image")} for r in refs
             ],
         }
         if sheet:
@@ -510,15 +525,18 @@ class TaskService:
             job["brief"] = brief or ""
         if video:
             job["video"] = copy.deepcopy(video)
+        if video_ext is not None:
+            job["videoExt"] = copy.deepcopy(video_ext)
+            job["videoExt"]["grade"] = grade
         if audio:
             job["audio"] = copy.deepcopy(audio)
         if image is not None:
             # 图片生成的画法/线稿/风格整条存下来，「基于上一条」才能把选项带回来。
             job["image"] = copy.deepcopy(image)
-            # prompt 字段是 compose 后的成片提示词（带线稿前缀/尾缀），回填会二次拼装；
-            # rawPrompt 是用户原话，refine 优先用它。老的 job 没这个字段，前端会回退到 prompt。
-            if raw_prompt is not None:
-                job["rawPrompt"] = raw_prompt
+        # prompt 字段是 compose 后的成片提示词（图片的前后缀 / 视频扩展的禁字幕尾缀），
+        # refine 直接用它会二次拼装。rawPrompt 存用户原话，两种能力都要有。
+        if raw_prompt is not None:
+            job["rawPrompt"] = raw_prompt
         if params is not None:
             # 参数跟着任务走：换档重跑、再来一张都要拿回同一份覆盖，不能靠名字重查
             job["params"] = copy.deepcopy(params)
@@ -555,6 +573,20 @@ class TaskService:
         params: dict[str, Any] | None = None
         tag: str | None = None
         cid = str((job.get("sheet") or {}).get("combo") or "")
+        if job.get("cap") == videoext.CAP_ID:
+            # 视频生成扩展：档位 = 不同工作流文件；换档就是换 wf，参数/种子/参考/提示词全沿用。
+            try:
+                new_wf = videoext.wf_for(
+                    str((job.get("videoExt") or {}).get("func") or ""), grade)
+            except ValueError as exc:
+                return False, str(exc)
+            run = self._new_run(job, "queue", new_wf, grade)
+            run["params"] = None
+            run["gradeTag"] = grade
+            with state.lock:
+                job["runs"].append(run)
+            state.persist()
+            return True, ""
         if cid:
             if job.get("cap") in ("sheet.scene", "sheet.prop"):
                 from . import extsheets as ext
@@ -619,6 +651,21 @@ class TaskService:
             image=job.get("image"), raw_prompt=job.get("rawPrompt"),
         )
 
+    def _stop_comfy(self, prompt_id: str, tries: int = 8) -> None:
+        """把一条已提交的任务从 ComfyUI 里彻底撤掉。
+
+        待跑和正在跑是两套动作（delete / interrupt），两者交接的瞬间可能都落空，
+        所以短时间内重试几轮，直到它确实不在队列里。
+        """
+        if not prompt_id:
+            return
+        for _ in range(tries):
+            self.comfy.delete(prompt_id)
+            self.comfy.interrupt(prompt_id)
+            if not self.comfy.queue_contains(prompt_id):
+                return
+            time.sleep(0.2)
+
     def cancel(self, run_id: str) -> bool:
         """取消排队中/生成中的任务，并通知 ComfyUI 真正停下。"""
         found = state.run(run_id)
@@ -628,12 +675,12 @@ class TaskService:
         with state.lock:
             run["state"] = "canceled"
             run["t1"] = now_ms()
-        pid = run.get("prompt_id")
-        if pid:
-            self.comfy.delete(pid)
-            if run.get("state") == "running":
-                self.comfy.interrupt()
+            pid = run.get("prompt_id")
         state.persist()
+        if pid:
+            # 队列里没开跑的摘掉；已经开跑的用带 prompt_id 的 interrupt 精确打断
+            self.comfy.delete(pid)
+            self.comfy.interrupt(pid)
         return True
 
     # ------------------------------------------------------------------ 执行
@@ -658,6 +705,8 @@ class TaskService:
     def _execute(self, job: dict[str, Any], run: dict[str, Any]) -> None:
         """提交一次工作流并盯到出片/失败/取消。"""
         with state.lock:
+            if run.get("state") == "canceled":   # 排队时就被取消了，别再真的提交
+                return
             run["state"] = "running"
             run["t0"] = now_ms()
             run["pct"] = max(1, run.get("pct", 0) or 0)
@@ -674,7 +723,30 @@ class TaskService:
                 bridge = registry.bridge(run["wf"])
                 media = bridge.get("media", "image")
                 applied: dict[str, Any] = {}
-                if media == "video":
+                if job.get("cap") == videoext.CAP_ID:
+                    # 视频生成扩展：档位文件 = 完整工作流，运行时只注入用户输入，
+                    # 不碰档位文件本身的加速链/分辨率开关。
+                    ext = job.get("videoExt") or {}
+                    text = videoext.compose(job["prompt"])
+                    api = registry.load(run["wf"], "默认")
+                    func_id = str(ext.get("func") or "multiRefFast")
+                    mode = videoext.norm_mode(func_id, str(ext.get("mode") or ""))
+                    prompt = videoext.build(
+                        api, text=text,
+                        ratio=str(ext.get("ratio") or "16:9"),
+                        refs=refs, seed=seed, prefix=prefix,
+                        duration=(ext.get("duration") if ext.get("duration") is not None
+                                  else (job.get("video") or {}).get("duration")),
+                        func=func_id, grade=run["grade"], mode=mode)
+                    applied = {"档位": run["grade"],
+                               "参考模式": videoext.mode_name(func_id, mode),
+                               "宽高比": str(ext.get("ratio") or "16:9"),
+                               "参考": f"{len([r for r in refs if r.get('kind')=='image'])} 图 / "
+                                       f"{len([r for r in refs if r.get('kind')=='video'])} 视频 / "
+                                       f"{len([r for r in refs if r.get('kind')=='audio'])} 音频"}
+                    size_label = (f"{run['grade']} · {videoext.mode_name(func_id, mode)} · "
+                                  f"{ext.get('ratio') or '16:9'}")
+                elif media == "video":
                     opt = self.video_opt(job, run["grade"])
                     # 视频工作流在 config 里只有「默认」一档：真正的档位（比例/分辨率/步数）
                     # 是 videolib 按模式算出来的，不落在这条工作流的 grades 表里
@@ -708,13 +780,22 @@ class TaskService:
                     eff = registry.grade_effective(
                         run["wf"], run["grade"], params=params, tag=tag)
                     applied, size_label = eff["applied"], eff["size"]["label"]
+                with state.lock:
+                    canceled_early = run.get("state") == "canceled"
+                if canceled_early:
+                    return
                 prompt_id = self.comfy.submit(prompt)
                 with state.lock:
                     run["prompt_id"] = prompt_id
                     run["seed"] = seed
                     run["applied"] = applied
                     run["sizeExpected"] = size_label
+                    canceled_late = run.get("state") == "canceled"
                 state.persist()
+                if canceled_late:
+                    # 提交和取消撞车：把刚排进 ComfyUI 的这条收回来，别留下孤儿任务
+                    self._stop_comfy(prompt_id)
+                    return
             else:
                 with state.lock:
                     run.pop("resume_only", None)
@@ -722,8 +803,11 @@ class TaskService:
             while True:
                 time.sleep(0.8)
                 with state.lock:
-                    if run["state"] == "canceled":
-                        return
+                    canceled_now = run["state"] == "canceled"
+                if canceled_now:
+                    # 取消请求可能撞在提交/执行交接处，这里再兜一次底
+                    self._stop_comfy(prompt_id)
+                    return
                 entry = self.comfy.history(prompt_id)
                 if entry:
                     status = entry.get("status") or {}
@@ -1114,6 +1198,23 @@ class TaskService:
             return False, "找不到这条任务", []
         uploads = config.resolve(config.service.uploadDir)
         uploads.mkdir(parents=True, exist_ok=True)
+        def ref_kind(info: dict[str, Any], existing: dict[str, Any] | None) -> str:
+            """参考素材类型：任务里存的 kind 最准；老任务没存就按扩展名推断。
+
+            扩展名要放在「已登记项」之前：老版本恢复时把所有素材都登记成了
+            image，照抄那个值会让 mp4 / wav 永远变不回视频 / 音频。
+            """
+            k = info.get("kind")
+            if k in ("image", "video", "audio"):
+                return str(k)
+            name = str(info.get("name") or info.get("path") or "").lower()
+            if name.endswith((".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v")):
+                return "video"
+            if name.endswith((".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus")):
+                return "audio"
+            if existing and existing.get("kind") in ("image", "video", "audio"):
+                return str(existing["kind"])
+            return "image"
         out: list[dict[str, Any]] = []
         for info in job.get("refsInfo") or []:
             src = Path(str(info.get("path") or ""))
@@ -1128,7 +1229,12 @@ class TaskService:
                 None,
             )
             if existing:
-                out.append({"id": existing["id"], "kind": "image",
+                kind = ref_kind(info, existing)
+                # 老版本把重新登记的素材全写成了 image；这里顺手改正索引，
+                # 否则「基于上一条」之后再发送仍会按图片槽接 mp4 / wav。
+                if existing.get("kind") != kind:
+                    state.refs.add(existing["id"], {**existing, "kind": kind})
+                out.append({"id": existing["id"], "kind": kind,
                             "name": existing.get("name") or src.name})
                 continue
             ref_id = state.next_id("ref")
@@ -1151,10 +1257,11 @@ class TaskService:
                 comfy_name = self.comfy.upload_image(dest, filename)
             except ComfyError:
                 comfy_name = filename       # ComfyUI 没开也先把图挂上，等它起来再说
-            ref = {"id": ref_id, "kind": "image", "name": info.get("name") or filename,
+            kind = ref_kind(info, None)
+            ref = {"id": ref_id, "kind": kind, "name": info.get("name") or filename,
                    "filename": filename, "path": str(dest), "comfyName": comfy_name}
             state.refs.add(ref_id, ref)
-            out.append({"id": ref_id, "kind": "image", "name": ref["name"]})
+            out.append({"id": ref_id, "kind": kind, "name": ref["name"]})
         if not out and job.get("refs"):
             return False, "这条任务的参考图已经被清理，只能带文字描述", []
         return True, "", out

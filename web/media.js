@@ -12,6 +12,7 @@ function audioMeta() { return (S && S.audio) || { modes: [], durations: [30] }; 
 function vModeList() { return videoMeta().modes || []; }
 function aModeList() { return (audioMeta().modes || []).filter(m => m.enabled !== false); }
 function isVideoCap(cap) { return !!cap && cap.id === 'video.generate'; }
+function isVideoExtCap(cap) { return !!cap && cap.id === 'video.ext'; }
 function isAudioCap(cap) { return !!cap && String(cap.id || '').startsWith('audio.'); }
 function vModeOf(id) { return vModeList().find(m => m.id === id) || vModeList()[0] || null; }
 function aModeOf(id) { return aModeList().find(m => m.id === id) || aModeList()[0] || null; }
@@ -405,4 +406,159 @@ function mediaGradesFor(job) {
     return (m && m.grades) || [];
   }
   return null;
+}
+
+/* ============================================================ 视频生成扩展（独立模块）
+   与上面「视频生成」完全分开：子功能切换 + 参考模式 + 宽高比 + 档位（一档一份工作流文件）。
+   只认 cap.id === 'video.ext'，不复用 isVideoCap 的任何逻辑，避免影响原模块。 */
+function veMeta() { return (S && S.videoExt) || { funcs: [], capId: 'video.ext' }; }
+function veFuncList() { return veMeta().funcs || []; }
+function veFunc() {
+  const f = UI.veFunc = UI.veFunc || {};
+  const list = veFuncList();
+  const found = list.find(x => x.id === (f.id || (list[0] || {}).id));
+  if (!found) return list[0] || null;
+  f.id = found.id;
+  if (!found.grades.includes(f.grade)) f.grade = found.defaultGrade || found.grades[0];
+  if (!(found.ratios || []).includes(f.ratio)) f.ratio = found.defaultRatio || '16:9';
+  if (!(found.modes || []).some(m => m.id === f.mode)) f.mode = found.defaultMode || ((found.modes || [])[0] || {}).id || 'fl2v';
+  return found;
+}
+function veGrades() { const f = veFunc(); return (f && f.grades) || []; }
+function veGrade() { return (UI.veFunc || {}).grade || (veGrades()[0] || ''); }
+function veModes() { const f = veFunc(); return (f && f.modes) || []; }
+function veMode() {
+  const f = UI.veFunc = UI.veFunc || {};
+  return f.mode || veModes()[0]?.id || 'fl2v';
+}
+function veModeName() {
+  const id = veMode();
+  return (veModes().find(m => m.id === id) || {}).name || id;
+}
+function veDuration() {
+  const f = UI.veFunc = UI.veFunc || {};
+  return Math.min(15, Math.max(4, +f.duration || 5.2));
+}
+function veHint(images, videos, audios) {
+  const n = images + videos + audios;
+  return n ? `已接 ${images} 图 / ${videos} 视频 / ${audios} 音频` : '可以只写提示词，也可以接素材';
+}
+
+function viewVideoExtComposer(cap) {
+  const func = veFunc();
+  if (!func) return '<div class="composer"><div class="composer-inner"><div class="inputbox"><div class="tiny muted" style="padding:18px">还没配置子功能</div></div></div></div>';
+  const images = refsOfKind('image'), videos = refsOfKind('video'), audios = refsOfKind('audio');
+  const empty = !(UI.prompt || '').trim();
+  const grades = veGrades(), grade = veGrade(), ratios = func.ratios || ['16:9', '9:16'];
+  // 子功能条：以后扩展时配置里加一项，这里自动多一个按钮
+  const funcBar = `<div class="parambar"><div class="vmodes" role="group" aria-label="子功能">
+    ${veFuncList().map(x => `<button class="vmode ${x.id === func.id ? 'on' : ''}" data-vefunc="${esc(x.id)}" title="${esc(x.desc || '')}">${esc(x.name)}</button>`).join('')}
+    </div><span class="modedis">${esc(func.desc || '')}</span></div>`;
+  const gradeBar = `<div class="sheetbar"><span class="slb">档位</span>
+    <div class="seg" role="group" aria-label="档位">${grades.map(g => `<button class="segb ${g === grade ? 'on' : ''}" data-vegrade="${esc(g)}">${esc(g)}</button>`).join('')}</div></div>`;
+  // 参考模式紧跟宽高比右侧：和宽高比同为单选分段按钮，切换只换「档位 × 模式」的模型参数
+  const modeSeg = `<div class="seg" role="group" aria-label="参考模式">${veModes().map(m =>
+    `<button class="segb ${m.id === veMode() ? 'on' : ''}" data-vemode="${esc(m.id)}" title="${esc(m.desc || '')}">${esc(m.name)}</button>`).join('')}</div>`;
+  const ratioBar = `<div class="sheetbar"><span class="slb">宽高比</span>
+    <div class="seg" role="group" aria-label="宽高比">${ratios.map(r => `<button class="segb ${r === (UI.veFunc.ratio) ? 'on' : ''}" data-veratio="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+    <span class="slb" style="margin-left:10px">参考模式</span>${modeSeg}</div>`;
+  const durBar = `<div class="sheetbar vdurbar"><span class="slb">时长</span>
+    <input type="number" class="input vdur-num" id="veDurNum" min="4" max="15" step="0.01" value="${veDuration().toFixed(2)}" aria-label="视频时长（秒）">
+    <span class="tiny muted vdur-unit">秒</span>
+    <input type="range" class="vdur-range" id="veDurRange" min="4" max="15" step="0.1" value="${veDuration()}">
+    <span class="tiny muted vdur-meta">${grade} · ${esc(veModeName())} · ${esc(UI.veFunc.ratio)} · 独立工作流</span></div>`;
+  const slots = `<div class="vslots">
+    ${images.map((r, i) => vRefSlot(`图${i + 1}`, 'image', r)).join('')}
+    ${videos.map((r, i) => vRefSlot(`视频${i + 1}`, 'video', r)).join('')}
+    ${audios.map((r, i) => vRefSlot(`音频${i + 1}`, 'audio', r)).join('')}
+    <div class="vadds">
+      ${images.length < (func.maxImages || 6) ? '<button class="vadd" data-vup="image">＋ 图片</button>' : ''}
+      ${videos.length < (func.maxVideos || 1) ? '<button class="vadd" data-vup="video">＋ 视频</button>' : ''}
+      ${audios.length < (func.maxAudios || 3) ? '<button class="vadd" data-vup="audio">＋ 音频</button>' : ''}
+    </div></div>`;
+  return `<div class="composer"><div class="composer-inner">
+    ${funcBar}
+    <div class="inputbox sheetbox" id="inputbox">
+      <div class="sheetbody">${gradeBar}${ratioBar}${durBar}${slots}
+        <div class="editor" id="promptInput" contenteditable="true"
+          data-ph="描述这一镜的画面；用 @ 引用左侧素材">${editorInnerHTML(UI.prompt)}</div>
+      </div>
+      <div class="foot">
+        <span class="tiny muted" id="pickHint">${esc(veHint(images.length, videos.length, audios.length))}</span>
+        <span class="tiny muted" id="emptyHint" style="${empty ? '' : 'display:none'}">写点描述再发送</span>
+        <span style="flex:1"></span><span class="tiny muted kbdhint">Ctrl/⌘ + Enter</span>
+        <button class="sendbtn" id="sendBtn" ${empty ? 'disabled' : ''}>↑</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+
+function bindVideoExtComposer() {
+  const f = UI.veFunc = UI.veFunc || {};
+  $$('[data-vefunc]').forEach(el => el.onclick = () => {
+    f.id = el.dataset.vefunc;
+    const func = veFunc();
+    f.grade = func.defaultGrade || func.grades[0];
+    f.ratio = func.defaultRatio || '16:9';
+    f.mode = func.defaultMode || ((func.modes || [])[0] || {}).id || 'fl2v';
+    saveDraft(); refreshComposer();
+  });
+  $$('[data-vegrade]').forEach(el => el.onclick = () => {
+    f.grade = el.dataset.vegrade; saveDraft(); refreshComposer();
+  });
+  $$('[data-veratio]').forEach(el => el.onclick = () => {
+    f.ratio = el.dataset.veratio; saveDraft(); refreshComposer();
+  });
+  $$('[data-vemode]').forEach(el => el.onclick = () => {
+    f.mode = el.dataset.vemode; saveDraft(); refreshComposer();
+  });
+  const num = $('#veDurNum'), range = $('#veDurRange');
+  const clamp = v => Math.min(15, Math.max(4, v));
+  if (num) num.oninput = () => {
+    const v = clamp(parseFloat(num.value)); if (isNaN(v)) return;
+    UI.veFunc.duration = v; if (range) range.value = (Math.round(v * 10) / 10).toFixed(1); saveDraft();
+  };
+  if (range) range.oninput = () => {
+    const v = clamp(parseFloat(range.value)); if (isNaN(v)) return;
+    UI.veFunc.duration = v; if (num) num.value = v.toFixed(2); saveDraft();
+  };
+  $$('[data-vup]').forEach(el => el.onclick = () => mediaPicker(el.dataset.vup));
+  $$('[data-vat]').forEach(el => el.onclick = e => { e.stopPropagation(); insertMediaToken(el.dataset.vat); });
+  $$('[data-vrm]').forEach(el => el.onclick = e => {
+    e.stopPropagation();
+    UI.refs = UI.refs.filter(r => r.id !== el.dataset.vrm);
+    UI.prompt = serializeEditor(); saveDraft(); refreshComposer();
+  });
+  const t = $('#promptInput');
+  if (t) {
+    t.onkeydown = e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSendVideoExt(); } };
+    t.oninput = onEditorInput;
+    t.onpaste = e => {
+      const cd = e.clipboardData || window.clipboardData;
+      const imgs = clipboardImages(e);
+      if (imgs.length) { e.preventDefault(); uploadMediaFiles(imgs, 'image'); return; }
+      e.preventDefault(); document.execCommand('insertText', false, cd ? cd.getData('text/plain') : '');
+    };
+  }
+  const send = $('#sendBtn'); if (send) send.onclick = doSendVideoExt;
+}
+
+async function doSendVideoExt() {
+  const func = veFunc(), f = UI.veFunc;
+  const prompt = serializeEditor().trim();
+  if (!prompt) { $('#inputbox').classList.add('err'); toast('写点描述再发送'); return; }
+  const body = {
+    capId: 'video.ext', prompt, grade: f.grade,
+    refs: UI.refs.map(r => r.id),
+    videoExt: { func: func.id, ratio: f.ratio, mode: veMode(), duration: veDuration() },
+  };
+  const sent = await submitAction('/api/tasks', body, '');
+  if (sent) { UI.prompt = ''; UI.refs = []; saveDraft(); toast(`已提交「${func.name}」· ${f.grade} · ${veModeName()} · ${f.ratio}`); }
+}
+
+/* 队列弹窗：视频扩展的档位来自子功能配置（不是工作流的 grades） */
+function videoExtGradesFor(job) {
+  if (!job || !job.videoExt) return null;
+  const func = veFuncList().find(x => x.id === job.videoExt.func);
+  return (func && func.grades) ? func.grades.map(name => ({ name, note: '' })) : null;
 }

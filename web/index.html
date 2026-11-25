@@ -376,6 +376,7 @@ audio{width:100%;height:34px}
 
 /* ===== 档位 / 归档 相关（本轮新增） ===== */
 .gradechip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;background:var(--accent2);color:var(--accent);font-weight:600}
+.vechip{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:20px;background:#f2f5fa;border:1px solid var(--line2);color:var(--ink3);font-weight:500;white-space:nowrap}
 .archnote{display:flex;align-items:center;gap:7px;margin-top:10px;padding:7px 10px;border-radius:7px;background:#f4f7fd;border:1px dashed #ccd8ee;font-size:11.5px;color:#4a5b74;overflow:hidden}
 .archnote .ico{flex:0 0 auto}
 .archnote .p{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1d4ed8}
@@ -723,14 +724,6 @@ audio{width:100%;height:34px}
 .refchip .x{margin-left:1px;opacity:.6;font-size:11px;cursor:pointer;border-radius:3px;padding:0 2px}
 .refchip .x:hover{opacity:1;background:rgba(47,107,255,.15)}
 .refchip.miss{background:var(--red2);border-color:var(--red3);color:#c0392b}
-/* 设定图图生图：已引用参考图 chip 条（缩略图 + 图N + 取消） */
-.refquoted{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:5px 0 2px}
-.qchipimg{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 5px 0 2px;border-radius:7px;
-  background:var(--accent2);border:1px solid var(--accent3);color:#1d4ed8;font-size:11.5px;user-select:none}
-.qchipimg img{width:20px;height:20px;border-radius:4px;object-fit:cover;display:block}
-.qchipimg b{font-weight:500}
-.qchipimg .x{opacity:.6;cursor:pointer;padding:0 2px;font-size:11px}
-.qchipimg .x:hover{opacity:1;background:rgba(47,107,255,.15)}
 
 /* ③ 参考图缩略图：hover 显示 @ 引用徽标 */
 .ref-thumb .at{position:absolute;right:3px;bottom:3px;width:19px;height:19px;border-radius:50%;background:rgba(47,107,255,.92);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;opacity:0;transition:.12s;cursor:pointer;border:0;box-shadow:0 1px 4px rgba(20,30,50,.3)}
@@ -862,7 +855,7 @@ audio{width:100%;height:34px}
   .chat-inner{max-width:none;gap:12px}
   .composer{position:relative;bottom:auto;flex:0 0 auto;padding:9px 10px calc(9px + env(safe-area-inset-bottom,0px));z-index:18;
     max-height:50dvh;display:flex;flex-direction:column}
-  .composer-inner{max-width:none;display:flex;flex-direction:column;min-height:0}
+  .composer-inner{max-width:none;width:100%;margin:0;display:flex;flex-direction:column;min-height:0}
   /* 输入框最高占半屏。滚动只发生在中间那块内容区（.sheetbody），底部工具栏永远露在外面——
      角色设定图那一版有 5 行分段按钮 + 描述 + 风格，不限高会把聊天区整个吃掉。 */
   .composer .inputbox{max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column}
@@ -1327,6 +1320,12 @@ select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
      移动端会把整个聊天区撑成一大片空白。改成贴顶、小内边距、不居中。 */
   .chat-scroll .empty{padding:16px 12px 12px !important;justify-content:flex-start !important;gap:8px}
   .chat-scroll .empty>div[style*="font-size:34"]{font-size:26px !important;line-height:1.2}
+  /* 空状态里的示例提示词 chip 是 nowrap 长句，会把聊天区撑出横向滚动条：
+     手机端允许换行、限宽，并让外层 .row 的 min-width 可以收缩 */
+  .chat-scroll .empty{max-width:100%;min-width:0}
+  .chat-scroll .empty .row{max-width:100% !important;min-width:0;flex-wrap:wrap}
+  .chat-scroll .empty .row .chip{max-width:100%;height:auto;min-height:24px;white-space:normal;
+    text-align:left;line-height:1.5;padding:4px 10px;word-break:break-word;overflow-wrap:anywhere}
 
   /* --- 需求5：所有分段切换控件统一到最小高度 24px ---
      桌面最小的是 .segb=24px；移动端 856/859 行却把 grade/modepick 提到 28px。
@@ -1380,6 +1379,9 @@ select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
   .inputbox.folded .sheetbody{display:none !important}
   .inputbox.folded{padding-bottom:6px;height:auto !important;max-height:none !important}
   .inputbox.folded .foot{border-top:0;margin-top:0;padding-top:2px}
+  /* 手机端收起态：卡片铺满屏宽，底部工具栏（发送那一排）整排隐藏，只剩「展开输入」一行 */
+  .composer .inputbox.folded{width:100%;max-width:100%}
+  .composer .inputbox.folded .foot{display:none !important}
 
   /* --- 修复横向溢出：flex 列子项默认 min-width:auto 会被宽内容撑破视口 ---
      视频页 7 个模式按钮总宽 600px+，把 .composer-inner 从 390 撑到 443，

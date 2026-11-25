@@ -60,13 +60,15 @@ def main() -> int:
     check("前端脚本", app_js.status_code == 200 and len(app_js.content) > 10000)
     state = get("/api/state")
     check("状态接口字段", all(k in state for k in ("service", "capabilities", "jobs", "wfLib", "ui", "health")))
-    check("15 个能力 / 图片生成可用",
-          len(state["capabilities"]) == 15 and len(state["capabilities"][0]["workflows"]) == 2)
-    # 默认 = 每个子工作流一条：图片生成 2 条 + 角色设定图 2 条 + 故事板 2 条
-    check("档位表 6 个默认 tab", len(state["wfLib"]) == 6 and
+    # 不断言总数：能力和工作流会随版本增加（1.06 新增视频扩展 5 档工作流）。
+    # 只验证关键能力都在，且图片生成的子工作流没被新模块挤掉。
+    cap_ids = {c["id"] for c in state["capabilities"]}
+    check("关键能力都在", {"image.generate", "video.generate", "video.ext", "audio.generate"} <= cap_ids,
+          str(sorted(cap_ids)))
+    check("档位表含图片/故事板默认 tab",
           {"文生图", "参考生图", "设定图-文生图", "设定图-参考生图",
            "故事板-参考生图", "故事板-参考生图-宽幅6格"} <= set(state["wfLib"]),
-          str(list(state["wfLib"])))
+          str(list(state["wfLib"])[:8]))
     check("顶栏健康灯", state["health"]["online"] is True, str(state["health"]["queue"]))
 
     # 2. 忙闲判定：ComfyUI 队列必须空闲才能开始

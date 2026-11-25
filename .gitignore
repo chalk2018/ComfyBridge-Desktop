@@ -45,3 +45,8 @@ _dev/*.html
 
 # 文件备份
 _dev/backup/
+
+# 便携 Python 运行时（38MB，当前无脚本引用，按需再入库）
+runtime/
+# 调试截图
+_dev/zoom/
