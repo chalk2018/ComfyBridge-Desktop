@@ -51,14 +51,16 @@
 
 ## 在另一台电脑上搭建（clone → 能跑）
 
-仓库里只有源码，**不含 `.venv`、`.cache`，`data` 里也不带历史任务和上传图**。所以别人拉下来后要先建环境，再启动。
+仓库里只有源码和一份**便携 Python 运行时**（`runtime\python`，Python 3.12.10），**不含 `.venv`、`.cache`，`data` 里也不带历史任务和上传图**。所以别人拉下来后要先建环境，再启动。
+
+好处是**不需要在本机安装 Python**：直接用自带的 `runtime\python` 建虚拟环境即可。
 
 ### 1. 前置条件
 
 | 项 | 要求 | 说明 |
 | --- | --- | --- |
 | 系统 | Windows 10 / 11 | 启动脚本是 `.bat`；目录选择框依赖 PowerShell |
-| Python | 3.12.x（3.10 以上可用） | 安装时勾选 `Add python.exe to PATH` |
+| Python | **无需安装** | 仓库自带 `runtime\python\python.exe`（3.12.10）；已装 Python 3.10+ 的也可以用系统的 |
 | ComfyUI | 已装好并能启动 | 默认 `http://127.0.0.1:8188`；工作流用到的模型、自定义节点必须已装在本机，否则任务会报节点/模型缺失 |
 | ffmpeg（可选） | `ffprobe` 在 PATH 里 | 用来读音频/视频成品时长；没有也能跑，只是时长显示不全 |
 
@@ -73,13 +75,16 @@ cd ComfyBridge-Desktop
 
 ### 3. 建虚拟环境并装依赖（只需一次）
 
+用仓库自带的 Python 建环境（不需要本机装 Python）：
+
 ```powershell
-python -m venv .venv
+.\runtime\python\python.exe -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 - 虚拟环境目录名必须是 `.venv` —— `启动服务.bat` 里固定调用 `.venv\Scripts\python.exe`
+- 如果本机已装 Python 3.10+，也可以把第一行换成 `python -m venv .venv`，效果一样
 - 国内网络慢可以加镜像：`-i https://pypi.tuna.tsinghua.edu.cn/simple`
 - 依赖很少（fastapi / uvicorn / httpx / pyyaml / python-multipart / websocket-client / pillow），几分钟装完
 
@@ -119,7 +124,7 @@ python -m venv .venv
 
 | 现象 | 原因 / 处理 |
 | --- | --- |
-| 双击窗口一闪就没 / 提示找不到 python.exe | 没建 `.venv`，回到第 3 步 |
+| 双击窗口一闪就没 / 提示找不到 python.exe | 没建 `.venv`，回到第 3 步；注意 `runtime\python\python.exe` 要存在（别把 `runtime` 目录删了） |
 | 控制台报 `[Errno 10048]` 或提示端口被占用 | 已经有一个 ComfyBridge 窗口开着，先关掉；或到管理台改端口 |
 | 顶部红条「ComfyUI 输出目录不存在」 | 用「添加目录」重新选 output 目录，再保存并生效 |
 | 创作台提示未连接 ComfyUI | 先把 ComfyUI 启动起来（默认 8188） |
