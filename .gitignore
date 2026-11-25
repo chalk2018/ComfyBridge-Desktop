@@ -1,6 +1,7 @@
-# ===== 通用 =====
+﻿# ===== 通用 =====
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
 *.log
 .cache/
 .venv/
@@ -38,3 +39,4 @@ ComfyBridge-Desktop/_dev/backup_pre500/
 ComfyBridge-Desktop/_dev/_backup_107/
 ComfyBridge-Desktop/tests/_sheet_full_out/*
 !ComfyBridge-Desktop/tests/_sheet_full_out/*.py
+
