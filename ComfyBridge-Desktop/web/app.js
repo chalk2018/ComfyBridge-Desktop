@@ -5,10 +5,6 @@
 'use strict';
 
 let S = null;                       // 服务端状态镜像
-/* 公开版置灰能力：服务端 /api/state 带回 release.disabled（本地开发没有这个文件 → 空对象） */
-const relDisabled = () => ((S && S.release && S.release.disabled) || {});
-const capLocked = (id) => !!relDisabled()[id];
-const capLockReason = (id) => relDisabled()[id] || '公开版暂未开放';
 const UI = {
   route: 'studio', adminPage: 'caps', capId: 'image.generate',
   refs: [], params: {}, comfyOnline: false,
@@ -179,11 +175,6 @@ async function fetchState() {
   }
   // 需求16：旧的四个音频能力 id 合并成 audio.generate，草稿里残留的旧 id 迁移过来
   if (/^audio\.(music|music\.ref|tts|clone)$/.test(UI.capId || '')) UI.capId = 'audio.generate';
-  // 公开版：草稿里残留的置灰能力 → 切到第一个可用能力，免得打开就是「点不动」的页面
-  if (!UI._navPending && capLocked(UI.capId)) {
-    const first = (S.capabilities || []).find(c => c.kind !== 'canvas' && capUsable(c) && c.enabled && !capLocked(c.id));
-    if (first) UI.capId = first.id;
-  }
   if (S.ui.galleryFilter) UI.galleryFilter = S.ui.galleryFilter;
   if (S.ui.wizardSeen) UI.wizardSeen = true;
   // 折叠状态跟着服务端走：换窗口 / 刷新后保持用户收起来的布局
@@ -1540,8 +1531,6 @@ if (typeof document !== 'undefined' && !window.__foldBound) {
 
 function render() {
   const root = $('#root');
-  // 公开版：画布被置灰时不允许进画布页（直接输 #canvas 或草稿恢复也拦住）
-  if (UI.route === 'canvas' && capLocked('canvas.video')) UI.route = 'studio';
   syncHash();
   normalizeCapForRoute();
   if (UI.route === 'canvas') {
@@ -1739,24 +1728,20 @@ function viewRail() {
     html += `<div class="group">${grp}</div>`;
     caps.forEach(c => {
       if (c.kind === 'canvas') {          // 画布入口：不是能力，点它切到画布页
-        const locked = capLocked(c.id);
-        if (!locked) hasAny = true;
-        html += `<div class="item ${UI.route === 'canvas' ? 'on' : ''} ${locked ? 'dis' : ''}" data-cap="${c.id}" title="${esc(c.desc || '')}">
-        <span class="em">${c.em}</span><span class="nm">${esc(c.name)}</span>
-        ${locked ? `<span class="tag">${esc(capLockReason(c.id))}</span>` : ''}</div>`;
+        hasAny = true;
+        html += `<div class="item ${UI.route === 'canvas' ? 'on' : ''}" data-cap="${c.id}" title="${esc(c.desc || '')}">
+        <span class="em">${c.em}</span><span class="nm">${esc(c.name)}</span></div>`;
         return;
       }
       // 已配置但停用：从创作台消失；未配置：灰着显示、点不动（需求 §2.1 / X45）
-      // 公开版置灰的能力例外：即使已配置也留在列表里显示「公开版暂未开放」
-      const locked = capLocked(c.id);
-      if (!locked && (c.workflows || []).length && !c.enabled) return;
-      const usable = capUsable(c) && c.enabled && !locked;
+      if ((c.workflows || []).length && !c.enabled) return;
+      const usable = capUsable(c) && c.enabled;
       if (usable) hasAny = true;
       // 画布页只有「视频生成画布」那一项高亮，别把上次选的能力也点亮
       const lit = UI.route === 'canvas' ? '' : (c.id === UI.capId ? 'on' : '');
       html += `<div class="item ${lit} ${usable ? '' : 'dis'}" data-cap="${c.id}" title="${esc(c.desc || '')}">
         <span class="em">${c.em}</span><span class="nm">${esc(c.name)}</span>
-        ${usable ? '' : `<span class="tag">${locked ? esc(capLockReason(c.id)) : '未配置（下个版本开放）'}</span>`}
+        ${usable ? '' : '<span class="tag">未配置（下个版本开放）</span>'}
       </div>`;
     });
   });
@@ -2245,7 +2230,6 @@ function bindStudio() {
   $$('[data-cap]').forEach(el => el.onclick = async () => {
     const target = (S.capabilities || []).find(x => x.id === el.dataset.cap);
     if (!target) return;
-    if (capLocked(target.id)) { toast(`「${target.name}」${capLockReason(target.id)}`); return; }
     if (target.kind === 'canvas') {
       // 进画布：左右两栏保留，只把中间换成画布；能力选择不动，方便来回切
       UI._userSwitched = true;
@@ -2878,16 +2862,9 @@ function viewAdmin() {
   return `<div class="admin ${UI.navOpen ? 'nav-open' : ''}">${viewTopbar()}${configBanner()}<div class="admin-body">
     <div class="admin-nav">
       <div class="side-hd"><b>管理台</b><button class="side-x" data-side-close title="收起">✕</button></div>
-      ${ADMIN_PAGES.map(([k, n], i) => {
-        const lockId = k === 'canvas' ? 'canvas.video' : null;
-        const locked = lockId ? capLocked(lockId) : false;
-        return `<div class="item ${UI.adminPage === k ? 'on' : ''} ${locked ? 'dis' : ''}" ${locked ? 'style="opacity:.5;cursor:not-allowed" title="' + esc(capLockReason(lockId)) + '"' : `data-page="${k}"`}><span class="n">${i + 1}</span>${n}</div>
-        ${k === 'grades' && subs.length ? `<div class="nav-sub">${subs.map(c => {
-          const subLocked = capLocked(c.id);
-          return `<div class="sitem ${c.id === UI.capId && UI.adminPage === 'grades' ? 'on' : ''}" ${subLocked ? 'style="opacity:.45;cursor:not-allowed" title="' + esc(capLockReason(c.id)) + '"' : `data-grades-cap="${esc(c.id)}"`}>
-          <span class="em">${c.em}</span><span class="sn">${esc(c.name)}</span></div>`;
-        }).join('')}</div>` : ''}`;
-      }).join('')}
+      ${ADMIN_PAGES.map(([k, n], i) => `<div class="item ${UI.adminPage === k ? 'on' : ''}" data-page="${k}"><span class="n">${i + 1}</span>${n}</div>
+        ${k === 'grades' && subs.length ? `<div class="nav-sub">${subs.map(c => `<div class="sitem ${c.id === UI.capId && UI.adminPage === 'grades' ? 'on' : ''}" data-grades-cap="${esc(c.id)}">
+          <span class="em">${c.em}</span><span class="sn">${esc(c.name)}</span></div>`).join('')}</div>` : ''}`).join('')}
       <div class="hr"></div><div class="tiny muted" style="padding:0 8px;line-height:1.7">${(S.capabilities || []).filter(c => capUsable(c) && c.enabled).length} 个能力可用</div>
     </div><div class="admin-main"><div class="inner">${adminPage(cur)}</div></div></div>
     <div class="side-mask" id="sideMask"></div></div>`;
@@ -3246,9 +3223,7 @@ function pageCaps() {
   let list = '';
   orderedGroups().forEach(({ caps }) => caps.forEach(c => {
     const st = capStatus(c);
-    const locked = capLocked(c.id);
-    const stChip = locked ? `<span class="chip gray">${esc(capLockReason(c.id))}</span>`
-      : st === 'ok' ? '<span class="chip green">可用</span>'
+    const stChip = st === 'ok' ? '<span class="chip green">可用</span>'
       : st === 'partial' ? '<span class="chip amber">部分可用</span>'
       : st === 'err' ? '<span class="chip red">有问题</span>'
       : st === 'off' ? '<span class="chip gray">已停用</span>' : '<span class="chip gray">未配置</span>';
@@ -3267,12 +3242,8 @@ function pageCaps() {
           <span class="tiny muted">${esc(gradeText)}</span></div>
         ${c.desc ? `<div class="tiny muted" style="margin-top:2px">${esc(c.desc)}</div>` : ''}
       </div>
-      ${locked
-        ? '<span class="switch" style="width:34px;height:20px;opacity:.4;cursor:not-allowed" title="' + esc(capLockReason(c.id)) + '"></span>'
-        : `<span class="switch ${c.enabled ? 'on' : ''}" data-toggle="${c.id}" style="width:34px;height:20px"></span>`}
-      ${locked
-        ? `<button class="btn sm" disabled title="${esc(capLockReason(c.id))}">配置</button>`
-        : hasWf ? `<button class="btn sm" data-edit="${c.id}">配置</button>` : '<span class="tiny muted capoff">未配置（下个版本开放）</span>'}</div>`;
+      <span class="switch ${c.enabled ? 'on' : ''}" data-toggle="${c.id}" style="width:34px;height:20px"></span>
+      ${hasWf ? `<button class="btn sm" data-edit="${c.id}">配置</button>` : '<span class="tiny muted capoff">未配置（下个版本开放）</span>'}</div>`;
   }));
   return `<div class="spread" style="margin-bottom:14px"><div><h2>能力与工作流</h2>
     <div class="sub">开关能力、调整每个能力的档位（能力清单固定，改配置请改 config.yaml 后重启）</div></div></div>${list}`;

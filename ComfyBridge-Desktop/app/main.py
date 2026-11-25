@@ -23,7 +23,7 @@ from .boardlib import BoardError
 from .promptlib import SheetError, library as sheet_library
 from .services import service
 from .state import state
-from . import audiolib, canvas, imagestylelib, release, videolib, videoext
+from . import audiolib, canvas, imagestylelib, videolib, videoext
 from .prompttemplates import router as prompt_templates_router
 
 WEB_DIR = ROOT / "web"
@@ -257,7 +257,6 @@ class AIOrder(BaseModel):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """配置损坏时仍把页面发出来：顶部红条指出问题，并允许在页面上直接改（需求 04 章）。"""
-    release.load()  # 公开版的置灰能力清单（无 public_release.json 时全开放）
     try:
         config.load()
         service.start()
@@ -514,7 +513,6 @@ async def api_state() -> Response:
         return Response(content=_STATE_CACHE["body"], media_type="application/json")
     payload = service.state_payload()
     payload["configError"] = state.last_error
-    payload["release"] = {"disabled": release.disabled()}
     body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
     _STATE_CACHE.update(at=now, body=body)
     return Response(content=body, media_type="application/json")
@@ -534,8 +532,6 @@ def submit_task_body(body: TaskRequest, archive_folder: str | None = None) -> tu
     设定图、故事板、视频四模式、音频四功能的规则只有这一份，两边不会分叉。
     返回 (是否受理, job_id, 拒收原因)。
     """
-    if release.is_disabled(body.capId):
-        return False, "", f"「{release.name_of(body.capId)}」{release.reason(body.capId)}"
     prompt, grade, wf = body.prompt, body.grade, body.wf
     sheet_info: dict[str, Any] | None = None
     params: dict[str, Any] | None = None
@@ -1314,9 +1310,6 @@ async def v1_capabilities() -> dict[str, Any]:
 
 @app.post("/api/v1/orders")
 async def v1_order(body: AIOrder) -> dict[str, Any]:
-    cap = body.capability or "image.generate"
-    if release.is_disabled(cap):
-        return {"ok": False, "reason": f"「{release.name_of(cap)}」{release.reason(cap)}"}
     return service.ai_order(body.model_dump())
 
 
