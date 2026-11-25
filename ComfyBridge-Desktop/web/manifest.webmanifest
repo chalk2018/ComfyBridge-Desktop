@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "ComfyBridge",
+  "short_name": "ComfyBridge",
+  "description": "本地 ComfyUI 创作台：图片、设定图、故事板、视频、音频一站生成。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F5F3EE",
+  "theme_color": "#F5F3EE",
+  "categories": ["productivity", "graphics"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/static/logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/logo-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

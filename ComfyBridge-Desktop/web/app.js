@@ -2010,15 +2010,20 @@ function taskThumbHTML(j) {
   const run = runs[0] || null;
   // 缩略图底部一行：有成品就显示成品图，没有就按能力类型给占位图标
   if (run) {
-    const kind = ((run.files || [])[0] || {}).kind || run.media || 'image';
-    if (kind === 'video') return `<div class="task-thumbs"><span class="tthumb-ph">🎬</span></div>`;
-    if (kind === 'audio') return `<div class="task-thumbs"><span class="tthumb-ph">🎵</span></div>`;
+    const f0 = (run.files || [])[0] || {};
+    // kind 缺失时按扩展名兜底，避免视频/音频被当成图片渲染成破图
+    const ext = String(f0.path || f0.name || '').toLowerCase();
+    const kind = f0.kind || run.media
+      || (/\.(mp4|webm|mov|mkv|m4v)$/.test(ext) ? 'video'
+        : /\.(mp3|wav|flac|ogg|m4a|aac)$/.test(ext) ? 'audio' : 'image');
+    if (kind === 'video') return `<div class="task-thumbs"><span class="tthumb-v"><video src="${imgUrl(run.id, 0)}#t=0.1" preload="metadata" muted playsinline></video></span></div>`;
+    if (kind === 'audio') return `<div class="task-thumbs"><span class="tthumb-a"></span></div>`;
     return `<div class="task-thumbs"><img src="${imgUrl(run.id, 0)}" alt="成品缩略图" loading="lazy"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="tthumb-ph" style="display:none">🖼</span></div>`;
+      onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="tthumb-ph" style="display:none"></span></div>`;
   }
   const cap = j.cap || '';
-  const icon = cap.startsWith('video') || cap === 'canvas.video' ? '🎬' : cap.startsWith('audio') ? '🎵' : '🖼';
-  return `<div class="task-thumbs"><span class="tthumb-ph">${icon}</span></div>`;
+  const kind = cap.startsWith('video') || cap === 'canvas.video' ? 'video' : cap.startsWith('audio') ? 'audio' : 'image';
+  return `<div class="task-thumbs"><span class="tthumb-ph tthumb-${kind}"></span></div>`;
 }
 function drawerJobs() {
   // 需求 4：会话任务里出现的每一条（成品 / 生成中 / 失败）都要有 checkbox，
@@ -4895,10 +4900,23 @@ function viewGallery() {
         <button class="btn danger" id="gDel">🗑 删除（${UI.selected.size}）</button></div></div>
     ${tiles.length ? `<div class="gallery">${tiles.map(({ j, r }) => {
       const key = r.id + '|0';
+      // 成品可能是图片 / 视频 / 音频：按类型给不同的缩略图（视频用首帧，音频用波形）
+      const f0 = (r.files || [])[0] || {};
+      const ext = String(f0.path || f0.name || '').toLowerCase();
+      const kind = f0.kind || r.media
+        || (/\.(mp4|webm|mov|mkv|m4v)$/.test(ext) ? 'video'
+          : /\.(mp3|wav|flac|ogg|m4a|aac)$/.test(ext) ? 'audio' : 'image');
+      const thumb = kind === 'video'
+        ? `<video class="gvid" src="${imgUrl(r.id, 0)}#t=0.1" preload="metadata" muted playsinline></video>`
+        : kind === 'audio'
+          ? ''
+          : `<img src="${imgUrl(r.id, 0)}" style="width:100%;height:100%;object-fit:contain">`;
+      const artBg = kind === 'video' ? '#101722'
+        : kind === 'audio' ? 'linear-gradient(155deg,#1C2436,#2E3D61 70%,#3A4C78)' : '#f4f6fa';
       return `<div class="card" style="overflow:hidden;cursor:pointer" data-zoom="${j.id}|${r.id}">
         <label class="gcheck" data-stop><input type="checkbox" data-sel="${key}" ${UI.selected.has(key) ? 'checked' : ''}></label>
         <button class="gdelone" data-delone="${key}" title="删除这张成品及本地文件">✕</button>
-        <div class="art" style="border:0;border-radius:0;aspect-ratio:1/1;background:#f4f6fa"><img src="${imgUrl(r.id, 0)}" style="width:100%;height:100%;object-fit:contain"></div>
+        <div class="art art-${kind}" style="border:0;border-radius:0;aspect-ratio:1/1;background:${artBg}">${thumb}</div>
         <div style="padding:9px 11px"><div class="tiny" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.brief || j.prompt)}</div>
           <div class="tiny muted" style="margin-top:2px">${esc(j.capName)}${!(S.capabilities || []).some(c => c.id === j.cap) ? ' · 能力已删除' : ''} · ${esc(r.grade || '默认')} · 种子 ${r.seed ?? j.seed ?? ''}</div></div></div>`;
     }).join('')}</div>` : '<div class="empty"><div style="font-size:30px">🗂</div><div class="tiny">这里还没有记录，先去创作台生成几张</div></div>'}

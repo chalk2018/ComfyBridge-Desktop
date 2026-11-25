@@ -46,3 +46,9 @@ ComfyBridge-Desktop/certs/*.pem
 ComfyBridge-Desktop/certs/*.key
 ComfyBridge-Desktop/certs/*.crt
 ComfyBridge-Desktop/certs/*.pfx
+
+# ===== 本次补充：父目录 _dev、_dev 根目录截图/中间产物、_reference 抓取数据 =====
+/_dev/
+ComfyBridge-Desktop/_dev/zoom_*.png
+ComfyBridge-Desktop/_dev/doc*_stripped.html
+ComfyBridge-Desktop/_reference/
