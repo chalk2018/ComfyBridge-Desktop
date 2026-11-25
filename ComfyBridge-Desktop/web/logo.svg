@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="ComfyBridge 小图标">
+  <defs>
+    <linearGradient id="sbg" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#69AEFF"/>
+      <stop offset="0.42" stop-color="#3B79FF"/>
+      <stop offset="1" stop-color="#1537B8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#sbg)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+    <path d="M34 76a30 30 0 0 1 60 0" stroke-width="15"/>
+    <path d="M17 86h94" stroke-width="15"/>
+  </g>
+  <path d="M56 50v28l22-14z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round"/>
+</svg>

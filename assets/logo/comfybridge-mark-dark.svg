@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 40 92 57" width="368" height="228" role="img" aria-label="ComfyBridge 标志 - 深色">
+  <g fill="none" stroke-linecap="round">
+    <path d="M33 78a31 31 0 0 1 62 0" stroke="#7FA9FF" stroke-width="12.5"/>
+    <path d="M18 84h92" stroke="#FFFFFF" stroke-width="12"/>
+  </g>
+  <rect x="22" y="84" width="10" height="12" rx="3.2" fill="#FFFFFF"/>
+  <rect x="96" y="84" width="10" height="12" rx="3.2" fill="#FFFFFF"/>
+  <path d="M52 55v21l14-10.5z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M68 55v21l14-10.5z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4.5" stroke-linejoin="round"/>
+</svg>

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo/comfybridge-icon-1024.png" width="88" alt="ComfyBridge">
+
 # ComfyBridge
 
 **在本机 ComfyUI 上，用一句中文，生成图片、设定图和短视频**
@@ -10,7 +12,7 @@
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
 ![works with ComfyUI](https://img.shields.io/badge/works%20with-ComfyUI-ff6f00)
 
-[它能做什么](#它能做什么) · [开始使用](#开始使用) · [怎么用](#怎么用) · [常见问题](#常见问题)
+[它能做什么](#它能做什么) · [模型与插件](#需要准备哪些模型和插件) · [音频](#音频生成可选) · [开始使用](#开始使用) · [怎么用](#怎么用) · [常见问题](#常见问题)
 
 </div>
 
@@ -28,14 +30,54 @@
 
 生成好的图片和视频都保存在你自己的电脑上，不会上传到任何云端。
 
+## 需要准备哪些模型和插件
+
+ComfyBridge 本身不带模型，所有生成能力都调用你本机的 ComfyUI。要让图片和视频能力全部可用，需要下面这些：
+
+| 准备项 | 要求 | 用在哪 |
+|---|---|---|
+| ComfyUI | **0.42.1 或更高** | 全部功能 |
+| 图像模型 | Qwen-Image 2.1 Turbo：主模型 + 2 个文本编码器 + 1 个多模态编码器 + VAE，约 34 GB | 图片生成、角色/场景/道具设定图、宫格故事板 |
+| 视频模型 | MiniMax H3：fl2va 与 ref2va 两套主模型 + 编码器 + 视频/音频 VAE + 4 个加速 LoRA，约 69 GB | 视频生成、视频生成扩展 |
+| 自定义插件 | 6 个，装在 ComfyUI 的 `custom_nodes` 里 | 视频生成扩展 |
+
+模型合计约 **103 GB**，建议预留 130 GB 以上空闲磁盘。
+
+放置位置：
+
+- 模型 → ComfyUI 的 `models` 目录下对应子文件夹（`diffusion_models`、`text_encoders`、`vae`、`loras`）；
+- 插件 → ComfyUI 的 `custom_nodes` 目录；6 个插件分别是 ComfyUI-Impact-Pack、ComfyUI-KJNodes、ComfyUI-MieNodes、ComfyUI_Comfyroll_CustomNodes、Derfuu_ComfyUI_ModdedNodes、TE-Speed-MiniMaxH3-OSS；
+- 放完重启 ComfyUI，再启动 ComfyBridge。
+
+每个文件的确切名称、大小、插件仓库地址，以及放完后的自查方法，都在 [模型与插件依赖清单](ComfyBridge-Desktop/模型与插件依赖清单.md) 里。
+
+## 音频生成（可选）
+
+除了图片和视频，ComfyBridge 也能在本机做音乐和配音，入口是「音频生成」页：
+
+| 子功能 | 你能做什么 |
+|---|---|
+| 音乐生成 | 写风格和歌词，直接出一段音乐 |
+| 参考生成音乐 | 传一段参考音频，按它的感觉重做一版 |
+| 语音生成 | 文字转语音，可选性别、年龄、音高和语速 |
+| 声音克隆 | 传一段样音，用这个音色念新台词 |
+
+这部分需要额外准备：
+
+- 音乐模型：MiniMax Music 3 三件套 + YuE2 + SheetSage2，约 18 GB，放到 `models` 下对应的 `diffusion_models`、`text_encoders`、`vae`、`checkpoints`、`audio_encoders`；
+- 插件：comfyui-AICG3D（放在 `custom_nodes`）；
+- 语音生成与声音克隆还需要 **Spark-TTS-0.5B**，放到 `models/tts/Spark-TTS-0.5B`。当前尚未安装，所以这两个子功能暂时不可用。
+
+补齐后重启 ComfyUI 即可在「音频生成」页使用，细节见 [模型与插件依赖清单](ComfyBridge-Desktop/模型与插件依赖清单.md)。
+
 ## 开始使用
 
 ### 你需要准备
 
 - 一台 Windows 电脑
-- 已经能正常出图的 ComfyUI
+- 已经能正常出图的 ComfyUI（0.42.1 及以上，模型与插件见「需要准备哪些模型和插件」）
 
-> ComfyBridge 只负责帮你操作 ComfyUI，不负责安装模型。ComfyUI 本身能出图，这里就能用。
+> ComfyBridge 只负责帮你操作 ComfyUI，不负责安装模型。ComfyUI 能出图，并且装齐前面的模型与插件后，所有能力才完整可用。
 
 ### 三步启动
 

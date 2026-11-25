@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ComfyBridge</title>
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/logo-32.png">
+<link rel="apple-touch-icon" href="/static/logo-180.png">
 <style>
 /* ============ ComfyBridge 页面样式 ============ */
 :root{
@@ -92,8 +95,7 @@ select.input{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg 
 /* ---------- 顶栏 ---------- */
 .topbar{height:52px;display:flex;align-items:center;gap:14px;padding:0 16px;background:#fff;border-bottom:1px solid var(--line);flex:0 0 auto;position:relative;z-index:20}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}
-.brand i{width:22px;height:22px;border-radius:7px;background:var(--accent);position:relative;display:inline-block}
-.brand i::after{content:"";position:absolute;inset:6px;border-radius:3px;background:#fff;opacity:.92}
+.brand img{width:22px;height:22px;border-radius:7px;display:block;flex:0 0 auto}
 .health{display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;background:#f5f8fd;border:1px solid var(--line);font-size:12px;cursor:pointer;transition:.15s}
 .health:hover{background:#eef4ff}
 .health.off{background:var(--red2);border-color:var(--red3)}
@@ -782,7 +784,7 @@ audio{width:100%;height:34px}
   /* ---------- 顶栏：矮一点、按钮图标化，功能一个不少 ---------- */
   .topbar{height:50px;min-height:50px;flex-wrap:nowrap;gap:5px;padding:0 9px;position:sticky}
   .topbar .brand{font-size:13.5px;gap:7px}
-  .topbar .brand i{width:20px;height:20px;border-radius:6px}
+  .topbar .brand img{width:20px;height:20px;border-radius:6px}
   .topbar .lbl{display:none}
   .topbar .dico{display:none}
   .topbar .mico{display:inline-flex;align-items:center;justify-content:center}

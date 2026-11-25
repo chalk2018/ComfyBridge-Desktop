@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" width="560" height="120" role="img" aria-label="ComfyBridge">
+  <defs>
+    <linearGradient id="ld-bg" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#69AEFF"/>
+      <stop offset="0.42" stop-color="#3B79FF"/>
+      <stop offset="1" stop-color="#1537B8"/>
+    </linearGradient>
+    <radialGradient id="ld-hi" cx="0.24" cy="0.12" r="0.85">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ld-mk" gradientUnits="userSpaceOnUse" x1="0" y1="40" x2="0" y2="97">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCE8FF"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0 18)">
+    <rect width="84" height="84" rx="20" fill="url(#ld-bg)"/>
+    <rect width="84" height="84" rx="20" fill="url(#ld-hi)"/>
+    <rect x="0.7" y="0.7" width="82.6" height="82.6" rx="19.4" fill="none"
+          stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="1.2"/>
+    <g transform="scale(0.65625)" fill="none" stroke="url(#ld-mk)" stroke-linecap="round">
+      <path d="M33 78a31 31 0 0 1 62 0" stroke-width="12.5"/>
+      <path d="M18 84h92" stroke-width="12"/>
+      <rect x="22" y="84" width="10" height="12" rx="3.2" fill="url(#ld-mk)" stroke="none"/>
+      <rect x="96" y="84" width="10" height="12" rx="3.2" fill="url(#ld-mk)" stroke="none"/>
+      <path d="M52 55v21l14-10.5z" fill="url(#ld-mk)" stroke="url(#ld-mk)" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M68 55v21l14-10.5z" fill="url(#ld-mk)" stroke="url(#ld-mk)" stroke-width="4.5" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <text x="108" y="82" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="54" font-weight="700" letter-spacing="-1.3">
+    <tspan fill="#FFFFFF">Comfy</tspan><tspan fill="#7FA9FF">Bridge</tspan>
+  </text>
+</svg>

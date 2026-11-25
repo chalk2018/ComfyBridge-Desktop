@@ -1662,7 +1662,7 @@ function viewTopbar() {
         <span class="pts-label">提示词模板</span></button>`
     : '';
   return `<div class="topbar">
-    <div class="brand"><i></i><span class="bname">ComfyBridge</span></div>
+    <div class="brand"><img src="/static/logo.svg" alt="" width="22" height="22"><span class="bname">ComfyBridge</span></div>
     <div class="health ${on ? '' : 'off'}" id="healthBtn" title="重新检测">
       <span class="dot ${on ? 'g' : 'r'} pulse"></span>
       <span class="txt">${on ? '已连接' : 'ComfyUI 未连接，请先启动'}</span>

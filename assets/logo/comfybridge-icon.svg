@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="ComfyBridge 图标">
+  <defs>
+    <linearGradient id="ibg" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#69AEFF"/>
+      <stop offset="0.42" stop-color="#3B79FF"/>
+      <stop offset="1" stop-color="#1537B8"/>
+    </linearGradient>
+    <radialGradient id="ihi" cx="0.24" cy="0.12" r="0.85">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ilo" cx="0.85" cy="1" r="0.7">
+      <stop offset="0" stop-color="#0A2A8C" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#0A2A8C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="imk" gradientUnits="userSpaceOnUse" x1="0" y1="40" x2="0" y2="97">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.7" stop-color="#F4F8FF"/>
+      <stop offset="1" stop-color="#DCE8FF"/>
+    </linearGradient>
+    <filter id="ish" x="-35%" y="-35%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="2.6" stdDeviation="3.4" flood-color="#08205E" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="29" fill="url(#ibg)"/>
+  <rect width="128" height="128" rx="29" fill="url(#ihi)"/>
+  <rect width="128" height="128" rx="29" fill="url(#ilo)"/>
+  <path d="M127.2 96C110 118 74 127.2 44 127.2" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="2.4"/>
+  <rect x="0.8" y="0.8" width="126.4" height="126.4" rx="28.4" fill="none"
+        stroke="#FFFFFF" stroke-opacity="0.26" stroke-width="1.6"/>
+  <g filter="url(#ish)">
+    <g fill="none" stroke="url(#imk)" stroke-linecap="round">
+      <path d="M33 78a31 31 0 0 1 62 0" stroke-width="12.5"/>
+      <path d="M18 84h92" stroke-width="12"/>
+    </g>
+    <rect x="22" y="84" width="10" height="12" rx="3.2" fill="url(#imk)"/>
+    <rect x="96" y="84" width="10" height="12" rx="3.2" fill="url(#imk)"/>
+    <path d="M52 55v21l14-10.5z" fill="url(#imk)" stroke="url(#imk)" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M68 55v21l14-10.5z" fill="url(#imk)" stroke="url(#imk)" stroke-width="4.5" stroke-linejoin="round"/>
+  </g>
+</svg>
