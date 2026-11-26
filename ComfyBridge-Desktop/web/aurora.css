@@ -975,26 +975,28 @@ textarea[readonly]{background:rgba(16,24,40,.035);color:var(--ink2)}
   .chat-inner{max-width:none;gap:14px}
   .msg-u{max-width:88%;font-size:13.5px}
 
-  /* 左抽屉：圆角玻璃侧板 */
+  /* 左抽屉：圆角玻璃侧板。宽度收窄到「刚好放得下文字」，管理台同宽 */
   .rail,.admin-nav{
     top:0;bottom:auto;height:100vh;height:100dvh;max-height:none;
-    width:86vw;max-width:332px;
-    padding:env(safe-area-inset-top,0px) 10px calc(22px + env(safe-area-inset-bottom,0px));
+    width:clamp(170px,44vw,190px);max-width:none;
+    padding:env(safe-area-inset-top,0px) 8px calc(22px + env(safe-area-inset-bottom,0px));
     background:rgba(253,252,249,.96);
     backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);
     border:0;border-right:1px solid rgba(255,255,255,.6);
-    border-radius:0 26px 26px 0;
-    box-shadow:40px 0 90px -40px rgba(16,24,40,.55)}
-  .side-hd{padding:14px 4px 12px;border-bottom:1px solid var(--line2);background:transparent}
-  .side-hd b{font-size:15px;font-weight:680;letter-spacing:-.02em}
-  .side-x{width:32px;height:32px;border-radius:10px;background:rgba(16,24,40,.05);color:var(--ink2)}
+    border-radius:0 20px 20px 0;
+    box-shadow:28px 0 64px -36px rgba(16,24,40,.5)}
+  /* 标题栏必须不透明：透明时滚动内容会从下面透出来，压住「选择能力」 */
+  .side-hd{padding:12px 2px 10px;border-bottom:1px solid var(--line2);
+    position:sticky;top:0;z-index:3;background:#FDFCF9}
+  .side-hd b{font-size:14px;font-weight:680;letter-spacing:-.02em}
+  .side-x{width:28px;height:28px;border-radius:9px;background:rgba(16,24,40,.05);color:var(--ink2)}
   .side-mask{background:rgba(14,19,30,.34);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
-  .rail .item{border-radius:12px;padding:11px 12px;font-size:13.5px}
+  .rail .item{border-radius:10px;padding:9px 7px;gap:7px;font-size:13px}
   .rail .item.on{box-shadow:0 1px 0 rgba(255,255,255,.24) inset,0 10px 22px -12px rgba(75,91,232,.85)}
-  .rail .item .em{width:28px;height:28px;flex-basis:28px;font-size:15px;background:rgba(16,24,40,.045)}
+  .rail .item .em{width:24px;height:24px;flex-basis:24px;font-size:15px;border-radius:8px;background:rgba(16,24,40,.045)}
   .rail .item.on .em{background:rgba(255,255,255,.22)}
-  .admin-nav .item{border-radius:12px;padding:11px 12px;font-size:13.5px}
-  .nav-sub{margin:0 0 8px 13px}
+  .admin-nav .item{border-radius:10px;padding:9px 8px;font-size:13px}
+  .nav-sub{margin:0 0 8px 4px}
 
   /* 右抽屉：圆角玻璃侧板 */
   .drawer{
@@ -1248,6 +1250,10 @@ textarea[readonly]{background:rgba(16,24,40,.035);color:var(--ink2)}
   .topbar [data-nav="canvas"] .ico:not(.mico),
   .topbar .navbtn .ico,
   .topbar .sheetbtn .ico.dico{width:19px;height:19px;flex:0 0 19px}
+  /* 手机上只留 .mico：上面这组规则给的 display 权重高于 index.html 的
+     .topbar .dico{display:none}，会让桌面图标和手机图标同时出现（一个按钮两个图标）。
+     这里用同权重但更靠后的规则盖回隐藏。 */
+  .topbar .btn .ico.dico{display:none}
 }
 
 /* ============================ 15 动效偏好 ============================ */

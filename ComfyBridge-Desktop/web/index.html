@@ -1356,7 +1356,11 @@ select.vsmall{width:auto;height:28px;font-size:12px;padding:0 26px 0 8px}
   .cnode .inputbox .editor,
   .inputbox .editor{
     height:96px !important;min-height:96px !important;max-height:96px !important;
-    overflow-y:auto !important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    overflow-y:auto !important;
+    /* 不能用 contain：编辑区自己滚到底后手势会被吃掉，外层 .sheetbody 不再跟手，
+       手指落在描述区上就「滑不动」（角色设定图的 textarea 没这条，所以那边正常）。
+       这里用 auto 让滚动链交给 .sheetbody，它自己才是真正的分区滚动容器。 */
+    overscroll-behavior:auto;-webkit-overflow-scrolling:touch;
   }
   /* textarea 描述区同样处理 */
   .inputbox textarea.sheetchar,
